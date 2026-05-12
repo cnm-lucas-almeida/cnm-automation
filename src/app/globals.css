@@ -1,0 +1,33 @@
+@import url('https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+:root {
+  --primary: #EB0027;
+  --primary-hover: #C4001F;
+  --primary-light: #FFF0F2;
+  --background: #ffffff;
+  --foreground: #0F172A;
+  --slate-50: #F8FAFC;
+  --slate-100: #F1F5F9;
+  --slate-200: #E2E8F0;
+  --slate-800: #1E293B;
+  --slate-900: #0F172A;
+}
+
+@theme inline {
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-light: var(--primary-light);
+  --font-sans: 'Urbanist', var(--font-geist-sans);
+}
+
+body {
+  background-color: var(--slate-50);
+  color: var(--slate-900);
+  font-family: 'Urbanist', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.transition-all {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
