@@ -7,6 +7,7 @@ export async function POST(request: Request) {
     const { 
       codigo_fornecedor, 
       codigo_categoria, 
+      codigo_departamento,
       id_conta_corrente, 
       valor, 
       data_vencimento, 
@@ -17,7 +18,7 @@ export async function POST(request: Request) {
       id_externo 
     } = body;
 
-    if (!codigo_fornecedor || !codigo_categoria || !id_conta_corrente || !valor || !data_vencimento || !data_pagamento) {
+    if (!codigo_fornecedor || !codigo_categoria || !codigo_departamento || !id_conta_corrente || !valor || !data_vencimento || !data_pagamento) {
       return NextResponse.json({ error: 'Parâmetros obrigatórios ausentes.' }, { status: 400 });
     }
 
@@ -35,6 +36,15 @@ export async function POST(request: Request) {
       numero_documento_fiscal: numero_nf || "",
       observacao: (historico ? `${historico}. ` : "") + (observacao || "")
     };
+
+    if (codigo_departamento) {
+      (payloadInclusao as any).distribuicao = [
+        {
+          cCodDep: String(codigo_departamento),
+          nPerDep: 100
+        }
+      ];
+    }
 
     const inclusaoResult = await incluirContaPagar(payloadInclusao);
     const codigo_lancamento_omie = inclusaoResult.codigo_lancamento_omie;

@@ -1,30 +1,28 @@
 import { NextResponse } from 'next/server';
-import { alterarContaPagar, lancarPagamento } from '@/lib/omie';
+import { alterarContaPagar } from '@/lib/omie';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { 
+    const {
       codigo_lancamento_omie,
       codigo_conta_corrente,
       codigo_categoria,
       codigo_departamento,
       codigo_fornecedor,
       data_vencimento,
-      valor, 
+      valor,
       data_pagamento,
       observacao
     } = body;
 
-    if (!codigo_lancamento_omie || !codigo_conta_corrente || !codigo_categoria || !codigo_departamento || !valor || !data_pagamento) {
+    if (!codigo_lancamento_omie || !codigo_conta_corrente || !codigo_categoria || !codigo_departamento || !valor) {
       return NextResponse.json({ error: 'Parâmetros obrigatórios ausentes.' }, { status: 400 });
     }
 
-    let alteracaoResult = null;
     const payloadAlteracao: any = {
       codigo_lancamento_omie,
       valor_documento: valor,
-      data_previsao: data_pagamento,
       id_conta_corrente: codigo_conta_corrente,
       codigo_categoria,
       distribuicao: [
@@ -37,30 +35,19 @@ export async function POST(request: Request) {
 
     if (codigo_fornecedor) payloadAlteracao.codigo_cliente_fornecedor = codigo_fornecedor;
     if (data_vencimento) payloadAlteracao.data_vencimento = data_vencimento;
+    if (data_pagamento) payloadAlteracao.data_previsao = data_pagamento;
+    if (observacao) payloadAlteracao.observacao = observacao;
 
-    alteracaoResult = await alterarContaPagar(payloadAlteracao);
-
-    const payloadPagamento = {
-      codigo_lancamento: codigo_lancamento_omie,
-      codigo_conta_corrente: codigo_conta_corrente,
-      valor: valor,
-      data: data_pagamento,
-      observacao: observacao || "Baixa automática da importação de planilha retroativa"
-    };
-
-    const pagamentoResult = await lancarPagamento(payloadPagamento);
+    const alteracaoResult = await alterarContaPagar(payloadAlteracao);
 
     return NextResponse.json({
       success: true,
-      codigo_baixa: pagamentoResult.codigo_baixa,
-      alteracao: alteracaoResult,
-      pagamento: pagamentoResult
+      alteracao: alteracaoResult
     });
-
   } catch (error: any) {
-    console.error("Erro no processo de baixa avulsa:", error);
-    return NextResponse.json({ 
-        error: error.message || 'Erro interno ao processar baixa.' 
+    console.error('Erro ao atualizar conta já cadastrada:', error);
+    return NextResponse.json({
+      error: error.message || 'Erro interno ao atualizar conta.'
     }, { status: 500 });
   }
 }

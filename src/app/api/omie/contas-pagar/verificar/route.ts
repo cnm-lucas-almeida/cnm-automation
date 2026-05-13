@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { listarContasPagar } from '@/lib/omie';
+import { isTemporaryOmieBlock, listarContasPagar } from '@/lib/omie';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -103,6 +103,11 @@ export async function GET(request: Request) {
       let statusFormatado = c.status_titulo || 'DESCONHECIDO';
       const estaAberto = statusFormatado === 'ABERTO' || statusFormatado === 'ATRASADO';
       const estaPago = statusFormatado === 'PAGO' || statusFormatado === 'LIQUIDADO';
+      const categoriasRateioRaw = c.categorias || c.categoriasArray || [];
+      const categoriasRateio = Array.isArray(categoriasRateioRaw) ? categoriasRateioRaw : [categoriasRateioRaw];
+      const primeiraCategoria = categoriasRateio[0] || null;
+      const distribuicoes = Array.isArray(c.distribuicao) ? c.distribuicao : [];
+      const primeiraDistribuicao = distribuicoes[0] || null;
 
       return {
         codigo: c.codigo_lancamento_omie,
@@ -110,6 +115,18 @@ export async function GET(request: Request) {
         valor: c.valor_documento,
         vencimento: c.data_vencimento,
         nf: c.numero_documento_fiscal || 'N/A',
+        numero_documento: c.numero_documento || c.numero_documento_fiscal || 'N/A',
+        parcela: c.numero_parcela || c.parcela || 'N/A',
+        categoria_codigo: c.codigo_categoria || primeiraCategoria?.codigo_categoria || primeiraCategoria?.codigo || null,
+        departamento_codigo: primeiraDistribuicao?.cCodDep || primeiraDistribuicao?.codigo_departamento || primeiraDistribuicao?.codigo || null,
+        departamento_nome: primeiraDistribuicao?.cDesDep || primeiraDistribuicao?.descricao || null,
+        conta_id: c.codigo_conta_corrente || c.id_conta_corrente || c.conta_corrente?.codigo_conta_corrente || c.conta_corrente?.id_conta_corrente || null,
+        departamentos: distribuicoes.map((d: any) => ({
+          codigo: d.cCodDep || d.codigo_departamento || d.codigo || null,
+          descricao: d.cDesDep || d.descricao || '',
+          percentual: d.nPerDep || d.percentual || null,
+          valor: d.nValDep || d.valor || null
+        })).filter((d: any) => d.codigo),
         descricao: c.descricao || '',
         observacao: c.observacao || '',
         data_pagamento: c.data_pagamento || null,
@@ -146,6 +163,21 @@ export async function GET(request: Request) {
 
   } catch (error: any) {
     console.error('Erro na verificação:', error);
+
+    if (isTemporaryOmieBlock(error)) {
+      return NextResponse.json({
+        exists: false,
+        duplicados: [],
+        resumo: {
+          total_encontrados: 0,
+          tem_em_aberto: false,
+          tem_pago: false,
+        },
+        bloqueio_temporario: true,
+        warning: error.message,
+      });
+    }
+
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
