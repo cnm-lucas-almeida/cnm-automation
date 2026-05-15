@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { Fragment, useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
 import { 
   UploadCloud, CheckCircle2, AlertCircle, Play, 
-  Loader2, Search, FileSpreadsheet, Wallet, Trash2
+  Loader2, Search, FileSpreadsheet, Wallet, Trash2, ChevronDown, ChevronUp
 } from 'lucide-react';
 
 type PlanilhaRow = {
@@ -69,7 +69,54 @@ type RowMapping = {
   selecionado?: boolean;
 };
 
+type RowValidation = {
+  valor: number;
+  valorValido: boolean;
+  vencimentoValido: boolean;
+  pagamentoValido: boolean;
+  fornecedorLocalizado: boolean;
+  hasErrors: boolean;
+  canImport: boolean;
+};
+
+type StatusDisplay = {
+  tone: 'neutral' | 'info' | 'success' | 'warning' | 'danger';
+  title: string;
+  description: string;
+  monoLine?: string;
+  detailLines?: string[];
+};
+
+type WorkflowSteps = {
+  importarPlanilha: boolean;
+  buscarFornecedores: boolean;
+  buscarCategoria: boolean;
+  buscarDepartamento: boolean;
+  buscarBanco: boolean;
+  finalizandoListando: boolean;
+};
+
+const INITIAL_WORKFLOW_STEPS: WorkflowSteps = {
+  importarPlanilha: false,
+  buscarFornecedores: false,
+  buscarCategoria: false,
+  buscarDepartamento: false,
+  buscarBanco: false,
+  finalizandoListando: false,
+};
+
 const STORAGE_KEY = 'omie-validator:contas-a-pagar:rows';
+
+function ChavesNaMaoLogo({ className = 'h-9 w-auto' }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 478 70" fill="none" aria-label="Chaves na Mão">
+      <path fill="#2a2a2f" d="M426.614 15.67c2.938 0 4.134 2.317 6.314 2.317 1.196 0 2.125-.683 2.339-2.214h3.483c-.598 4.159-2.991 6.165-6.144 6.165-2.938 0-4.135-2.37-6.314-2.37-1.197 0-2.126.735-2.34 2.266h-3.483c.599-4.159 2.992-6.164 6.145-6.164zM312.438 38.171v19.807h-7.647V40.177c0-1.233-.303-2.35-.909-3.353a6.61 6.61 0 00-2.444-2.413c-1.003-.606-2.121-.91-3.354-.91-1.232 0-2.361.304-3.384.91a6.679 6.679 0 00-2.413 2.413c-.585 1.003-.878 2.12-.878 3.353v17.8h-7.647l-.031-31.339h7.647l.031 2.79a11.55 11.55 0 013.824-2.664c1.483-.669 3.081-1.003 4.794-1.003 2.278 0 4.357.564 6.237 1.692a12.452 12.452 0 014.481 4.482c1.129 1.86 1.693 3.938 1.693 6.236zM339.819 26.638h7.647v31.34h-7.647l-.345-3.886a10.262 10.262 0 01-3.416 3.416c-1.399.856-3.06 1.284-4.983 1.284-2.319 0-4.492-.438-6.518-1.316a17.132 17.132 0 01-5.359-3.635 17.401 17.401 0 01-3.604-5.36c-.857-2.026-1.285-4.199-1.285-6.518 0-2.235.407-4.335 1.222-6.299a16.313 16.313 0 018.618-8.65c1.943-.835 4.033-1.253 6.268-1.253 2.069 0 3.918.46 5.547 1.379 1.651.92 3.051 2.09 4.2 3.51l-.345-4.012zm-8.932 24.79c1.63 0 3.072-.408 4.325-1.222 1.254-.815 2.236-1.912 2.946-3.291.71-1.4 1.066-2.935 1.066-4.607 0-1.692-.356-3.228-1.066-4.607-.71-1.4-1.703-2.507-2.977-3.322-1.254-.815-2.685-1.222-4.294-1.222-1.608 0-3.081.418-4.418 1.254a9.194 9.194 0 00-3.166 3.29c-.773 1.38-1.159 2.915-1.159 4.607 0 1.692.397 3.228 1.191 4.607a9.199 9.199 0 003.165 3.29 8.271 8.271 0 004.387 1.223zM360.224 57.978v-31.34h7.647v2.79a11.555 11.555 0 013.823-2.664c1.484-.669 3.082-1.003 4.795-1.003 2.173 0 4.168.512 5.986 1.536 1.839 1.023 3.301 2.392 4.388 4.105 1.107-1.713 2.569-3.082 4.387-4.105 1.818-1.024 3.813-1.536 5.986-1.536 2.298 0 4.377.564 6.236 1.692a12.447 12.447 0 014.482 4.482c1.128 1.86 1.692 3.938 1.692 6.236v19.807H402v-17.77a6.3 6.3 0 00-.909-3.322 6.681 6.681 0 00-2.382-2.444c-.982-.627-2.089-.94-3.322-.94s-2.351.303-3.353.909a6.843 6.843 0 00-2.382 2.381c-.606 1.003-.909 2.142-.909 3.416v17.77h-7.647v-17.77c0-1.274-.292-2.413-.877-3.416a6.51 6.51 0 00-2.382-2.381c-1.003-.606-2.121-.91-3.353-.91a6.14 6.14 0 00-3.322.94 6.926 6.926 0 00-2.413 2.445c-.585 1.003-.878 2.11-.878 3.322v17.77h-7.647zM437.062 26.638h7.647v31.34h-7.647l-.344-3.886a10.28 10.28 0 01-3.416 3.416c-1.4.856-3.061 1.284-4.983 1.284-2.319 0-4.492-.438-6.519-1.316a17.132 17.132 0 01-5.359-3.635 17.42 17.42 0 01-3.604-5.36c-.857-2.026-1.285-4.199-1.285-6.518 0-2.235.408-4.335 1.222-6.299a16.317 16.317 0 018.619-8.65c1.943-.835 4.032-1.253 6.268-1.253 2.068 0 3.917.46 5.547 1.379 1.65.92 3.05 2.09 4.199 3.51l-.345-4.012zm-8.931 24.79c1.629 0 3.071-.408 4.324-1.222 1.254-.815 2.236-1.912 2.946-3.291.711-1.4 1.066-2.935 1.066-4.607 0-1.692-.355-3.228-1.066-4.607-.71-1.4-1.702-2.507-2.977-3.322-1.253-.815-2.685-1.222-4.293-1.222-1.609 0-3.082.418-4.419 1.254a9.191 9.191 0 00-3.165 3.29c-.774 1.38-1.16 2.915-1.16 4.607 0 1.692.397 3.228 1.191 4.607a9.199 9.199 0 003.165 3.29 8.275 8.275 0 004.388 1.223zM462.251 58.792c-2.883 0-5.516-.741-7.898-2.224-2.361-1.484-4.251-3.469-5.672-5.955-1.4-2.507-2.1-5.276-2.1-8.305 0-2.298.408-4.44 1.222-6.425.815-2.005 1.933-3.76 3.354-5.265a15.723 15.723 0 015.014-3.572c1.901-.857 3.928-1.285 6.08-1.285 2.883 0 5.505.742 7.866 2.225 2.382 1.483 4.273 3.479 5.672 5.986 1.421 2.507 2.131 5.286 2.131 8.336 0 2.277-.407 4.409-1.222 6.393a16.99 16.99 0 01-3.384 5.265 15.606 15.606 0 01-4.983 3.542c-1.881.856-3.907 1.284-6.08 1.284zm0-7.646c1.525 0 2.893-.408 4.105-1.223a8.52 8.52 0 002.852-3.227c.71-1.338 1.066-2.8 1.066-4.388 0-1.63-.366-3.113-1.097-4.45-.711-1.358-1.682-2.434-2.915-3.228a7.036 7.036 0 00-4.011-1.222c-1.504 0-2.863.407-4.074 1.222-1.212.815-2.173 1.901-2.884 3.26-.71 1.357-1.065 2.83-1.065 4.418 0 1.65.366 3.144 1.097 4.482.731 1.337 1.703 2.402 2.914 3.196a7.411 7.411 0 004.012 1.16zM107.826 48.545l6.894 3.729a16.435 16.435 0 01-5.421 4.732c-2.173 1.191-4.545 1.786-7.114 1.786-2.884 0-5.516-.741-7.898-2.224-2.36-1.484-4.252-3.469-5.672-5.955-1.4-2.507-2.1-5.276-2.1-8.305 0-2.298.407-4.44 1.222-6.425.815-2.005 1.933-3.76 3.353-5.265a15.727 15.727 0 015.015-3.572c1.9-.857 3.928-1.285 6.08-1.285 2.569 0 4.941.595 7.114 1.786a16.156 16.156 0 015.421 4.795l-6.894 3.698a7.671 7.671 0 00-2.602-1.943 7.092 7.092 0 00-3.039-.69c-1.505 0-2.863.419-4.075 1.254-1.211.815-2.172 1.901-2.883 3.26-.71 1.337-1.065 2.8-1.065 4.387 0 1.567.355 3.03 1.065 4.388.71 1.337 1.672 2.413 2.883 3.227 1.212.815 2.57 1.223 4.075 1.223 1.086 0 2.12-.23 3.102-.69a8.222 8.222 0 002.539-1.911zM146.194 38.171v19.807h-7.647V40.177c0-1.233-.303-2.35-.909-3.353a6.61 6.61 0 00-2.444-2.413c-1.003-.606-2.121-.91-3.354-.91-1.232 0-2.361.304-3.384.91a6.671 6.671 0 00-2.413 2.413c-.585 1.003-.878 2.12-.878 3.353v17.8h-7.647l-.031-47.008h7.647l.031 18.459a11.555 11.555 0 013.823-2.664c1.484-.669 3.082-1.003 4.795-1.003 2.278 0 4.357.564 6.237 1.692a12.452 12.452 0 014.481 4.482c1.129 1.86 1.693 3.938 1.693 6.236zM173.575 26.638h7.647v31.34h-7.647l-.345-3.886a10.262 10.262 0 01-3.416 3.416c-1.4.856-3.061 1.284-4.983 1.284-2.319 0-4.492-.438-6.518-1.316a17.132 17.132 0 01-5.359-3.635 17.401 17.401 0 01-3.604-5.36c-.857-2.026-1.285-4.199-1.285-6.518 0-2.235.407-4.335 1.222-6.299a16.313 16.313 0 018.618-8.65c1.943-.835 4.033-1.253 6.268-1.253 2.069 0 3.918.46 5.547 1.379 1.651.92 3.051 2.09 4.2 3.51l-.345-4.012zm-8.932 24.79c1.63 0 3.072-.408 4.325-1.222 1.254-.815 2.236-1.912 2.946-3.291.71-1.4 1.066-2.935 1.066-4.607 0-1.692-.356-3.228-1.066-4.607-.71-1.4-1.703-2.507-2.977-3.322-1.254-.815-2.685-1.222-4.294-1.222-1.608 0-3.081.418-4.419 1.254a9.2 9.2 0 00-3.165 3.29c-.773 1.38-1.159 2.915-1.159 4.607 0 1.692.397 3.228 1.191 4.607a9.19 9.19 0 003.165 3.29 8.271 8.271 0 004.387 1.223zM203.516 57.978h-9.872l-11.407-31.37h8.148l8.211 22.563 8.18-22.564h8.148l-11.408 31.37zM230.242 58.792c-2.883 0-5.515-.741-7.897-2.224-2.361-1.484-4.252-3.48-5.673-5.986-1.399-2.508-2.099-5.276-2.099-8.305 0-2.278.407-4.409 1.222-6.394.815-2.005 1.933-3.76 3.353-5.265a15.727 15.727 0 015.015-3.572c1.901-.857 3.927-1.285 6.079-1.285 2.445 0 4.68.522 6.707 1.567a15.243 15.243 0 015.202 4.23c1.421 1.797 2.455 3.845 3.103 6.143.648 2.298.794 4.701.439 7.208h-22.909a9.298 9.298 0 001.441 3.166 7.675 7.675 0 002.539 2.225c1.023.543 2.183.825 3.478.846 1.338.02 2.549-.293 3.636-.94a8.5 8.5 0 002.758-2.696l7.803 1.818c-1.274 2.779-3.176 5.056-5.704 6.832-2.528 1.755-5.359 2.633-8.493 2.633zm-7.709-19.618h15.419a7.957 7.957 0 00-1.473-3.385 8.25 8.25 0 00-2.727-2.444 7.088 7.088 0 00-3.51-.909 6.915 6.915 0 00-3.478.909 8.335 8.335 0 00-2.727 2.413 8.852 8.852 0 00-1.504 3.416zM258.401 58.542a17.341 17.341 0 01-4.732-.972 14.02 14.02 0 01-4.011-2.288 9.804 9.804 0 01-2.696-3.447l6.456-2.758c.251.418.658.867 1.223 1.348.564.46 1.232.846 2.005 1.16.794.313 1.661.47 2.601.47.794 0 1.546-.105 2.257-.314.731-.23 1.316-.574 1.755-1.034.459-.46.689-1.055.689-1.786 0-.773-.271-1.369-.815-1.787-.522-.438-1.19-.762-2.005-.971a65.646 65.646 0 00-2.319-.627 22.777 22.777 0 01-5.547-1.849c-1.693-.836-3.061-1.912-4.106-3.228-1.024-1.337-1.536-2.946-1.536-4.826 0-2.069.544-3.855 1.63-5.36 1.107-1.503 2.539-2.663 4.294-3.478 1.776-.815 3.687-1.222 5.735-1.222 2.486 0 4.763.522 6.832 1.567 2.089 1.024 3.74 2.476 4.951 4.356l-6.048 3.573a5.025 5.025 0 00-1.222-1.38 6.647 6.647 0 00-1.787-1.065 6.054 6.054 0 00-2.099-.501c-.941-.042-1.797.042-2.57.25-.773.21-1.4.565-1.881 1.066-.459.502-.689 1.17-.689 2.006 0 .794.313 1.39.94 1.786.627.376 1.379.669 2.256.878.899.209 1.755.438 2.57.69a31.055 31.055 0 015.171 2.224c1.63.878 2.936 1.954 3.918 3.228.982 1.275 1.452 2.8 1.41 4.576 0 2.026-.606 3.802-1.818 5.327-1.212 1.505-2.778 2.654-4.701 3.448-1.901.794-3.938 1.107-6.111.94z"></path>
+      <path fill="#FF0D36" d="M42.807 30.997c-.949.31-1.96.23-2.846-.222a3.715 3.715 0 01-2.03-3.138 3.74 3.74 0 002.03 3.528 3.694 3.694 0 002.846.222 3.716 3.716 0 002.172-1.853 3.83 3.83 0 00.4-1.88 3.627 3.627 0 01-.4 1.49 3.715 3.715 0 01-2.172 1.853z"></path>
+      <path fill="#FF0D36" d="M57.755 0h-45.51C5.479 0 0 5.48 0 12.245v45.51C0 64.513 5.48 70 12.245 70h45.51C64.513 70 70 64.52 70 57.755v-45.51C70 5.488 64.52 0 57.755 0zM38.977 43.764l-4.575 10.25a.344.344 0 01-.151.168c-.843.559-1.95.727-3.06.488a4.9 4.9 0 01-1.019-.337c-1.41-.638-2.402-1.853-2.571-3.165a.38.38 0 01.036-.222l4.45-9.957c.063-.133.195-.221.364-.248a.68.68 0 01.496.124c.692.479 1.366.86 2.049 1.18.062.026.115.044.177.061.089.027.177.063.266.098.204.08.399.15.603.213l.124.044h.027v.009a13.6 13.6 0 002.243.559c.177.008.363.132.47.283.106.151.133.32.062.461l.009-.009zm12.51-10.932c-2.793 5.489-9.514 7.678-15.002 4.886a11.018 11.018 0 01-3.697-3.077L18.68 39.225a.473.473 0 01-.248.009.494.494 0 01-.257-.142.486.486 0 01-.098-.506l3.201-7.837a.467.467 0 01.302-.275l8.848-2.873c.027-1.65.373-3.307 1.17-4.877 2.794-5.488 9.514-7.678 15.003-4.885 5.488 2.793 7.678 9.514 4.885 15.002v-.009z"></path>
+      <path fill="#FF0D36" d="M43.348 24.507a3.947 3.947 0 00-.922-.328 3.742 3.742 0 00-1.924.106 3.715 3.715 0 00-2.572 3.343c.018.328.071.647.178.966.31.949.966 1.72 1.853 2.172a3.694 3.694 0 002.846.222 3.716 3.716 0 002.571-3.343 3.731 3.731 0 00-2.03-3.147v.009z"></path>
+    </svg>
+  );
+}
 
 const normalizeStoredRows = (storedRows: RowMapping[]) => storedRows.map(row => ({
   ...row,
@@ -82,6 +129,8 @@ const normalizeStoredRows = (storedRows: RowMapping[]) => storedRows.map(row => 
 
 export default function ContasAPagar() {
   const [rows, setRows] = useState<RowMapping[]>([]);
+  const [workflowSteps, setWorkflowSteps] = useState<WorkflowSteps>(INITIAL_WORKFLOW_STEPS);
+  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
   const [isProcessing, setIsProcessing] = useState(false);
   const [isMatchingOverlayVisible, setIsMatchingOverlayVisible] = useState(false);
   const [planilhaPassword, setPlanilhaPassword] = useState('031007');
@@ -110,8 +159,6 @@ export default function ContasAPagar() {
       const parsed = JSON.parse(saved);
       const storedRows = Array.isArray(parsed?.rows) ? parsed.rows : [];
       if (storedRows.length > 0) {
-        setRows(normalizeStoredRows(storedRows));
-        setHasStoredRows(true);
       }
     } catch (error) {
       console.warn('Não foi possível restaurar os dados locais da planilha.', error);
@@ -218,6 +265,8 @@ export default function ContasAPagar() {
   const limparDadosLocais = () => {
     window.localStorage.removeItem(STORAGE_KEY);
     setRows([]);
+    setWorkflowSteps(INITIAL_WORKFLOW_STEPS);
+    setExpandedRows({});
     setHasStoredRows(false);
     setSearchTerm('');
     setSearchResults([]);
@@ -303,6 +352,7 @@ export default function ContasAPagar() {
 
     setIsProcessing(true);
     try {
+      setExpandedRows({});
       const results = await Promise.all(files.map(processFile));
       let initialRows = results.flat();
       
@@ -515,7 +565,7 @@ export default function ContasAPagar() {
     setIsMatchingOverlayVisible(true);
     const rowsToMatch = Array.isArray(targetRows) ? targetRows : rows;
     const selectedIds = new Set(rowsToMatch.filter(r => r.selecionado ?? true).map(r => r.internal_id));
-    let updatedRows = rows.map(r => ({ ...r }));
+    let updatedRows = rowsToMatch.map(r => ({ ...r }));
     const uniqueNames = Array.from(new Set(
       updatedRows.filter(r => selectedIds.has(r.internal_id) && !r.fornecedor_id && r.original.NOMEFORNECEDOR)
           .map(r => r.original.NOMEFORNECEDOR!)
@@ -586,6 +636,16 @@ export default function ContasAPagar() {
 
         await new Promise(r => setTimeout(r, 100));
       }
+
+      setWorkflowSteps(prev => ({
+        ...prev,
+        buscarFornecedores: true,
+        buscarCategoria: true,
+        buscarDepartamento: true,
+        buscarBanco: true,
+      }));
+
+      return updatedRows;
     } finally {
       setIsProcessing(false);
       setIsMatchingOverlayVisible(false);
@@ -792,6 +852,32 @@ export default function ContasAPagar() {
     return Number(normalized);
   };
 
+  const formatCurrencyBRL = (value: any) => {
+    const amount = parseCurrencyValue(value);
+    if (!Number.isFinite(amount)) return String(value ?? 'N/A');
+
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(amount);
+  };
+
+  const getPagamentoResumoLinhas = (row: RowMapping, pagamento: OmiePagamentoVinculado) => {
+    const vencimento = pagamento.vencimento || formatExcelDate(row.original.Vencimento) || 'N/A';
+    const documento = pagamento.numero_documento || pagamento.nf || row.original['Nº NF'] || 'N/A';
+    const parcela = pagamento.parcela || 'N/A';
+    const valorTitulo = formatCurrencyBRL(row.original.Saída);
+    const valorBaixa = formatCurrencyBRL(pagamento.valor);
+    const dataBaixa = pagamento.data_pagamento || formatExcelDate(row.original.PGTO) || 'N/A';
+    const blocoPagamento = pagamento.estaPago
+      ? `Pagamento ${pagamento.codigo} - Baixa ${dataBaixa} - Valor ${valorBaixa}`
+      : `Pagamento ${pagamento.codigo} - Sem baixa - Valor ${valorBaixa}`;
+
+    return [
+      `Doc ${documento} - Parcela ${parcela} - Vencimento ${vencimento} - Valor ${valorTitulo} | ${blocoPagamento}`
+    ];
+  };
+
   const atualizarContaCorrente = (rowId: string, contaId: number | null) => {
     setRows(prev => prev.map(r => r.internal_id === rowId
       ? prepararLinhaAposEdicaoManual(r, { conta_id: contaId })
@@ -858,7 +944,7 @@ export default function ContasAPagar() {
     );
   };
 
-  const getRowValidation = (row: RowMapping) => {
+  const getRowValidation = (row: RowMapping): RowValidation => {
     const valor = parseCurrencyValue(row.original.Saída);
     const valorValido = Number.isFinite(valor) && valor > 0;
     const vencimentoValido = isValidDateValue(row.original.Vencimento);
@@ -873,6 +959,70 @@ export default function ContasAPagar() {
       fornecedorLocalizado,
       hasErrors: !valorValido || !vencimentoValido || !pagamentoValido,
       canImport: fornecedorLocalizado && valorValido && vencimentoValido && pagamentoValido
+    };
+  };
+
+  const getStatusDisplay = (row: RowMapping, validation: RowValidation): StatusDisplay => {
+    if (validation.hasErrors || row.status === 'ERRO') {
+      return {
+        tone: 'danger',
+        title: 'ERRO',
+        description: row.mensagem_erro || 'Valor, vencimento ou data de pagamento inválidos.',
+        monoLine: row.duplicados_info
+      };
+    }
+
+    if (row.status === 'PROCESSANDO') {
+      return {
+        tone: 'info',
+        title: 'Processando',
+        description: 'Enviando os dados para o Omie.'
+      };
+    }
+
+    if (row.status === 'SUCESSO') {
+      return {
+        tone: 'success',
+        title: 'Importado',
+        description: row.omie_id_gerado
+          ? `Título e baixa processados no Omie. ID ${row.omie_id_gerado}.`
+          : 'Título e baixa processados no Omie.',
+        monoLine: row.omie_id_gerado ? `ID ${row.omie_id_gerado}` : undefined
+      };
+    }
+
+    if (row.status === 'JA_CADASTRADO') {
+      const detalhesPagamento = row.pagamentos_vinculados?.[0]
+        ? getPagamentoResumoLinhas(row, row.pagamentos_vinculados[0])
+        : [];
+
+      return {
+        tone: 'success',
+        title: 'Cadastrado',
+        description: 'Título já possui baixa no Omie. Nenhuma ação será executada.',
+        detailLines: detalhesPagamento
+      };
+    }
+
+    if (row.status === 'LANCAR_PAGAMENTO') {
+      const detalhesPagamento = row.pagamentos_vinculados?.[0]
+        ? getPagamentoResumoLinhas(row, row.pagamentos_vinculados[0])
+        : [];
+
+      return {
+        tone: 'warning',
+        title: 'Baixar',
+        description: 'Título cadastrado no Omie sem baixa. Será atualizada a baixa.',
+        detailLines: detalhesPagamento
+      };
+    }
+
+    return {
+      tone: 'neutral',
+      title: 'Pendente',
+      description: row.acao_importacao === 'ATUALIZAR'
+        ? 'Título localizado. Aguardando atualização do cadastro.'
+        : 'Registro pronto para importação.'
     };
   };
 
@@ -1197,6 +1347,38 @@ export default function ContasAPagar() {
     XLSX.writeFile(workbook, `Log_Importacao_ContasPagar_${new Date().getTime()}.csv`);
   };
 
+  const hasRowDetail = (row: RowMapping) => {
+    const validation = getRowValidation(row);
+    const statusDisplay = getStatusDisplay(row, validation);
+
+    return Boolean(
+      statusDisplay.description ||
+      statusDisplay.monoLine ||
+      statusDisplay.detailLines?.length ||
+      row.status === 'ERRO' ||
+      row.status === 'LANCAR_PAGAMENTO' ||
+      (row.status === 'PENDENTE' && !isNoopRow(row))
+    );
+  };
+
+  const expandableRowIds = rows.filter(hasRowDetail).map(r => r.internal_id);
+  const hasExpandableRows = expandableRowIds.length > 0;
+  const areAllRowsExpanded = hasExpandableRows && expandableRowIds.every(id => expandedRows[id]);
+
+  const toggleRowExpanded = (rowId: string) => {
+    setExpandedRows(prev => ({
+      ...prev,
+      [rowId]: !prev[rowId]
+    }));
+  };
+
+  const toggleAllExpandedRows = () => {
+    if (!hasExpandableRows) return;
+
+    const nextExpanded = !areAllRowsExpanded;
+    setExpandedRows(Object.fromEntries(expandableRowIds.map(id => [id, nextExpanded])));
+  };
+
   const selectedRows = rows.filter(r => (r.selecionado ?? true) && !getRowValidation(r).hasErrors && r.status !== 'ERRO');
   const rowsProcessaveisSelecionadas = selectedRows.filter(r =>
     !isNoopRow(r) &&
@@ -1227,9 +1409,21 @@ export default function ContasAPagar() {
     r.status !== 'ERRO' &&
     r.acao_importacao !== 'REVISAR'
   );
+  const renderCheckpointItem = (step: number, label: string, done: boolean) => (
+    <div className="flex items-center gap-2" key={label}>
+      {done ? (
+        <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+      ) : (
+        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[#ffccd6] bg-[#fff0f2] text-[10px] font-bold text-[#d30a2f]">
+          {step}
+        </span>
+      )}
+      <span className={done ? 'font-semibold text-emerald-700' : ''}>{label}</span>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans pb-20">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#fff_0%,#f8fafc_12%,#f8fafc_100%)] text-slate-800 font-sans pb-20">
       {isMatchingOverlayVisible && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-6 backdrop-blur-sm">
           <div className="w-full max-w-lg rounded-3xl border border-indigo-100 bg-white p-8 shadow-2xl">
@@ -1239,13 +1433,13 @@ export default function ContasAPagar() {
               </div>
               <div>
                 <h2 className="text-xl font-bold text-slate-900">Buscando no Omie</h2>
-                <p className="text-sm text-slate-500">Os fornecedores e pagamentos vinculados estao sendo validados.</p>
+                <p className="text-sm text-slate-500">Os fornecedores e pagamentos vinculados estão sendo validados.</p>
               </div>
             </div>
 
             <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <div className="flex items-center justify-between text-sm font-semibold text-slate-600">
-                <span>Item em validacao</span>
+                <span>Item em validação</span>
                 <span>{matchProgress.current} de {matchProgress.total}</span>
               </div>
               <div className="mt-3 text-base font-bold text-slate-900 break-words">
@@ -1263,67 +1457,113 @@ export default function ContasAPagar() {
       )}
       
       {/* HEADER */}
-      <header className="bg-white border-b border-slate-200 shadow-sm p-6 px-10 flex justify-between items-center sticky top-0 z-10 backdrop-blur-md bg-white/70">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center">
-            <Wallet className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-blue-500 bg-clip-text text-transparent">Importação Contas a Pagar</h1>
-            <p className="text-sm text-slate-500 mt-1">Integração de pagamentos retroativos com o Omie</p>
-          </div>
-        </div>
-        
-        {rows.length > 0 && (
-          <div className="flex gap-3">
-            {hasStoredRows && (
-              <button
-                onClick={limparDadosLocais}
-                disabled={isProcessing}
-                className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 rounded-lg text-sm font-bold shadow-sm transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Trash2 className="w-4 h-4" /> Limpar Dados
-              </button>
+      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 shadow-sm backdrop-blur-md">
+        <div className="flex flex-col gap-4 px-6 py-4 md:px-10">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex min-w-0 flex-1 items-center gap-5 lg:gap-8">
+              <div className="shrink-0">
+                <ChavesNaMaoLogo className="h-8 w-auto md:h-9" />
+              </div>
+              <div className="flex-1 text-left lg:text-center">
+                <div className="mx-auto w-fit max-w-full">
+                  <h1 className="text-2xl font-bold text-slate-900">Importação de Contas a Pagar</h1>
+                  <p className="text-sm text-slate-500">Integração de pagamentos retroativos com o Omie</p>
+                </div>
+              </div>
+            </div>
+
+            {rows.length > 0 && (
+              <div className="flex flex-wrap gap-3">
+                {hasStoredRows && (
+                  <button
+                    onClick={limparDadosLocais}
+                    disabled={isProcessing}
+                    className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-600 shadow-sm transition-all hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <span className="flex items-center gap-2"><Trash2 className="h-4 w-4" /> Limpar dados</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={() => autoMatchFornecedores()}
+                  disabled={isProcessing || selectedRows.length === 0}
+                  className="rounded-xl border border-[#ffccd6] bg-[#fff0f2] px-4 py-2 text-sm font-bold text-[#d30a2f] shadow-sm transition-all hover:bg-[#ffe2e8] disabled:opacity-50"
+                >
+                  <span className="flex items-center gap-2"><Search className="h-4 w-4" /> Buscar no Omie</span>
+                </button>
+
+                <button
+                  onClick={processarImportacao}
+                  disabled={!isReady || isProcessing}
+                  className="rounded-xl bg-[#ff0d36] px-6 py-2 text-sm font-bold text-white shadow-md transition-all hover:bg-[#d90b2f] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <span className="flex items-center gap-2">{isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}{isProcessing ? 'Processando...' : 'Integrar'}</span>
+                </button>
+
+                <button
+                  onClick={gerarLogCSV}
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm transition-all hover:bg-slate-50"
+                >
+                  <span className="flex items-center gap-2"><FileSpreadsheet className="h-4 w-4" /> Baixar Log CSV</span>
+                </button>
+
+                {hasExpandableRows && (
+                  <button
+                    onClick={toggleAllExpandedRows}
+                    disabled={isProcessing}
+                    className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm transition-all hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <span className="flex items-center gap-2">
+                      {areAllRowsExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      {areAllRowsExpanded ? 'Ocultar Todos' : 'Exibir Todos'}
+                    </span>
+                  </button>
+                )}
+              </div>
             )}
-
-            <button
-              onClick={() => autoMatchFornecedores()}
-              disabled={isProcessing || selectedRows.length === 0}
-              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-bold shadow-sm transition-all flex items-center gap-2"
-            >
-              <Search className="w-4 h-4" /> Buscar Omie
-            </button>
-
-            <button
-              onClick={processarImportacao}
-              disabled={!isReady || isProcessing}
-              className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold shadow-md transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-              {isProcessing ? 'Processando...' : 'Integrar'}
-            </button>
-
-            <button
-              onClick={gerarLogCSV}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold shadow-sm transition-all flex items-center gap-2"
-            >
-              <FileSpreadsheet className="w-4 h-4" /> Baixar Log CSV
-            </button>
           </div>
-        )}
+
+        </div>
       </header>
 
       <main className="p-6 md:p-10 w-full max-w-full mx-auto">
         
         {/* WIZARD STEP 1 */}
         {rows.length === 0 && (
-           <div className="max-w-2xl mx-auto mt-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="bg-white border border-slate-200 border-dashed rounded-3xl p-12 flex flex-col items-center justify-center text-center">
-                 <div className="w-20 h-20 bg-indigo-50 text-indigo-500 rounded-full flex items-center justify-center mb-6">
-                    <UploadCloud className="w-10 h-10" />
-                 </div>
-                 <h2 className="text-2xl font-bold text-slate-800 mb-2">Importe sua Planilha</h2>
-                 <p className="text-slate-500 mb-8 max-w-md">Selecione o arquivo Excel (.xlsx) contendo as contas a pagar retroativas para iniciar o processo de mapeamento e integração.</p>
+           <div className="mx-auto mt-14 max-w-4xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+                 <div className="grid gap-0 lg:grid-cols-[1.2fr_0.8fr]">
+                   <div className="border-b border-slate-200 bg-[linear-gradient(135deg,#fff_0%,#fff6f7_100%)] p-10 lg:border-b-0 lg:border-r">
+                     <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#ffccd6] bg-white px-4 py-2 text-sm font-semibold text-[#d30a2f]">
+                       <span className="h-2 w-2 rounded-full bg-[#ff0d36]" /> Importação financeira
+                     </div>
+                     <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-[#fff0f2] text-[#ff0d36] shadow-sm">
+                        <UploadCloud className="h-10 w-10" />
+                     </div>
+                     <h2 className="mb-3 text-3xl font-bold text-slate-900">Importe sua planilha</h2>
+                     <p className="mb-8 max-w-xl text-slate-500">Selecione o arquivo Excel com as contas a pagar retroativas para iniciar o mapeamento, consultar o Omie e preparar a integração.</p>
+
+                     <div className="space-y-4">
+                       <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Checkpoints</div>
+
+                       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                         <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                           <CheckCircle2 className="h-4 w-4 text-[#ff0d36]" /> Busca automática de fornecedores
+                         </div>
+                         <div className="mt-3 space-y-2 text-sm text-slate-600">
+                           {renderCheckpointItem(1, 'Importar planilha', workflowSteps.importarPlanilha)}
+                           {renderCheckpointItem(2, 'Buscar Fornecedores no Omie', workflowSteps.buscarFornecedores)}
+                         </div>
+                       </div>
+                     </div>
+                   </div>
+
+                   <div className="flex flex-col justify-center bg-slate-50 p-10">
+                     <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                       <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Painel</div>
+                       <div className="mt-2 text-lg font-bold text-slate-900">Validação guiada</div>
+                       <div className="mt-1 text-sm text-slate-500">Fluxo inspirado na navegação limpa do Chaves na Mão, com foco em leitura rápida e ação direta.</div>
+                     </div>
                  
                  {isLoadingMetadata || (isProcessing && rows.length === 0) ? (
                    <div className="flex flex-col items-center gap-4 text-indigo-500">
@@ -1342,14 +1582,14 @@ export default function ContasAPagar() {
                      {isProcessing && <p className="text-sm text-slate-400">Isso pode levar alguns segundos dependendo da quantidade de registros.</p>}
                    </div>
                  ) : (
-                   <div className="flex flex-col items-center gap-4">
+                   <div className="flex flex-col items-center gap-4 rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
                      {metadataWarning && (
                        <div className="w-full max-w-md rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
                          {metadataWarning}
                        </div>
                      )}
                      <div className="flex flex-col items-start w-full max-w-xs">
-                        <label className="text-xs font-semibold text-slate-500 uppercase mb-1">Senha da Planilha (se houver)</label>
+                        <label className="text-xs font-semibold text-slate-500 uppercase mb-1">Senha da planilha (se houver)</label>
                         <input 
                           type="text" 
                           value={planilhaPassword} 
@@ -1358,20 +1598,22 @@ export default function ContasAPagar() {
                           className="w-full px-4 py-2 bg-slate-100 border-none rounded-lg focus:ring-2 focus:ring-indigo-400 outline-none transition text-center"
                         />
                      </div>
-                     <label className="px-8 py-3 bg-indigo-600 text-white font-bold rounded-xl cursor-pointer hover:bg-indigo-700 transition shadow-lg hover:shadow-indigo-500/30">
-                       Selecionar Arquivo
+                     <label className="cursor-pointer rounded-xl bg-[#ff0d36] px-8 py-3 font-bold text-white shadow-lg transition hover:bg-[#d90b2f] hover:shadow-[#ff0d36]/30">
+                       Selecionar arquivo
                        <input type="file" multiple accept=".xlsx, .csv" className="hidden" onChange={handleFileUpload} />
                      </label>
                    </div>
                  )}
+                   </div>
+                 </div>
               </div>
            </div>
         )}
 
         {/* WIZARD STEP 2 & 3 */}
         {rows.length > 0 && (
-           <div className="bg-white border border-slate-200 shadow-sm rounded-2xl overflow-hidden animate-in fade-in">
-             <div className="p-6 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+           <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm animate-in fade-in">
+             <div className="flex items-center justify-between border-b border-slate-100 bg-[linear-gradient(135deg,#ffffff_0%,#fff7f8_100%)] p-6">
                 <div>
                   <h3 className="font-bold text-slate-700">Mapeamento de Dados ({rows.length} registros encontrados)</h3>
                   {metadataWarning && (
@@ -1381,7 +1623,7 @@ export default function ContasAPagar() {
                   )}
                 </div>
                 {!isReady && <span className="text-amber-600 text-sm font-medium flex items-center gap-1"><AlertCircle className="w-4 h-4"/> Selecione registros válidos e preencha os campos vazios para liberar a importação.</span>}
-                {isReady && <span className="text-emerald-600 text-sm font-medium flex items-center gap-1"><CheckCircle2 className="w-4 h-4"/> {rowsProcessaveisSelecionadas.length} registro(s) pronto(s) para processamento!</span>}
+                {isReady && <span className="text-emerald-600 text-sm font-medium flex items-center gap-1"><CheckCircle2 className="w-4 h-4"/> {rowsProcessaveisSelecionadas.length} registro(s) pronto(s) para processamento.</span>}
               </div>
 
               {/* RESUMO VISUAL */}
@@ -1448,12 +1690,21 @@ export default function ContasAPagar() {
                        <th className="px-4 py-3 font-semibold text-indigo-600">Omie: Categoria</th>
                        <th className="px-4 py-3 font-semibold text-indigo-600">Omie: Departamento</th>
                        <th className="px-4 py-3 font-semibold text-indigo-600">Omie: Banco</th>
-                       <th className="px-4 py-3 font-semibold text-indigo-600">Omie: Pagamentos</th>
                      </tr>
                    </thead>
                    <tbody className="divide-y divide-slate-100">
                      {rows.map(row => {
                        const validation = getRowValidation(row);
+                       const statusDisplay = getStatusDisplay(row, validation);
+                       const showDetailRow = Boolean(
+                         statusDisplay.description ||
+                         statusDisplay.monoLine ||
+                         statusDisplay.detailLines?.length ||
+                         row.status === 'ERRO' ||
+                         row.status === 'LANCAR_PAGAMENTO' ||
+                         (row.status === 'PENDENTE' && !isNoopRow(row))
+                       );
+                       const isDetailExpanded = Boolean(expandedRows[row.internal_id]);
                        const valorErrorClass = validation.valorValido
                          ? 'bg-slate-100 border-transparent focus-within:border-indigo-400'
                          : 'bg-rose-50 border-rose-300 focus-within:border-rose-500';
@@ -1461,7 +1712,7 @@ export default function ContasAPagar() {
                        const fornecedorWarningClass = !validation.fornecedorLocalizado
                          ? 'bg-amber-50 text-amber-700 border border-amber-200 rounded-md'
                          : '';
-	                       const hasDataErrors = validation.hasErrors;
+                         const hasDataErrors = validation.hasErrors;
 	                       const canSelectRow = !hasDataErrors && row.status !== 'ERRO';
 	                       const isSelected = canSelectRow && (row.selecionado ?? true);
                        const rowColorClass = hasDataErrors || row.status === 'ERRO'
@@ -1472,7 +1723,8 @@ export default function ContasAPagar() {
                        const rowSelectionClass = !canSelectRow || isSelected ? '' : 'opacity-55';
 
                        return (
-                       <tr key={row.internal_id} className={`${rowColorClass} ${rowSelectionClass}`}>
+                       <Fragment key={row.internal_id}>
+                       <tr key={`${row.internal_id}-main`} className={`${rowColorClass} ${rowSelectionClass}`}>
                          <td className="px-4 py-4 text-center align-top">
 	                           <input
 	                             type="checkbox"
@@ -1485,111 +1737,39 @@ export default function ContasAPagar() {
                          </td>
                          {/* STATUS */}
                          <td className="px-4 py-4">
-                           {row.status === 'PENDENTE' && <span className="text-slate-400 font-medium">Pendente</span>}
-                           {row.status === 'PROCESSANDO' && <span className="text-indigo-500 font-medium flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin"/> Processando</span>}
-                           {row.status === 'SUCESSO' && (
-                             <div className="flex flex-col gap-1">
-                               <span className="text-emerald-600 font-bold flex items-center gap-1">
-                                 <CheckCircle2 className="w-4 h-4"/> Sucesso
-                               </span>
-                               {row.omie_id_gerado && (
-                                 <span className="text-[10px] font-mono text-emerald-500 bg-emerald-50 px-1.5 py-0.5 rounded w-fit">
-                                   ID: {row.omie_id_gerado}
-                                 </span>
+                           <div className="flex items-center gap-2">
+                             <div className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 font-bold text-[11px] ${
+                               statusDisplay.tone === 'success'
+                                 ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                                 : statusDisplay.tone === 'warning'
+                                   ? 'bg-amber-50 border-amber-200 text-amber-700'
+                                   : statusDisplay.tone === 'info'
+                                     ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                                     : statusDisplay.tone === 'danger'
+                                       ? 'bg-rose-50 border-rose-200 text-rose-700'
+                                       : 'bg-slate-50 border-slate-200 text-slate-600'
+                             }`}>
+                               {row.status === 'PROCESSANDO' ? (
+                                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                               ) : statusDisplay.tone === 'danger' ? (
+                                 <AlertCircle className="w-3.5 h-3.5" />
+                               ) : (
+                                 <CheckCircle2 className="w-3.5 h-3.5" />
                                )}
+                               {statusDisplay.title}
                              </div>
-                           )}
-                           {row.status === 'JA_CADASTRADO' && (
-                             <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2 flex flex-col gap-1">
-                               <div className="text-emerald-700 font-bold text-xs flex items-center gap-1">
-                                 <CheckCircle2 className="w-4 h-4"/> Já Cadastrado
-                               </div>
-                               <p className="text-[11px] text-emerald-600 leading-tight">
-                                 Título já possui baixa no Omie. Nenhuma ação será executada.
-                               </p>
-                               {row.duplicados_info && (
-                                 <p className="text-[10px] text-emerald-500 font-mono mt-1 bg-white/50 px-1.5 py-0.5 rounded">
-                                   {row.duplicados_info}
-                                 </p>
-                               )}
-                             </div>
-                           )}
-                          {row.status === 'LANCAR_PAGAMENTO' && (
-                              <div className="flex flex-col gap-2">
-                                <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 flex flex-col gap-1">
-                                  <div className="text-amber-700 font-bold text-xs flex items-center gap-1">
-                                    <CheckCircle2 className="w-4 h-4"/> Já Cadastrado
-                                  </div>
-                                  <p className="text-[11px] text-amber-600 leading-tight">
-                                    Título encontrado em aberto no Omie. <br/>
-                                    Será atualizada a baixa.
-                                  </p>
-                                  {row.duplicados_info && (
-                                    <p className="text-[10px] text-amber-500 font-mono mt-1 bg-white/50 px-1.5 py-0.5 rounded">
-                                      {row.duplicados_info}
-                                    </p>
-                                  )}
-                                </div>
-                                <button
-                                  onClick={() => lancarSomentePagamento(row)}
-                                  disabled={!isSelected || !validation.canImport || !row.conta_id || !row.categoria_codigo || !row.departamento_codigo}
-                                  className="flex items-center justify-center gap-1 px-2 py-1.5 bg-amber-500 text-white rounded font-bold text-[11px] hover:bg-amber-600 transition disabled:opacity-30 disabled:cursor-not-allowed shadow-sm hover:shadow-md"
-                                >
-                                  <Play className="w-3 h-3" /> Atualizar Baixa
-                                </button>
-                              </div>
-                            )}
-                            {row.status === 'ERRO' && (
-                              <div className="flex flex-col gap-2">
-	                                {row.is_duplicate ? (
-	                                  <div className="bg-rose-50 border border-rose-200 rounded-lg p-2 flex flex-col gap-1">
-	                                    <div className="text-rose-700 font-bold text-xs flex items-center gap-1">
-	                                      <AlertCircle className="w-4 h-4"/> Revisar
-	                                    </div>
-	                                    <p className="text-[11px] text-rose-600 leading-tight">
-	                                      {row.mensagem_erro || 'O vínculo encontrado no Omie precisa de revisão.'}
-	                                    </p>
-                                    {row.duplicados_info && (
-                                      <p className="text-[10px] text-rose-500 font-mono mt-1 bg-white/50 px-1.5 py-0.5 rounded">
-                                        {row.duplicados_info}
-                                      </p>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <div className="bg-rose-50 border border-rose-200 rounded-lg p-2 flex flex-col gap-1">
-                                    <div className="text-rose-700 font-bold text-xs flex items-center gap-1">
-                                      <AlertCircle className="w-4 h-4"/> Erro
-                                    </div>
-                                    <p className="text-[11px] text-rose-600 leading-tight">
-                                      {row.mensagem_erro || 'Ocorreu um erro ao processar este registro.'}
-                                    </p>
-                                  </div>
-                                )}
-                                {!row.is_duplicate && row.status !== 'SUCESSO' && (
-                                  <button 
-                                    onClick={() => row.acao_importacao === 'ATUALIZAR' && getLinkedOmieId(row)
-                                      ? atualizarCadastroExistente(row)
-                                      : processarLinha(row)
-                                    }
-                                    className="text-[11px] bg-rose-100 text-rose-600 px-2 py-1 rounded hover:bg-rose-200 transition font-semibold"
-                                  >
-                                    Tentar Novamente
-                                  </button>
-                                )}
-                              </div>
-                            )}
-                            {row.status === 'PENDENTE' && !isNoopRow(row) && (
-                              <button
-                                onClick={() => row.acao_importacao === 'ATUALIZAR' && getLinkedOmieId(row)
-                                  ? atualizarCadastroExistente(row)
-                                  : processarLinha(row)
-                                }
-                                disabled={!isSelected || !validation.canImport || !row.categoria_codigo || !row.departamento_codigo || !row.conta_id}
-                                className="mt-1 flex items-center gap-1 px-2 py-1 bg-indigo-50 text-indigo-600 rounded text-[10px] font-bold hover:bg-indigo-600 hover:text-white transition disabled:opacity-30 disabled:cursor-not-allowed"
-                              >
-                                <Play className="w-3 h-3" /> {row.acao_importacao === 'ATUALIZAR' ? 'Atualizar Cadastro' : 'Importar'}
-                              </button>
-                            )}
+                             {showDetailRow && (
+                               <button
+                                 type="button"
+                                 onClick={() => toggleRowExpanded(row.internal_id)}
+                                 className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white p-1.5 text-slate-500 transition hover:border-slate-300 hover:text-slate-700"
+                                 aria-label={isDetailExpanded ? 'Ocultar detalhes' : 'Exibir detalhes'}
+                                 title={isDetailExpanded ? 'Ocultar detalhes' : 'Exibir detalhes'}
+                               >
+                                 {isDetailExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                               </button>
+                             )}
+                           </div>
                          </td>
 
                          {/* PLANILHA: NOME */}
@@ -1769,32 +1949,101 @@ export default function ContasAPagar() {
                             </select>
                          </td>
 
-                         {/* OMIE: PAGAMENTOS VINCULADOS */}
-                         <td className="px-4 py-4 min-w-[180px]">
-                           {(row.pagamentos_vinculados || []).length > 0 ? (
-                             <div className="flex flex-col gap-1">
-                               {row.pagamentos_vinculados!.map(pgto => (
-                                 <div key={pgto.codigo} className="rounded-md border border-indigo-100 bg-indigo-50 px-2 py-1">
-                                   <div className="text-xs font-bold text-indigo-700">ID {pgto.codigo}</div>
-                                   <div className="text-[10px] text-slate-500">
-                                     {pgto.status} - R$ {pgto.valor} - Vto {pgto.vencimento}
-                                   </div>
-                                   <div className="text-[10px] text-slate-500">
-                                     Doc {pgto.numero_documento || pgto.nf || 'N/A'} - Parcela {pgto.parcela || 'N/A'}
-                                   </div>
-                                   <div className="text-[10px] text-slate-500">
-                                     Dep {pgto.departamento_nome || pgto.departamento_codigo || 'N/A'}
-                                   </div>
-                                 </div>
-                               ))}
-                             </div>
-                           ) : (
-                             <span className="text-xs text-slate-400">Nenhum vínculo</span>
-                           )}
-                         </td>
-
                          {/* REMOVED DUPLICATE VALOR FROM END */}
                        </tr>
+                       {showDetailRow && isDetailExpanded && (
+                         <tr key={`${row.internal_id}-detail`} className={`${rowColorClass} ${rowSelectionClass}`}>
+                           <td className="px-4 pb-4"></td>
+                           <td colSpan={9} className="px-4 pb-4 pt-0">
+                             <div className={`rounded-lg border px-3 py-2 flex flex-col gap-1 ${
+                               statusDisplay.tone === 'success'
+                                 ? 'bg-emerald-50/70 border-emerald-200'
+                                 : statusDisplay.tone === 'warning'
+                                   ? 'bg-amber-50/70 border-amber-200'
+                                   : statusDisplay.tone === 'info'
+                                     ? 'bg-indigo-50/70 border-indigo-200'
+                                     : statusDisplay.tone === 'danger'
+                                       ? 'bg-rose-50/70 border-rose-200'
+                                       : 'bg-slate-50 border-slate-200'
+                             }`}>
+                               {statusDisplay.description && (
+                                 <p className={`text-[11px] leading-tight ${
+                                   statusDisplay.tone === 'success'
+                                     ? 'text-emerald-700'
+                                     : statusDisplay.tone === 'warning'
+                                       ? 'text-amber-700'
+                                       : statusDisplay.tone === 'info'
+                                         ? 'text-indigo-700'
+                                         : statusDisplay.tone === 'danger'
+                                           ? 'text-rose-700'
+                                           : 'text-slate-600'
+                                 }`}>
+                                   {statusDisplay.description}
+                                 </p>
+                               )}
+                               {statusDisplay.monoLine && (
+                                 <p className={`text-[10px] font-mono ${
+                                   statusDisplay.tone === 'success'
+                                     ? 'text-emerald-600'
+                                     : statusDisplay.tone === 'warning'
+                                       ? 'text-amber-600'
+                                       : statusDisplay.tone === 'info'
+                                         ? 'text-indigo-600'
+                                         : statusDisplay.tone === 'danger'
+                                           ? 'text-rose-600'
+                                           : 'text-slate-500'
+                                 }`}>
+                                   {statusDisplay.monoLine}
+                                 </p>
+                               )}
+                               {statusDisplay.detailLines?.map(line => (
+                                 <p key={`${row.internal_id}-${line}`} className="text-[10px] text-slate-600 leading-tight">
+                                   {line}
+                                 </p>
+                               ))}
+                               {row.status === 'LANCAR_PAGAMENTO' && (
+                                 <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                                   <button
+                                     onClick={() => lancarSomentePagamento(row)}
+                                     disabled={!isSelected || !validation.canImport || !row.conta_id || !row.categoria_codigo || !row.departamento_codigo}
+                                     className="flex items-center justify-center gap-1 px-2 py-1.5 bg-amber-500 text-white rounded font-bold text-[11px] hover:bg-amber-600 transition disabled:opacity-30 disabled:cursor-not-allowed shadow-sm hover:shadow-md w-fit"
+                                   >
+                                     <Play className="w-3 h-3" /> Atualizar Baixa
+                                   </button>
+                                 </div>
+                               )}
+                               {row.status === 'ERRO' && !row.is_duplicate && row.status !== 'SUCESSO' && (
+                                 <div className="mt-2">
+                                   <button 
+                                     onClick={() => row.acao_importacao === 'ATUALIZAR' && getLinkedOmieId(row)
+                                       ? atualizarCadastroExistente(row)
+                                       : processarLinha(row)
+                                     }
+                                     className="text-[11px] bg-rose-100 text-rose-600 px-2 py-1 rounded hover:bg-rose-200 transition font-semibold"
+                                   >
+                                     Tentar Novamente
+                                   </button>
+                                 </div>
+                               )}
+                               {row.status === 'PENDENTE' && !isNoopRow(row) && (
+                                 <div className="mt-2">
+                                   <button
+                                     onClick={() => row.acao_importacao === 'ATUALIZAR' && getLinkedOmieId(row)
+                                       ? atualizarCadastroExistente(row)
+                                       : processarLinha(row)
+                                     }
+                                     disabled={!isSelected || !validation.canImport || !row.categoria_codigo || !row.departamento_codigo || !row.conta_id}
+                                     className="flex items-center gap-1 px-2 py-1 bg-indigo-50 text-indigo-600 rounded text-[10px] font-bold hover:bg-indigo-600 hover:text-white transition disabled:opacity-30 disabled:cursor-not-allowed w-fit"
+                                   >
+                                     <Play className="w-3 h-3" /> {row.acao_importacao === 'ATUALIZAR' ? 'Atualizar cadastro' : 'Importar'}
+                                   </button>
+                                 </div>
+                               )}
+                             </div>
+                           </td>
+                         </tr>
+                       )}
+                       </Fragment>
                        );
                      })}
                    </tbody>
