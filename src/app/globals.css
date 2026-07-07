@@ -1,33 +1,120 @@
-@import url('https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
 @import "tailwindcss";
 
 :root {
-  --primary: #EB0027;
-  --primary-hover: #C4001F;
-  --primary-light: #FFF0F2;
-  --background: #ffffff;
-  --foreground: #0F172A;
-  --slate-50: #F8FAFC;
-  --slate-100: #F1F5F9;
-  --slate-200: #E2E8F0;
-  --slate-800: #1E293B;
-  --slate-900: #0F172A;
+  /* ===== Primitivas - Chaves na Mão Design System ===== */
+  --color-scarlet-50:  #FFF0F2;
+  --color-scarlet-100: #FFDDE3;
+  --color-scarlet-500: #FF264A;
+  --color-scarlet-600: #FC062F;
+  --color-scarlet-700: #EB0027;
+  --color-scarlet-800: #AF0521;
+  --color-scarlet-900: #900C22;
+
+  --color-grey-50:  #F6F5F5;
+  --color-grey-100: #E7E6E6;
+  --color-grey-200: #D1D0D0;
+  --color-grey-300: #B1AFB0;
+  --color-grey-400: #8A8686;
+  --color-grey-500: #6F686B;
+  --color-grey-600: #5E5C5D;
+  --color-grey-700: #504E4F;
+  --color-grey-800: #464444;
+  --color-grey-900: #323131;
+  --color-grey-950: #262626;
+
+  --color-green-100: #DCFCE7;
+  --color-green-700: #008236;
+  --color-green-800: #00A63E;
+
+  --color-yellow-100: #FEF9C2;
+  --color-yellow-600: #D08700;
+  --color-yellow-700: #A65F00;
+
+  --color-orange-100: #FFEDD4;
+  --color-orange-600: #FF6900;
+  --color-orange-700: #CA3500;
+
+  --color-blue-100: #DBEAFE;
+  --color-blue-600: #2B7FFF;
+  --color-blue-700: #155DFC;
+
+  --color-violet-100: #EEE7FF;
+  --color-violet-600: #914DFF;
+  --color-violet-700: #872BFF;
+
+  /* ===== Tokens semânticos ===== */
+  --primary: var(--color-scarlet-700);
+  --primary-hover: var(--color-scarlet-900);
+  --primary-foreground: #FFFFFF;
+  --background: #FFFFFF;
+  --foreground: var(--color-grey-900);
+  --card: #FFFFFF;
+  --card-foreground: var(--color-grey-900);
+  --muted: var(--color-grey-50);
+  --muted-foreground: var(--color-grey-600);
+  --accent: var(--color-grey-50);
+  --accent-foreground: var(--color-grey-900);
+  --destructive: var(--color-orange-700);
+  --destructive-foreground: #FFFFFF;
+  --success: var(--color-green-800);
+  --success-bg: var(--color-green-100);
+  --warning: var(--color-yellow-600);
+  --warning-bg: var(--color-yellow-100);
+  --info: var(--color-blue-700);
+  --info-bg: var(--color-blue-100);
+  --launches: var(--color-violet-700);
+  --launches-bg: var(--color-violet-100);
+  --border: var(--color-grey-200);
+  --input: var(--color-grey-200);
+  --ring: var(--color-scarlet-700);
+  --radius: 8px;
+
+  /* ===== Sombras ===== */
+  --shadow-sm: 0 2px 4px 1px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.0009);
+  --shadow-md: 0 3px 6px 1px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.0009);
+  --shadow-lg: 0 6px 12px 0 rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.0009);
 }
 
 @theme inline {
   --color-primary: var(--primary);
-  --color-primary-hover: var(--primary-hover);
-  --color-primary-light: var(--primary-light);
-  --font-sans: 'Urbanist', var(--font-geist-sans);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-info: var(--info);
+  --color-info-bg: var(--info-bg);
+  --color-launches: var(--launches);
+  --color-launches-bg: var(--launches-bg);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --font-sans: 'Open Sans', var(--font-geist-sans);
+  --font-mono: 'JetBrains Mono', monospace;
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
 }
 
 body {
-  background-color: var(--slate-50);
-  color: var(--slate-900);
-  font-family: 'Urbanist', sans-serif;
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: 'Open Sans', sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
-.transition-all {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background-color: var(--muted); }
+::-webkit-scrollbar-thumb { background-color: color-mix(in srgb, var(--primary) 25%, transparent); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--primary) 40%, transparent); }

@@ -36,6 +36,13 @@ yarn-error.log*
 # vercel
 .vercel
 
+# logs e saídas de scripts (não são código-fonte)
+/logs/
+scripts/logs/
+*.csv
+scripts/uncategorized_tickets.json
+scripts/omie/erro_retorno.html
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
