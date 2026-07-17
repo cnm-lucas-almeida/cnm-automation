@@ -5,11 +5,11 @@ import axios from 'axios';
 import {
   Loader2, RefreshCw, AlertCircle, Ticket, CheckCircle2,
   AlertTriangle, Users, TrendingUp, BarChart3, LayoutDashboard, PieChart as PieChartIcon, Building2,
-  ChevronUp, ChevronDown, ChevronsUpDown, X, ExternalLink,
+  ChevronUp, ChevronDown, ChevronsUpDown, X, ExternalLink, Maximize2, Minimize2,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  Legend, ResponsiveContainer, PieChart, Pie, Cell,
+  Legend, ResponsiveContainer, PieChart, Pie, Cell, LabelList,
 } from 'recharts';
 import type { DashboardData, TechRow, TicketItem, TicketResolvidoItem, AtendimentoBreakdown } from '@/lib/glpi';
 import { Select } from '@/components/ui/Select';
@@ -100,20 +100,20 @@ function deltaPct(curr: number, prev: number): number | null {
 }
 
 function KpiCard({
-  title, value, sub, icon: Icon, color, borderColor,
+  title, value, sub, icon: Icon, color, borderColor, big,
 }: {
   title: string; value: string | number; sub?: string;
-  icon: any; color: string; borderColor: string;
+  icon: any; color: string; borderColor: string; big?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-border p-5">
+    <div className={`rounded-lg border border-border ${big ? 'p-8 flex-1 flex flex-col justify-center' : 'p-5'}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{title}</p>
-          <p className="text-3xl font-bold mt-1 tabular-nums" style={{ color }}>{value}</p>
-          {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
+          <p className={`font-semibold text-muted-foreground uppercase tracking-wider ${big ? 'text-sm' : 'text-[11px]'}`}>{title}</p>
+          <p className={`font-bold mt-1 tabular-nums ${big ? 'text-5xl' : 'text-3xl'}`} style={{ color }}>{value}</p>
+          {sub && <p className={`text-muted-foreground mt-1 ${big ? 'text-base' : 'text-xs'}`}>{sub}</p>}
         </div>
-        <Icon size={20} style={{ color: borderColor }} className="opacity-60 flex-shrink-0 mt-1" />
+        <Icon size={big ? 32 : 20} style={{ color: borderColor }} className="opacity-60 flex-shrink-0 mt-1" />
       </div>
     </div>
   );
@@ -352,6 +352,13 @@ function DevMeterList({ data }: { data: AtendimentoBreakdown[] }) {
   );
 }
 
+// Rótulo com contagem + % direto na fatia — sem isso, quem só olha a apresentação (sem
+// mouse pra passar o tooltip) não tem como saber os números exatos, só as cores da legenda.
+function pieSliceLabel({ value, percent }: { value?: number; percent?: number }) {
+  if (!value || !percent) return '';
+  return `${value} (${Math.round(percent * 100)}%)`;
+}
+
 function TipoAtendimentoPie({ data }: { data: Array<{ tipo: string; count: number }> }) {
   if (data.length === 0) {
     return <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">Sem dados para este filtro.</div>;
@@ -359,7 +366,8 @@ function TipoAtendimentoPie({ data }: { data: Array<{ tipo: string; count: numbe
   return (
     <ResponsiveContainer width="100%" height={280}>
       <PieChart>
-        <Pie data={data} dataKey="count" nameKey="tipo" innerRadius={55} outerRadius={95} paddingAngle={2}>
+        <Pie data={data} dataKey="count" nameKey="tipo" innerRadius={55} outerRadius={95} paddingAngle={2}
+          label={pieSliceLabel} labelLine={false}>
           {data.map((d) => (
             <Cell key={d.tipo} fill={ATENDIMENTO_COLORS[d.tipo] ?? ATENDIMENTO_FALLBACK_COLOR} stroke="none" />
           ))}
@@ -371,7 +379,7 @@ function TipoAtendimentoPie({ data }: { data: Array<{ tipo: string; count: numbe
   );
 }
 
-function DesenvolvimentoPie({ data }: { data: { sim: number; nao: number } }) {
+function DesenvolvimentoPie({ data, height = 280 }: { data: { sim: number; nao: number }; height?: number }) {
   const total = data.sim + data.nao;
   if (total === 0) {
     return <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">Sem dados para este filtro.</div>;
@@ -381,9 +389,10 @@ function DesenvolvimentoPie({ data }: { data: { sim: number; nao: number } }) {
     { nome: 'Não exige desenvolvimento', key: 'nao', count: data.nao },
   ];
   return (
-    <ResponsiveContainer width="100%" height={280}>
+    <ResponsiveContainer width="100%" height={height}>
       <PieChart>
-        <Pie data={chartData} dataKey="count" nameKey="nome" innerRadius={55} outerRadius={95} paddingAngle={2}>
+        <Pie data={chartData} dataKey="count" nameKey="nome" innerRadius={55} outerRadius={95} paddingAngle={2}
+          label={pieSliceLabel} labelLine={false}>
           {chartData.map((d) => (
             <Cell key={d.key} fill={DEV_PIE_COLORS[d.key as 'sim' | 'nao']} stroke="none" />
           ))}
@@ -422,6 +431,13 @@ export default function GlpiDashboard() {
   const [dadosAbertura, setDadosAbertura] = useState<DashboardData | null>(null);
   const [loadingAbertura, setLoadingAbertura] = useState(false);
 
+  const [apresentacao, setApresentacao] = useState(false);
+  const [slideAtual, setSlideAtual] = useState(0);
+  const [slideEpoch, setSlideEpoch] = useState(0);
+  const [slidesPausados, setSlidesPausados] = useState(false);
+  const [embutido, setEmbutido] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
   const hasDataRef = useRef(false);
 
   const fetchDados = useCallback(async () => {
@@ -449,6 +465,75 @@ export default function GlpiDashboard() {
   }, [grupoFiltro, mesFiltro, dataInicio, dataFim]);
 
   useEffect(() => { fetchDados(); }, [fetchDados]);
+
+  // Quando embutido no iframe da tela /apresentacao, quem controla a saída da apresentação é o
+  // botão "Sair da apresentação" da barra do orquestrador — mostrar um segundo botão aqui dentro
+  // só duplicaria a ação e confundiria o usuário.
+  useEffect(() => {
+    setEmbutido(window.self !== window.top);
+  }, []);
+
+  useEffect(() => {
+    function onFullscreenChange() {
+      if (!document.fullscreenElement) setApresentacao(false);
+    }
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    };
+  }, []);
+
+  // Auto-inicia o modo apresentação quando aberto via ?apresentacao=1 (usado pela tela /apresentacao).
+  useEffect(() => {
+    if (loading) return;
+    if (!apresentacao && new URLSearchParams(window.location.search).get('apresentacao') === '1') {
+      setApresentacao(true);
+      setSlideAtual(0);
+      if (window.self === window.top) {
+        containerRef.current?.requestFullscreen?.().catch(() => {});
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+
+  // Escuta os avisos enviados pela tela /apresentacao (postMessage) quando este relatório é
+  // embutido em iframe: "ativar" reinicia o ciclo de slides ao virar o relatório em exibição, e
+  // "pausar" congela/retoma a troca automática junto com a pausa da apresentação.
+  useEffect(() => {
+    function onMessage(e: MessageEvent) {
+      if (e.origin !== window.location.origin) return;
+      if (e.data?.type === 'apresentacao:ativar') {
+        setSlideAtual(0);
+        setSlideEpoch((v) => v + 1);
+      } else if (e.data?.type === 'apresentacao:pausar') {
+        setSlidesPausados(Boolean(e.data.pausado));
+      }
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+
+  // Mantém os dados frescos sozinho enquanto a apresentação estiver ativa (sem intervenção manual).
+  useEffect(() => {
+    if (!apresentacao) return;
+    const id = setInterval(() => fetchDados(), 2 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [apresentacao, fetchDados]);
+
+  function toggleApresentacao() {
+    if (apresentacao) {
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      setApresentacao(false);
+    } else {
+      containerRef.current?.requestFullscreen?.().catch(() => {});
+      setApresentacao(true);
+      setSlideAtual(0);
+    }
+  }
 
   const fetchAnalitica = useCallback(async () => {
     setLoadingAnalitica(true);
@@ -531,6 +616,57 @@ export default function GlpiDashboard() {
     : null;
 
   const mesMesAtual = new Date().toISOString().slice(0, 7);
+
+  // ── Slides da apresentação: visão geral do mês → tendência mensal (todos os meses) → um
+  // slide por grupo com movimento no mês corrente, do maior para o menor volume (regras de
+  // negócio definidas para a apresentação de GLPI em /apresentacao).
+  const grupoSlides = useMemo(() => {
+    if (!dados) return [];
+    return dados.porGrupoMes
+      .filter((g) => g.mes === mesMesAtual && (g.abertos > 0 || g.resolvidos > 0))
+      .sort((a, b) => (b.abertos + b.resolvidos) - (a.abertos + a.resolvidos));
+  }, [dados, mesMesAtual]);
+
+  type SlideApresentacao =
+    | { kind: 'geral' }
+    | { kind: 'tendencia' }
+    | { kind: 'grupo'; grupo: string; abertos: number; resolvidos: number; devSimAbertos: number; devNaoAbertos: number };
+
+  const slidesApresentacao = useMemo<SlideApresentacao[]>(() => {
+    if (!dados) return [];
+    return [{ kind: 'geral' }, { kind: 'tendencia' }, ...grupoSlides.map((g) => ({ kind: 'grupo' as const, ...g }))];
+  }, [dados, grupoSlides]);
+
+  const slideAtivo = slidesApresentacao[slideAtual] ?? null;
+
+  const mesAtualDados = dados?.porMes.find((m) => m.mes === mesMesAtual) ?? null;
+  const mesAnteriorDados = dados
+    ? dados.porMes[dados.porMes.findIndex((m) => m.mes === mesMesAtual) - 1] ?? null
+    : null;
+  const deltaCriadosMes = mesAtualDados && mesAnteriorDados ? deltaPct(mesAtualDados.total, mesAnteriorDados.total) : null;
+  const deltaResolvidosMes = mesAtualDados && mesAnteriorDados
+    ? deltaPct(mesAtualDados.resolvidosNoMes, mesAnteriorDados.resolvidosNoMes)
+    : null;
+  const saldoMes = mesAtualDados ? mesAtualDados.total - mesAtualDados.resolvidosNoMes : 0;
+
+  // Troca automática de slide a cada 10s. Reinicia a contagem (slideEpoch) sempre que a tela
+  // /apresentacao avisa que este relatório acabou de virar o ativo.
+  useEffect(() => {
+    if (!apresentacao || slidesPausados || slidesApresentacao.length === 0) return;
+    const id = setInterval(() => {
+      setSlideAtual((s) => (s + 1) % slidesApresentacao.length);
+    }, 10 * 1000);
+    return () => clearInterval(id);
+  }, [apresentacao, slideEpoch, slidesPausados, slidesApresentacao.length]);
+
+  // Avisa a tela /apresentacao (orquestradora) quantos slides este relatório tem, já que aqui
+  // esse número varia mês a mês conforme quantos grupos tiveram movimento — diferente dos outros
+  // relatórios do carrossel, que têm uma quantidade fixa de slides.
+  useEffect(() => {
+    if (!embutido || slidesApresentacao.length === 0) return;
+    window.parent.postMessage({ type: 'apresentacao:totalSlides', total: slidesApresentacao.length }, window.location.origin);
+  }, [embutido, slidesApresentacao.length]);
+
   const filtroDataAtivo = Boolean(mesFiltro || dataInicio || dataFim);
   const porMesCards = dados
     ? (filtroDataAtivo ? dados.porMes : dados.porMes.slice(-4))
@@ -562,45 +698,131 @@ export default function GlpiDashboard() {
   if (!dados) return null;
 
   return (
-    <div className={`max-w-[1800px] mx-auto p-6 space-y-5 transition-opacity duration-150 ${reloading ? 'opacity-50 pointer-events-none' : ''}`}>
+    <div ref={containerRef}
+      className={`mx-auto transition-opacity duration-150 ${reloading ? 'opacity-50 pointer-events-none' : ''} ${apresentacao ? 'max-w-none bg-background p-10 h-screen flex flex-col gap-5 overflow-hidden' : 'max-w-[1800px] p-6 space-y-5'}`}>
 
       {/* ── Header ── */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${apresentacao ? 'shrink-0' : ''}`}>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Acompanhamento de Equipe — GLPI</h1>
-          <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2">
+          <h1 className={apresentacao ? 'text-3xl font-bold tracking-tight' : 'text-2xl font-semibold tracking-tight'}>Acompanhamento de Equipe — GLPI</h1>
+          <p className={`text-muted-foreground mt-0.5 flex items-center gap-2 ${apresentacao ? 'text-base' : 'text-sm'}`}>
             {updatedAt && <span>Atualizado às {updatedAt}</span>}
             {reloading && <Loader2 size={12} className="animate-spin text-primary" />}
             <span>{dados.kpis.total} chamados{grupoFiltro ? ` · ${grupoFiltro}` : ''}</span>
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 rounded-lg border border-border p-0.5">
-            {([
-              { key: 'geral', label: 'Visão Geral', icon: LayoutDashboard },
-              { key: 'analitica', label: 'Analítica', icon: PieChartIcon },
-              { key: 'abertura', label: 'Abertura por Equipe', icon: Building2 },
-            ] as const).map((opt) => (
-              <button key={opt.key} onClick={() => setMainTab(opt.key)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                  mainTab === opt.key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
-                }`}>
-                <opt.icon size={14} /> {opt.label}
-              </button>
-            ))}
+        {apresentacao ? (
+          !embutido && (
+            <button onClick={toggleApresentacao}
+              className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
+              <Minimize2 size={14} /> Sair da apresentação
+            </button>
+          )
+        ) : (
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 rounded-lg border border-border p-0.5">
+              {([
+                { key: 'geral', label: 'Visão Geral', icon: LayoutDashboard },
+                { key: 'analitica', label: 'Analítica', icon: PieChartIcon },
+                { key: 'abertura', label: 'Abertura por Equipe', icon: Building2 },
+              ] as const).map((opt) => (
+                <button key={opt.key} onClick={() => setMainTab(opt.key)}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    mainTab === opt.key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
+                  }`}>
+                  <opt.icon size={14} /> {opt.label}
+                </button>
+              ))}
+            </div>
+            <button onClick={
+              mainTab === 'analitica' ? fetchAnalitica
+              : mainTab === 'abertura' ? fetchAbertura
+              : fetchDados
+            }
+              className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
+              <RefreshCw size={14} /> Atualizar
+            </button>
+            <button onClick={toggleApresentacao}
+              className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
+              <Maximize2 size={14} /> Modo apresentação
+            </button>
           </div>
-          <button onClick={
-            mainTab === 'analitica' ? fetchAnalitica
-            : mainTab === 'abertura' ? fetchAbertura
-            : fetchDados
-          }
-            className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
-            <RefreshCw size={14} /> Atualizar
-          </button>
-        </div>
+        )}
       </div>
 
-      {mainTab === 'geral' && (
+      {/* ── Slides da apresentação ── */}
+      {apresentacao && (
+        <div className="flex-1 min-h-0 flex flex-col gap-5">
+          <div className="flex items-center justify-center gap-2 shrink-0">
+            {slidesApresentacao.map((_, i) => (
+              <span key={i} className={`h-2 rounded-full transition-all duration-300 ${slideAtual === i ? 'w-10 bg-primary' : 'w-2 bg-border'}`} />
+            ))}
+          </div>
+
+          {slideAtivo?.kind === 'geral' && (
+            <div className="flex-1 min-h-0 flex flex-col gap-6">
+              <h2 className="text-2xl font-bold text-center shrink-0">Visão geral — {fmtMes(mesMesAtual)}</h2>
+              <div className="grid grid-cols-3 gap-6 flex-1 min-h-0">
+                <KpiCard big title="Abertos no mês" value={mesAtualDados?.total ?? 0}
+                  sub={deltaCriadosMes !== null ? `${deltaCriadosMes > 0 ? '+' : ''}${deltaCriadosMes}% vs mês anterior` : 'sem mês anterior para comparar'}
+                  icon={Ticket} color="#155DFC" borderColor="#2B7FFF" />
+                <KpiCard big title="Resolvidos no mês" value={mesAtualDados?.resolvidosNoMes ?? 0}
+                  sub={deltaResolvidosMes !== null ? `${deltaResolvidosMes > 0 ? '+' : ''}${deltaResolvidosMes}% vs mês anterior` : 'sem mês anterior para comparar'}
+                  icon={CheckCircle2} color="#008236" borderColor="#00A63E" />
+                <KpiCard big title="Saldo do mês" value={saldoMes > 0 ? `+${saldoMes}` : String(saldoMes)}
+                  sub="abertos − resolvidos no mês"
+                  icon={TrendingUp} color={saldoMes > 0 ? '#CA3500' : '#008236'} borderColor="#872BFF" />
+              </div>
+            </div>
+          )}
+
+          {slideAtivo?.kind === 'tendencia' && (
+            <div className="flex-1 min-h-0 flex flex-col gap-4">
+              <h2 className="text-2xl font-bold text-center shrink-0 flex items-center justify-center gap-2">
+                <TrendingUp size={24} className="text-primary" /> Tendência mensal — todos os meses
+              </h2>
+              <div className="flex-1 min-h-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={dados.porMes.map((m) => ({ ...m, mes: fmtMes(m.mes) }))}
+                    margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#F6F5F5" />
+                    <XAxis dataKey="mes" tick={{ fontSize: 14 }} />
+                    <YAxis tick={{ fontSize: 14 }} />
+                    <Tooltip contentStyle={{ fontSize: 13, borderRadius: 8, border: '1px solid #D1D0D0' }} labelStyle={{ fontWeight: 600 }} />
+                    <Legend wrapperStyle={{ fontSize: 14 }} />
+                    <Bar dataKey="total" name="Criados" fill="#155DFC" radius={[3, 3, 0, 0]}>
+                      <LabelList dataKey="total" position="top" style={{ fontSize: 13, fill: '#155DFC', fontWeight: 600 }} />
+                    </Bar>
+                    <Bar dataKey="resolvidosNoMes" name="Resolvidos no mês" fill="#00A63E" radius={[3, 3, 0, 0]}>
+                      <LabelList dataKey="resolvidosNoMes" position="top" style={{ fontSize: 13, fill: '#00A63E', fontWeight: 600 }} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {slideAtivo?.kind === 'grupo' && (
+            <div className="flex-1 min-h-0 flex flex-col gap-6">
+              <h2 className="text-2xl font-bold text-center shrink-0">{slideAtivo.grupo} — {fmtMes(mesMesAtual)}</h2>
+              <div className="grid grid-cols-2 gap-6 flex-1 min-h-0">
+                <div className="flex flex-col gap-6">
+                  <KpiCard big title="Abertos no mês" value={slideAtivo.abertos} icon={Ticket} color="#155DFC" borderColor="#2B7FFF" />
+                  <KpiCard big title="Resolvidos no mês" value={slideAtivo.resolvidos} icon={CheckCircle2} color="#008236" borderColor="#00A63E" />
+                </div>
+                <div className="rounded-lg border border-border p-6 flex flex-col">
+                  <h3 className="text-lg font-semibold mb-2 text-center shrink-0">Exige desenvolvimento?</h3>
+                  <div className="flex-1 min-h-0 flex items-center justify-center">
+                    <DesenvolvimentoPie data={{ sim: slideAtivo.devSimAbertos, nao: slideAtivo.devNaoAbertos }} height={340} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {!apresentacao && mainTab === 'geral' && (
       <>
       {/* ── Filters ── */}
       <div className="rounded-lg border border-border px-4 py-3 flex flex-wrap items-center gap-3">
@@ -766,8 +988,12 @@ export default function GlpiDashboard() {
             <YAxis tick={{ fontSize: 11 }} />
             <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #D1D0D0' }} labelStyle={{ fontWeight: 600 }} />
             <Legend wrapperStyle={{ fontSize: 12 }} />
-            <Bar dataKey="total" name="Criados" fill="#155DFC" radius={[2,2,0,0]} />
-            <Bar dataKey="resolvidosNoMes" name="Resolvidos no mês" fill="#00A63E" radius={[2,2,0,0]} />
+            <Bar dataKey="total" name="Criados" fill="#155DFC" radius={[2,2,0,0]}>
+              <LabelList dataKey="total" position="top" style={{ fontSize: 11, fill: '#155DFC', fontWeight: 600 }} />
+            </Bar>
+            <Bar dataKey="resolvidosNoMes" name="Resolvidos no mês" fill="#00A63E" radius={[2,2,0,0]}>
+              <LabelList dataKey="resolvidosNoMes" position="top" style={{ fontSize: 11, fill: '#00A63E', fontWeight: 600 }} />
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -906,7 +1132,7 @@ export default function GlpiDashboard() {
       </>
       )}
 
-      {mainTab === 'analitica' && (
+      {!apresentacao && mainTab === 'analitica' && (
       <div className="space-y-5">
         {/* ── Squad filter ── */}
         <div className="rounded-lg border border-border px-4 py-3 flex flex-wrap items-center justify-between gap-3">
@@ -973,7 +1199,7 @@ export default function GlpiDashboard() {
       </div>
       )}
 
-      {mainTab === 'abertura' && (
+      {!apresentacao && mainTab === 'abertura' && (
       <div className="space-y-5">
         {/* ── Filters ── */}
         <div className="rounded-lg border border-border px-4 py-3 flex flex-wrap items-center gap-3">

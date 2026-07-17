@@ -1,24 +1,28 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Play, Pause, TrendingUp, ShoppingCart, X } from 'lucide-react';
+import { Play, Pause, TrendingUp, ShoppingCart, Ticket, X } from 'lucide-react';
 
 type Relatorio = { path: string; label: string; descricao: string; icon: typeof TrendingUp };
 
 const RELATORIOS: Relatorio[] = [
   { path: '/vendas', label: 'Relatório de Vendas', descricao: 'KPIs, evolução de vendas e ranking de vendedores.', icon: TrendingUp },
   { path: '/carrinho', label: 'Abandono de Carrinho', descricao: 'Funil de recuperação e conversão por segmento.', icon: ShoppingCart },
+  { path: '/glpi', label: 'GLPI', descricao: 'Visão geral do mês, tendência mensal e desempenho por equipe.', icon: Ticket },
 ];
 
-// Cada relatório (vendas/carrinho) tem 3 slides internos trocando a cada 10s (ver TOTAL_SLIDES
-// em src/app/vendas/page.tsx e src/app/carrinho/page.tsx), começando a contar assim que os dados
-// terminam de carregar dentro do iframe. Por isso a troca de relatório aqui precisa acontecer no
-// máximo nesses mesmos 3×10s: se demorasse mais (ex.: com uma folga extra), o ciclo interno de
-// slides já teria dado a volta e voltado pro primeiro slide antes da troca, gerando um "flash"
-// visível de volta ao slide 1 bem na hora de trocar de relatório.
-const SLIDES_POR_RELATORIO = 3;
+// Cada relatório embutido tem seus próprios slides internos trocando a cada 10s (ver TOTAL_SLIDES
+// em src/app/vendas/page.tsx e src/app/carrinho/page.tsx — sempre 3), começando a contar assim que
+// os dados terminam de carregar dentro do iframe. O GLPI (src/app/glpi/page.tsx) é diferente: sua
+// quantidade de slides varia mês a mês (um slide por equipe com movimento no mês), então ele avisa
+// o número real via postMessage (`apresentacao:totalSlides`) assim que os dados carregam — até essa
+// mensagem chegar, usamos DEFAULT_SLIDES_POR_RELATORIO como estimativa.
+//
+// A troca de relatório aqui precisa acontecer no máximo depois desse ciclo interno completo: se
+// demorasse mais (ex.: com uma folga extra), o ciclo de slides já teria dado a volta e voltado pro
+// primeiro slide antes da troca, gerando um "flash" visível de volta ao slide 1 bem na hora de trocar.
+const DEFAULT_SLIDES_POR_RELATORIO = 3;
 const DURACAO_SLIDE_MS = 10 * 1000;
-const INTERVALO_MS = SLIDES_POR_RELATORIO * DURACAO_SLIDE_MS;
 
 export default function ApresentacaoPage() {
   const [apresentando, setApresentando] = useState(false);
@@ -27,9 +31,20 @@ export default function ApresentacaoPage() {
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRefs = useRef<Record<string, HTMLIFrameElement | null>>({});
 
+  // Número real de slides reportado por cada relatório (via postMessage), quando difere do
+  // padrão. Fica num ref (e não só em state) porque o timer de troca precisa ler o valor mais
+  // recente de dentro de um setTimeout, sem depender de re-render.
+  const [slidesPorRelatorio, setSlidesPorRelatorio] = useState<Record<string, number>>({});
+  const slidesPorRelatorioRef = useRef(slidesPorRelatorio);
+  useEffect(() => { slidesPorRelatorioRef.current = slidesPorRelatorio; }, [slidesPorRelatorio]);
+
+  function intervaloDe(path: string) {
+    return (slidesPorRelatorioRef.current[path] ?? DEFAULT_SLIDES_POR_RELATORIO) * DURACAO_SLIDE_MS;
+  }
+
   // Controle imperativo do relógio de troca de relatório, em vez de um setInterval simples, pra
-  // dar pra pausar e retomar exatamente de onde parou (sem reiniciar os 30s do zero ao retomar).
-  const restanteRef = useRef(INTERVALO_MS);
+  // dar pra pausar e retomar exatamente de onde parou (sem reiniciar do zero ao retomar).
+  const restanteRef = useRef(intervaloDe(RELATORIOS[0].path));
   const inicioTickRef = useRef(0);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -45,21 +60,40 @@ export default function ApresentacaoPage() {
     inicioTickRef.current = Date.now();
     timeoutRef.current = setTimeout(() => {
       setIndice((i) => (i + 1) % RELATORIOS.length);
-      restanteRef.current = INTERVALO_MS;
-      armarTimer(INTERVALO_MS);
     }, ms);
   }
 
-  // Rotação automática entre relatórios: só roda enquanto a apresentação está ativa e não pausada.
+  // Rotação automática entre relatórios: só roda enquanto a apresentação está ativa e não
+  // pausada. Reagir também a `indice` (em vez de só `apresentando`) é o que permite que cada
+  // relatório tenha sua própria duração de ciclo — ao trocar de relatório, rearma o timer com o
+  // intervalo daquele relatório específico.
   useEffect(() => {
     if (!apresentando) {
       limparTimer();
       return;
     }
-    restanteRef.current = INTERVALO_MS;
-    armarTimer(INTERVALO_MS);
+    const atual = RELATORIOS[indice];
+    restanteRef.current = intervaloDe(atual.path);
+    armarTimer(restanteRef.current);
     return () => limparTimer();
-  }, [apresentando]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apresentando, indice]);
+
+  // Escuta o aviso de cada relatório embutido informando quantos slides internos ele tem (só o
+  // GLPI usa isso hoje, pois sua contagem varia mês a mês — vendas/carrinho ficam no padrão).
+  useEffect(() => {
+    function onMessage(e: MessageEvent) {
+      if (e.origin !== window.location.origin) return;
+      if (e.data?.type !== 'apresentacao:totalSlides') return;
+      const path = Object.keys(iframeRefs.current).find(
+        (p) => iframeRefs.current[p]?.contentWindow === e.source
+      );
+      if (!path || typeof e.data.total !== 'number' || e.data.total <= 0) return;
+      setSlidesPorRelatorio((prev) => (prev[path] === e.data.total ? prev : { ...prev, [path]: e.data.total }));
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
 
   // Avisa o relatório que acabou de virar o ativo pra ele reiniciar seu ciclo de slides do zero.
   // Sem isso, o relatório continua rodando seu próprio timer de slides escondido em segundo plano
@@ -170,7 +204,7 @@ export default function ApresentacaoPage() {
                       <span
                         key={`${r.path}-${indice}`}
                         className="absolute inset-y-0 left-0 bg-primary rounded-full animate-[apresentacaoProgresso_linear_forwards]"
-                        style={{ animationDuration: `${INTERVALO_MS}ms`, animationPlayState: pausado ? 'paused' : 'running' }}
+                        style={{ animationDuration: `${intervaloDe(r.path)}ms`, animationPlayState: pausado ? 'paused' : 'running' }}
                       />
                     )}
                     {i < indice && <span className="absolute inset-0 bg-primary rounded-full" />}

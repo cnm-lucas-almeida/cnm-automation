@@ -35,6 +35,15 @@ export type AtendimentoBreakdown = {
   devNao: number;
 };
 
+export type GrupoMesRow = {
+  grupo: string;
+  mes: string;
+  abertos: number;
+  resolvidos: number;
+  devSimAbertos: number;
+  devNaoAbertos: number;
+};
+
 export type DashboardData = {
   generatedAt: string;
   glpiUrl: string;
@@ -48,6 +57,7 @@ export type DashboardData = {
   porCategoria: Array<{ nome: string; count: number }>;
   porMes: Array<{ mes: string; abertos: number; resolvidos: number; fechados: number; total: number; resolvidosNoMes: number }>;
   porGrupo: Array<{ nome: string; count: number }>;
+  porGrupoMes: GrupoMesRow[];
   grupos: Array<{ id: string; nome: string }>;
   porTecnico: TechRow[];
   tiposAtendimento: string[];
@@ -424,6 +434,50 @@ function aggregate(
     .sort((a, b) => b.count - a.count);
   const desenvolvimentoTotais = { sim: devTotalSim, nao: devTotalNao };
 
+  // ── Volume e tipo de atendimento por grupo/mês (usado nos slides por equipe da apresentação) ──
+  // "Abertos no mês" usa o mês de date_creation do chamado; "resolvidos no mês" usa o mês de
+  // resolução (campo 17); a proporção dev sim/não fica restrita aos chamados abertos naquele mês.
+
+  const ticketGrupoMap: Record<number, string> = {};
+  for (const row of allAtendRows) {
+    const ticketId = Number(row['2'] ?? 0);
+    const groupRaw = Array.isArray(row['8']) ? row['8'][0] : row['8'];
+    const grupoNome = String(groupRaw ?? '').split(' > ')[0].trim();
+    if (ticketId && grupoNome) ticketGrupoMap[ticketId] = grupoNome;
+  }
+
+  const grupoMesMap: Record<string, { grupo: string; mes: string; abertos: number; resolvidos: number; devSimAbertos: number; devNaoAbertos: number }> = {};
+  function ensureGrupoMes(grupo: string, mes: string) {
+    const key = `${grupo}__${mes}`;
+    if (!grupoMesMap[key]) grupoMesMap[key] = { grupo, mes, abertos: 0, resolvidos: 0, devSimAbertos: 0, devNaoAbertos: 0 };
+    return grupoMesMap[key];
+  }
+
+  const ticketMesAberturaMap: Record<number, string> = {};
+  for (const t of tickets) {
+    const mesAbertura = t.date_creation?.slice(0, 7);
+    if (mesAbertura) ticketMesAberturaMap[t.id] = mesAbertura;
+    const grupo = ticketGrupoMap[t.id];
+    if (grupo && mesAbertura) ensureGrupoMes(grupo, mesAbertura).abertos++;
+  }
+  for (const row of resolvedRows || []) {
+    const ticketId = Number(row['2'] ?? 0);
+    const grupo = ticketGrupoMap[ticketId];
+    const mesResolucao = String(row['17'] ?? '').slice(0, 7);
+    if (grupo && mesResolucao) ensureGrupoMes(grupo, mesResolucao).resolvidos++;
+  }
+  for (const row of allAtendRows) {
+    const ticketId = Number(row['2'] ?? 0);
+    const grupo = ticketGrupoMap[ticketId];
+    const mesAbertura = ticketMesAberturaMap[ticketId];
+    if (!grupo || !mesAbertura) continue;
+    const dev = Number(row['76668'] ?? 0) === 1;
+    const acc = ensureGrupoMes(grupo, mesAbertura);
+    if (dev) acc.devSimAbertos++; else acc.devNaoAbertos++;
+  }
+
+  const porGrupoMes = Object.values(grupoMesMap);
+
   // ── Abertura de chamados por equipe/solicitante ─────────────────
   // GLPI não usa "Grupo requerente"; a equipe vem do Título do usuário
   // (formato "Departamento: Cargo"), cadastrado no perfil de cada solicitante.
@@ -477,6 +531,7 @@ function aggregate(
     porCategoria,
     porMes,
     porGrupo,
+    porGrupoMes,
     grupos,
     porTecnico: buildTechTable(resolved),
     tiposAtendimento,
