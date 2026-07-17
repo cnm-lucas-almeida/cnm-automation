@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Novos Prazos de Atendimento — Chamados</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap');
+
+  :root {
+    /* ===== Primitivas - Chaves na Mão Design System ===== */
+    --color-scarlet-50:  #FFF0F2;
+    --color-scarlet-100: #FFDDE3;
+    --color-scarlet-500: #FF264A;
+    --color-scarlet-600: #FC062F;
+    --color-scarlet-700: #EB0027;
+    --color-scarlet-800: #AF0521;
+    --color-scarlet-900: #900C22;
+
+    --color-grey-50:  #F6F5F5;
+    --color-grey-100: #E7E6E6;
+    --color-grey-200: #D1D0D0;
+    --color-grey-300: #B1AFB0;
+    --color-grey-400: #8A8686;
+    --color-grey-500: #6F686B;
+    --color-grey-600: #5E5C5D;
+    --color-grey-700: #504E4F;
+    --color-grey-800: #464444;
+    --color-grey-900: #323131;
+    --color-grey-950: #262626;
+
+    --color-green-100: #DCFCE7;
+    --color-green-700: #008236;
+    --color-green-800: #00A63E;
+
+    --color-yellow-100: #FEF9C2;
+    --color-yellow-600: #D08700;
+    --color-yellow-700: #A65F00;
+
+    --color-orange-100: #FFEDD4;
+    --color-orange-600: #FF6900;
+    --color-orange-700: #CA3500;
+
+    --color-blue-100: #DBEAFE;
+    --color-blue-600: #2B7FFF;
+    --color-blue-700: #155DFC;
+
+    --primary: var(--color-scarlet-700);
+    --primary-hover: var(--color-scarlet-900);
+    --primary-foreground: #FFFFFF;
+    --background: #FFFFFF;
+    --foreground: var(--color-grey-900);
+    --card: #FFFFFF;
+    --muted: var(--color-grey-50);
+    --muted-foreground: var(--color-grey-600);
+    --success: var(--color-green-800);
+    --success-bg: var(--color-green-100);
+    --warning: var(--color-yellow-600);
+    --warning-bg: var(--color-yellow-100);
+    --info: var(--color-blue-700);
+    --info-bg: var(--color-blue-100);
+    --border: var(--color-grey-200);
+    --radius: 8px;
+
+    --shadow-sm: 0 2px 4px 1px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.0009);
+    --shadow-md: 0 3px 6px 1px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.0009);
+    --shadow-lg: 0 6px 12px 0 rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.0009);
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--muted);
+    color: var(--foreground);
+    font-family: 'Open Sans', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  .deck {
+    height: 100vh;
+    overflow-y: auto;
+    scroll-snap-type: y mandatory;
+  }
+
+  .slide {
+    height: 100vh;
+    scroll-snap-align: start;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6vh 8vw;
+    position: relative;
+  }
+
+  .sheet {
+    width: 100%;
+    max-width: 880px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) * 2);
+    box-shadow: var(--shadow-lg);
+    padding: 64px 72px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .sheet::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 6px;
+    background: linear-gradient(90deg, var(--color-scarlet-700), var(--color-scarlet-500));
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--primary);
+    background: var(--color-scarlet-50);
+    border: 1px solid var(--color-scarlet-100);
+    padding: 5px 12px;
+    border-radius: 999px;
+    margin-bottom: 28px;
+  }
+
+  h1 {
+    font-size: 44px;
+    font-weight: 800;
+    line-height: 1.12;
+    letter-spacing: -0.01em;
+    margin: 0 0 18px;
+    text-wrap: balance;
+    color: var(--color-grey-950);
+  }
+
+  h2 {
+    font-size: 34px;
+    font-weight: 800;
+    line-height: 1.16;
+    margin: 0 0 16px;
+    text-wrap: balance;
+    color: var(--color-grey-950);
+  }
+
+  p.lead {
+    font-size: 18px;
+    line-height: 1.6;
+    color: var(--muted-foreground);
+    max-width: 62ch;
+    margin: 0 0 8px;
+  }
+
+  /* ===== CAPA ===== */
+  .cover .sheet {
+    text-align: center;
+    padding: 88px 72px;
+    background:
+      radial-gradient(120% 140% at 50% -10%, var(--color-scarlet-50) 0%, transparent 55%),
+      var(--card);
+  }
+  .cover .mark {
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+    background: var(--primary);
+    color: #fff;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 32px;
+    box-shadow: var(--shadow-md);
+  }
+  .cover h1 { font-size: 52px; margin-bottom: 14px; }
+  .cover .lead { margin: 0 auto 36px; }
+  .cover .foot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--muted-foreground);
+    letter-spacing: 0.02em;
+  }
+  .cover .foot .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--color-grey-300); }
+
+  /* ===== SLIDE 1 (o que mudou) ===== */
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-top: 36px;
+  }
+  .compare .box {
+    border-radius: var(--radius);
+    padding: 24px 24px 22px;
+    border: 1px solid var(--border);
+  }
+  .compare .box.before { background: var(--color-grey-50); }
+  .compare .box.after { background: var(--success-bg); border-color: #BBF0CE; }
+  .compare .tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+    display: block;
+    margin-bottom: 10px;
+  }
+  .compare .box.after .tag { color: var(--success); }
+  .compare .box p {
+    margin: 0;
+    font-size: 15.5px;
+    line-height: 1.55;
+    color: var(--color-grey-800);
+  }
+
+  /* ===== SLIDE 2 (tabela) ===== */
+  table.sla {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+    font-variant-numeric: tabular-nums;
+  }
+  table.sla th {
+    text-align: left;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+    padding: 0 14px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  table.sla td {
+    padding: 14px 14px;
+    border-bottom: 1px solid var(--color-grey-100);
+    font-size: 15px;
+    vertical-align: middle;
+  }
+  table.sla tr:last-child td { border-bottom: none; }
+  .urg {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    color: var(--color-grey-950);
+  }
+  .urg .chip {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex: none;
+  }
+  .time {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    color: var(--color-grey-800);
+  }
+  .note {
+    margin-top: 20px;
+    font-size: 13px;
+    color: var(--muted-foreground);
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+  }
+  .note b { color: var(--color-grey-700); font-weight: 700; }
+
+  /* ===== SLIDE 3 (como funciona) ===== */
+  .steps {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 32px;
+  }
+  .step {
+    display: grid;
+    grid-template-columns: 40px 1fr;
+    gap: 18px;
+    align-items: flex-start;
+    padding: 18px 20px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--color-grey-50);
+  }
+  .step .ico {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    background: var(--color-scarlet-50);
+    border: 1px solid var(--color-scarlet-100);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+  }
+  .step h3 {
+    margin: 0 0 4px;
+    font-size: 16.5px;
+    font-weight: 700;
+    color: var(--color-grey-950);
+  }
+  .step p {
+    margin: 0;
+    font-size: 14.5px;
+    line-height: 1.55;
+    color: var(--muted-foreground);
+  }
+
+  /* ===== NAV ===== */
+  .nav {
+    position: fixed;
+    bottom: 28px;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    z-index: 10;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .nav button {
+    width: 38px; height: 38px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--color-grey-800);
+    font-size: 16px;
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .nav button:hover {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+  }
+  .nav button:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+  .nav .dots {
+    display: flex;
+    gap: 7px;
+  }
+  .nav .dots span {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--color-grey-300);
+    transition: background 0.15s, transform 0.15s;
+  }
+  .nav .dots span.active {
+    background: var(--primary);
+    transform: scale(1.25);
+  }
+
+  @media (max-width: 640px) {
+    .sheet { padding: 40px 28px; }
+    h1 { font-size: 30px; }
+    h2 { font-size: 24px; }
+    .compare { grid-template-columns: 1fr; }
+    table.sla th:nth-child(2), table.sla td:nth-child(2) { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="deck" id="deck">
+
+  <section class="slide cover">
+    <div class="sheet">
+      <div class="mark">CNM</div>
+      <span class="eyebrow">Central de Atendimento · Chamados</span>
+      <h1>Novos prazos de atendimento</h1>
+      <p class="lead">A partir de agora, todo chamado aberto tem um prazo oficial de resposta e de solução — baseado na urgência escolhida na abertura.</p>
+      <div class="foot"><span>SLA</span><span class="dot"></span><span>Nível de Serviço</span><span class="dot"></span><span>2026</span></div>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="sheet">
+      <span class="eyebrow">01 · O que mudou</span>
+      <h2>Todo chamado agora tem um prazo</h2>
+      <p class="lead">O prazo é calculado automaticamente a partir da Urgência escolhida na abertura do chamado, e aparece direto na tela — sem precisar perguntar pra ninguém.</p>
+      <div class="compare">
+        <div class="box before">
+          <span class="tag">Antes</span>
+          <p>Nenhum prazo definido. O chamado ficava na fila sem uma expectativa clara de quando seria atendido ou resolvido.</p>
+        </div>
+        <div class="box after">
+          <span class="tag">Agora</span>
+          <p>Prazo de atendimento e de solução visíveis no chamado, com barra de progresso mostrando o quanto falta.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="sheet">
+      <span class="eyebrow">02 · Os prazos</span>
+      <h2>Tempo por nível de urgência</h2>
+      <table class="sla">
+        <thead>
+          <tr>
+            <th>Urgência</th>
+            <th>Atendimento em até</th>
+            <th>Solução em até</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="urg"><span class="chip" style="background:var(--color-scarlet-700)"></span>Muito Alta</span></td>
+            <td class="time">30 min</td>
+            <td class="time">4 horas</td>
+          </tr>
+          <tr>
+            <td><span class="urg"><span class="chip" style="background:var(--color-orange-600)"></span>Alta</span></td>
+            <td class="time">1 hora</td>
+            <td class="time">1 dia</td>
+          </tr>
+          <tr>
+            <td><span class="urg"><span class="chip" style="background:var(--color-yellow-600)"></span>Média</span></td>
+            <td class="time">4 horas</td>
+            <td class="time">2 dias</td>
+          </tr>
+          <tr>
+            <td><span class="urg"><span class="chip" style="background:var(--color-blue-600)"></span>Baixa</span></td>
+            <td class="time">1 dia</td>
+            <td class="time">1 semana</td>
+          </tr>
+          <tr>
+            <td><span class="urg"><span class="chip" style="background:var(--color-grey-400)"></span>Muito Baixa</span></td>
+            <td class="time">3 dias</td>
+            <td class="time">2 semanas</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="note">⏱ <span>Prazos contados em <b>horário comercial</b> — segunda a sexta, 08:30 às 17:30.</span></div>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="sheet">
+      <span class="eyebrow">03 · Na prática</span>
+      <h2>Como isso funciona no dia a dia</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="ico">🎯</div>
+          <div>
+            <h3>Escolha a urgência com sinceridade</h3>
+            <p>É ela que define o prazo — quanto mais urgente, mais rápido o atendimento é priorizado.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="ico">🔁</div>
+          <div>
+            <h3>O técnico pode reclassificar</h3>
+            <p>Se o técnico identificar que a urgência real é outra durante o atendimento, ele pode ajustar — e o prazo se recalcula automaticamente.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="ico">📊</div>
+          <div>
+            <h3>Acompanhe pela barra de progresso</h3>
+            <p>O andamento do prazo aparece direto na tela do chamado, com uma barra que muda de cor conforme o vencimento se aproxima.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<div class="nav">
+  <button id="prev" aria-label="Slide anterior">‹</button>
+  <div class="dots" id="dots"></div>
+  <button id="next" aria-label="Próximo slide">›</button>
+</div>
+
+<script>
+  const deck = document.getElementById('deck');
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const dotsWrap = document.getElementById('dots');
+  slides.forEach((_, i) => {
+    const d = document.createElement('span');
+    if (i === 0) d.classList.add('active');
+    dotsWrap.appendChild(d);
+  });
+  const dots = Array.from(dotsWrap.children);
+
+  function currentIndex() {
+    const top = deck.scrollTop;
+    return Math.round(top / window.innerHeight);
+  }
+  function goTo(i) {
+    i = Math.max(0, Math.min(slides.length - 1, i));
+    slides[i].scrollIntoView({ behavior: 'smooth' });
+  }
+  function updateDots() {
+    const i = currentIndex();
+    dots.forEach((d, idx) => d.classList.toggle('active', idx === i));
+  }
+  deck.addEventListener('scroll', () => {
+    window.clearTimeout(deck._t);
+    deck._t = window.setTimeout(updateDots, 80);
+  });
+  document.getElementById('prev').addEventListener('click', () => goTo(currentIndex() - 1));
+  document.getElementById('next').addEventListener('click', () => goTo(currentIndex() + 1));
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); goTo(currentIndex() + 1); }
+    if (e.key === 'ArrowUp' || e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); goTo(currentIndex() - 1); }
+  });
+</script>
+
+</body>
+</html>

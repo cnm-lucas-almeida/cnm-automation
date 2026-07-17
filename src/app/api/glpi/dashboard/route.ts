@@ -7,7 +7,8 @@ export async function GET(request: NextRequest) {
     const mes = request.nextUrl.searchParams.get('mes') || undefined;
     const dataInicio = request.nextUrl.searchParams.get('dataInicio') || undefined;
     const dataFim = request.nextUrl.searchParams.get('dataFim') || undefined;
-    const data = await getDashboardData(grupo, mes, dataInicio, dataFim);
+    const departamento = request.nextUrl.searchParams.get('departamento') || undefined;
+    const data = await getDashboardData(grupo, mes, dataInicio, dataFim, departamento);
     return NextResponse.json(data);
   } catch (error: any) {
     console.error('[GLPI dashboard]', error);

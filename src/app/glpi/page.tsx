@@ -4,20 +4,53 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import axios from 'axios';
 import {
   Loader2, RefreshCw, AlertCircle, Ticket, CheckCircle2,
-  AlertTriangle, Users, TrendingUp, BarChart3,
+  AlertTriangle, Users, TrendingUp, BarChart3, LayoutDashboard, PieChart as PieChartIcon, Building2,
   ChevronUp, ChevronDown, ChevronsUpDown, X, ExternalLink,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  Legend, ResponsiveContainer,
+  Legend, ResponsiveContainer, PieChart, Pie, Cell,
 } from 'recharts';
-import type { DashboardData, TechRow, TicketItem, TicketResolvidoItem } from '@/lib/glpi';
+import type { DashboardData, TechRow, TicketItem, TicketResolvidoItem, AtendimentoBreakdown } from '@/lib/glpi';
 import { Select } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
 
-type SortCol = 'nome' | 'grupo' | 'emAberto' | 'resolvidos' | 'tmaDias' | 'oldestDias';
+type SortCol = 'nome' | 'grupo' | 'emAberto' | 'pendentes' | 'emAndamento' | 'resolvidos' | 'tmaDias' | 'oldestDias';
 type SortDir = 'asc' | 'desc';
 type ModalType = 'aberto' | 'resolvido' | 'antigo';
+type MainTab = 'geral' | 'analitica' | 'abertura';
+
+// Ordem fixa validada (contraste + separação CVD) — nunca reordenar por ranking dos dados.
+const ATENDIMENTO_COLORS: Record<string, string> = {
+  'Suporte Técnico': '#155DFC',
+  'Correções': '#CA3500',
+  'Melhorias': '#00A63E',
+  'Dados/Relatórios': '#872BFF',
+  'Dúvidas/Informações': '#1BAF7A',
+  'Configuração/Ajuste': '#D08700',
+  'Outros': '#B1AFB0',
+};
+const ATENDIMENTO_FALLBACK_COLOR = '#94A3B8';
+const DEV_METER_COLOR = '#155DFC';
+const DEV_METER_TRACK = '#CDE2FB';
+const DEV_PIE_COLORS = { sim: '#155DFC', nao: '#94A3B8' };
+const OUTROS_LABEL = 'Outros';
+
+// Dobra tipos com participação marginal (< thresholdPct do total) em um único
+// grupo "Outros" — evita mais de ~5 cores categóricas competindo na legenda.
+function computeDominantTipos(data: AtendimentoBreakdown[], tipos: string[], thresholdPct = 5): string[] {
+  const totals: Record<string, number> = {};
+  let grandTotal = 0;
+  for (const row of data) {
+    for (const tipo of tipos) {
+      const c = row.porTipo[tipo] || 0;
+      totals[tipo] = (totals[tipo] || 0) + c;
+      grandTotal += c;
+    }
+  }
+  if (grandTotal === 0) return tipos;
+  return tipos.filter((t) => ((totals[t] || 0) / grandTotal) * 100 >= thresholdPct);
+}
 
 const STATUS_COLORS: Record<string, string> = {
   'Novo': '#2B7FFF',
@@ -86,15 +119,15 @@ function KpiCard({
   );
 }
 
-function HBarRow({ nome, count, max, color }: { nome: string; count: number; max: number; color: string }) {
+function HBarRow({ nome, count, max, color, valueLabel }: { nome: string; count: number; max: number; color: string; valueLabel?: string }) {
   const pct = max > 0 ? Math.round((count / max) * 100) : 0;
   return (
-    <div className="grid items-center gap-2" style={{ gridTemplateColumns: '160px 1fr 36px' }}>
+    <div className="grid items-center gap-2" style={{ gridTemplateColumns: '160px 1fr 44px' }}>
       <span className="text-xs font-medium truncate" title={nome}>{nome}</span>
       <div className="bg-muted rounded-full h-2 overflow-hidden">
         <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: color }} />
       </div>
-      <span className="text-xs font-bold text-right tabular-nums">{count}</span>
+      <span className="text-xs font-bold text-right tabular-nums">{valueLabel ?? count}</span>
     </div>
   );
 }
@@ -235,6 +268,133 @@ function TicketModal({
   );
 }
 
+function AtendimentoLegend({ tipos }: { tipos: string[] }) {
+  return (
+    <div className="flex items-center gap-3 flex-wrap">
+      {tipos.map((tipo) => (
+        <span key={tipo} className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: ATENDIMENTO_COLORS[tipo] ?? ATENDIMENTO_FALLBACK_COLOR }} />
+          {tipo}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function AtendimentoBarChart({ data, tipos }: { data: AtendimentoBreakdown[]; tipos: string[] }) {
+  if (data.length === 0) {
+    return <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">Sem dados para este filtro.</div>;
+  }
+  // `tipos` já vem resolvido (tipos dominantes + "Outros", se aplicável) — ver computeDominantTipos.
+  const realTipos = tipos.filter((t) => t !== OUTROS_LABEL);
+  const hasOutros = tipos.includes(OUTROS_LABEL);
+  const rows = data.map((r) => {
+    const row: Record<string, number | string> = { nome: r.nome };
+    let contabilizado = 0;
+    for (const tipo of realTipos) {
+      const c = r.porTipo[tipo] || 0;
+      contabilizado += c;
+      row[tipo] = r.total > 0 ? (c / r.total) * 100 : 0;
+      row[`_count_${tipo}`] = c;
+    }
+    if (hasOutros) {
+      const outrosCount = r.total - contabilizado;
+      row[OUTROS_LABEL] = r.total > 0 ? (outrosCount / r.total) * 100 : 0;
+      row[`_count_${OUTROS_LABEL}`] = outrosCount;
+    }
+    return row;
+  });
+  const chartHeight = Math.max(120, rows.length * 34);
+  return (
+    <div className="max-h-[480px] overflow-y-auto">
+      <ResponsiveContainer width="100%" height={chartHeight}>
+        <BarChart data={rows} layout="vertical" margin={{ top: 0, right: 16, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#F6F5F5" horizontal={false} />
+          <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11 }} />
+          <YAxis type="category" dataKey="nome" width={150} tick={{ fontSize: 11 }} />
+          <Tooltip
+            contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #D1D0D0' }}
+            labelStyle={{ fontWeight: 600 }}
+            formatter={(value: any, name: any, props: any) => {
+              const count = props?.payload?.[`_count_${name}`] ?? 0;
+              return [`${Math.round(Number(value) || 0)}% (${count})`, name];
+            }}
+          />
+          {tipos.map((tipo) => (
+            <Bar key={tipo} dataKey={tipo} name={tipo} stackId="atendimento"
+              fill={ATENDIMENTO_COLORS[tipo] ?? ATENDIMENTO_FALLBACK_COLOR} radius={[0, 0, 0, 0]} />
+          ))}
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function DevMeterList({ data }: { data: AtendimentoBreakdown[] }) {
+  if (data.length === 0) {
+    return <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">Sem dados para este filtro.</div>;
+  }
+  return (
+    <div className="max-h-[480px] overflow-y-auto space-y-3 pr-1">
+      {data.map((row) => {
+        const pct = row.total > 0 ? Math.round((row.devSim / row.total) * 100) : 0;
+        return (
+          <div key={row.nome} className="grid items-center gap-2" style={{ gridTemplateColumns: '150px 1fr 40px' }}>
+            <span className="text-xs font-medium truncate" title={row.nome}>{row.nome}</span>
+            <div className="rounded-full h-2.5 overflow-hidden" style={{ backgroundColor: DEV_METER_TRACK }}>
+              <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: DEV_METER_COLOR }} />
+            </div>
+            <span className="text-xs font-bold text-right tabular-nums">{pct}%</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function TipoAtendimentoPie({ data }: { data: Array<{ tipo: string; count: number }> }) {
+  if (data.length === 0) {
+    return <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">Sem dados para este filtro.</div>;
+  }
+  return (
+    <ResponsiveContainer width="100%" height={280}>
+      <PieChart>
+        <Pie data={data} dataKey="count" nameKey="tipo" innerRadius={55} outerRadius={95} paddingAngle={2}>
+          {data.map((d) => (
+            <Cell key={d.tipo} fill={ATENDIMENTO_COLORS[d.tipo] ?? ATENDIMENTO_FALLBACK_COLOR} stroke="none" />
+          ))}
+        </Pie>
+        <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #D1D0D0' }} />
+        <Legend wrapperStyle={{ fontSize: 11 }} />
+      </PieChart>
+    </ResponsiveContainer>
+  );
+}
+
+function DesenvolvimentoPie({ data }: { data: { sim: number; nao: number } }) {
+  const total = data.sim + data.nao;
+  if (total === 0) {
+    return <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">Sem dados para este filtro.</div>;
+  }
+  const chartData = [
+    { nome: 'Exige desenvolvimento', key: 'sim', count: data.sim },
+    { nome: 'Não exige desenvolvimento', key: 'nao', count: data.nao },
+  ];
+  return (
+    <ResponsiveContainer width="100%" height={280}>
+      <PieChart>
+        <Pie data={chartData} dataKey="count" nameKey="nome" innerRadius={55} outerRadius={95} paddingAngle={2}>
+          {chartData.map((d) => (
+            <Cell key={d.key} fill={DEV_PIE_COLORS[d.key as 'sim' | 'nao']} stroke="none" />
+          ))}
+        </Pie>
+        <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #D1D0D0' }} />
+        <Legend wrapperStyle={{ fontSize: 11 }} />
+      </PieChart>
+    </ResponsiveContainer>
+  );
+}
+
 export default function GlpiDashboard() {
   const [dados, setDados] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -249,6 +409,18 @@ export default function GlpiDashboard() {
   const [availableMeses, setAvailableMeses] = useState<string[]>([]);
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
+  const [mainTab, setMainTab] = useState<MainTab>('geral');
+  const [analiticaGrupo, setAnaliticaGrupo] = useState('');
+  const [dadosAnalitica, setDadosAnalitica] = useState<DashboardData | null>(null);
+  const [loadingAnalitica, setLoadingAnalitica] = useState(false);
+  const [aberturaGrupo, setAberturaGrupo] = useState('');
+  const [aberturaDepartamento, setAberturaDepartamento] = useState('');
+  const [aberturaMes, setAberturaMes] = useState('');
+  const [aberturaAvailableMeses, setAberturaAvailableMeses] = useState<string[]>([]);
+  const [aberturaDataInicio, setAberturaDataInicio] = useState('');
+  const [aberturaDataFim, setAberturaDataFim] = useState('');
+  const [dadosAbertura, setDadosAbertura] = useState<DashboardData | null>(null);
+  const [loadingAbertura, setLoadingAbertura] = useState(false);
 
   const hasDataRef = useRef(false);
 
@@ -278,6 +450,48 @@ export default function GlpiDashboard() {
 
   useEffect(() => { fetchDados(); }, [fetchDados]);
 
+  const fetchAnalitica = useCallback(async () => {
+    setLoadingAnalitica(true);
+    try {
+      const qs = analiticaGrupo ? `?grupo=${encodeURIComponent(analiticaGrupo)}` : '';
+      const res = await axios.get(`/api/glpi/dashboard${qs}`);
+      setDadosAnalitica(res.data);
+    } catch {
+      setDadosAnalitica(null);
+    } finally {
+      setLoadingAnalitica(false);
+    }
+  }, [analiticaGrupo]);
+
+  useEffect(() => {
+    if (mainTab === 'analitica') fetchAnalitica();
+  }, [mainTab, fetchAnalitica]);
+
+  const fetchAbertura = useCallback(async () => {
+    setLoadingAbertura(true);
+    try {
+      const qs: string[] = [];
+      if (aberturaGrupo) qs.push(`grupo=${encodeURIComponent(aberturaGrupo)}`);
+      if (aberturaDepartamento) qs.push(`departamento=${encodeURIComponent(aberturaDepartamento)}`);
+      if (aberturaMes) qs.push(`mes=${encodeURIComponent(aberturaMes)}`);
+      if (aberturaDataInicio) qs.push(`dataInicio=${aberturaDataInicio}`);
+      if (aberturaDataFim) qs.push(`dataFim=${aberturaDataFim}`);
+      const res = await axios.get(`/api/glpi/dashboard${qs.length ? `?${qs.join('&')}` : ''}`);
+      setDadosAbertura(res.data);
+      if (!aberturaMes) {
+        setAberturaAvailableMeses((res.data.porMes as Array<{ mes: string }>).map((m) => m.mes));
+      }
+    } catch {
+      setDadosAbertura(null);
+    } finally {
+      setLoadingAbertura(false);
+    }
+  }, [aberturaGrupo, aberturaDepartamento, aberturaMes, aberturaDataInicio, aberturaDataFim]);
+
+  useEffect(() => {
+    if (mainTab === 'abertura') fetchAbertura();
+  }, [mainTab, fetchAbertura]);
+
   function toggleSort(col: SortCol) {
     if (sortCol === col) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     else { setSortCol(col); setSortDir('desc'); }
@@ -302,6 +516,15 @@ export default function GlpiDashboard() {
   const maxPrio = dados ? Math.max(...dados.porPrioridade.map((p) => p.count), 1) : 1;
   const maxCat = dados ? Math.max(...dados.porCategoria.map((c) => c.count), 1) : 1;
   const maxGrupo = dados ? Math.max(...dados.porGrupo.map((g) => g.count), 1) : 1;
+
+  // Tipos dominantes (>=5% do total) + "Outros" — mantém a legenda com poucas cores
+  // e consistente entre os 3 gráficos (Categoria/Técnico/Equipe) da aba Analítica.
+  const keepTiposAnalitica = useMemo(() => {
+    const tipos = dados?.tiposAtendimento ?? [];
+    if (!dadosAnalitica) return tipos;
+    const keep = computeDominantTipos(dadosAnalitica.porCategoriaAtendimento, tipos);
+    return keep.length < tipos.length ? [...keep, OUTROS_LABEL] : keep;
+  }, [dadosAnalitica, dados]);
 
   const updatedAt = dados?.generatedAt
     ? new Date(dados.generatedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
@@ -351,12 +574,34 @@ export default function GlpiDashboard() {
             <span>{dados.kpis.total} chamados{grupoFiltro ? ` · ${grupoFiltro}` : ''}</span>
           </p>
         </div>
-        <button onClick={fetchDados}
-          className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
-          <RefreshCw size={14} /> Atualizar
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 rounded-lg border border-border p-0.5">
+            {([
+              { key: 'geral', label: 'Visão Geral', icon: LayoutDashboard },
+              { key: 'analitica', label: 'Analítica', icon: PieChartIcon },
+              { key: 'abertura', label: 'Abertura por Equipe', icon: Building2 },
+            ] as const).map((opt) => (
+              <button key={opt.key} onClick={() => setMainTab(opt.key)}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  mainTab === opt.key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
+                }`}>
+                <opt.icon size={14} /> {opt.label}
+              </button>
+            ))}
+          </div>
+          <button onClick={
+            mainTab === 'analitica' ? fetchAnalitica
+            : mainTab === 'abertura' ? fetchAbertura
+            : fetchDados
+          }
+            className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
+            <RefreshCw size={14} /> Atualizar
+          </button>
+        </div>
       </div>
 
+      {mainTab === 'geral' && (
+      <>
       {/* ── Filters ── */}
       <div className="rounded-lg border border-border px-4 py-3 flex flex-wrap items-center gap-3">
         <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Equipe</span>
@@ -578,6 +823,8 @@ export default function GlpiDashboard() {
                   <SortTh col="nome" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-5">Técnico</SortTh>
                   <SortTh col="grupo" current={sortCol} dir={sortDir} onSort={toggleSort}>Equipe</SortTh>
                   <SortTh col="emAberto" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right">Em aberto</SortTh>
+                  <SortTh col="pendentes" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right">Pendentes</SortTh>
+                  <SortTh col="emAndamento" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right">Em andamento</SortTh>
                   <SortTh col="resolvidos" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right">Resolvidos</SortTh>
                   <SortTh col="tmaDias" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right">TMA médio</SortTh>
                   <SortTh col="oldestDias" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right">Mais antigo</SortTh>
@@ -609,6 +856,12 @@ export default function GlpiDashboard() {
                           {t.emAberto}
                         </button>
                       </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-xs text-muted-foreground">
+                        {t.pendentes > 0 ? t.pendentes : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-xs text-muted-foreground">
+                        {t.emAndamento > 0 ? t.emAndamento : '—'}
+                      </td>
                       <td className="px-4 py-3 text-right">
                         <button onClick={() => t.resolvidos > 0 && openModal(t, 'resolvido')} disabled={t.resolvidos === 0}
                           className={`tabular-nums font-semibold transition-colors ${
@@ -635,6 +888,8 @@ export default function GlpiDashboard() {
                 <tr className="text-xs font-semibold text-muted-foreground">
                   <td className="px-5 py-3" colSpan={2}>Total</td>
                   <td className="px-4 py-3 text-right tabular-nums">{sortedTecnicos.reduce((s, t) => s + t.emAberto, 0)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{sortedTecnicos.reduce((s, t) => s + t.pendentes, 0)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{sortedTecnicos.reduce((s, t) => s + t.emAndamento, 0)}</td>
                   <td className="px-4 py-3 text-right tabular-nums text-success">{sortedTecnicos.reduce((s, t) => s + t.resolvidos, 0)}</td>
                   <td className="px-4 py-3" colSpan={2} />
                 </tr>
@@ -647,6 +902,211 @@ export default function GlpiDashboard() {
       {/* ── Modal ── */}
       {modalTech && modalType && (
         <TicketModal tech={modalTech} type={modalType} glpiUrl={dados.glpiUrl} onClose={closeModal} />
+      )}
+      </>
+      )}
+
+      {mainTab === 'analitica' && (
+      <div className="space-y-5">
+        {/* ── Squad filter ── */}
+        <div className="rounded-lg border border-border px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Equipe</span>
+            <Select
+              value={analiticaGrupo}
+              onChange={setAnaliticaGrupo}
+              className="min-w-[220px]"
+              options={[
+                { value: '', label: 'Selecione uma equipe para detalhar' },
+                ...dados.grupos.map((g) => ({ value: g.nome, label: g.nome })),
+              ]}
+            />
+            {loadingAnalitica && <Loader2 size={14} className="animate-spin text-primary" />}
+          </div>
+          <AtendimentoLegend tipos={keepTiposAnalitica} />
+        </div>
+
+        {!dadosAnalitica ? (
+          <div className="flex items-center justify-center py-24 text-muted-foreground text-sm">
+            {loadingAnalitica ? 'Carregando…' : 'Sem dados.'}
+          </div>
+        ) : !analiticaGrupo ? (
+          <>
+            <p className="text-xs text-muted-foreground">
+              Visão consolidada por equipe. Selecione uma equipe acima para detalhar por categoria e técnico.
+            </p>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="rounded-lg border border-border p-5">
+                <h2 className="text-sm font-semibold mb-4">Tipo de Atendimento por Equipe</h2>
+                <AtendimentoBarChart data={dadosAnalitica.porGrupoAtendimento} tipos={keepTiposAnalitica} />
+              </div>
+              <div className="rounded-lg border border-border p-5">
+                <h2 className="text-sm font-semibold mb-4">% que exige Desenvolvimento — por Equipe</h2>
+                <DevMeterList data={dadosAnalitica.porGrupoAtendimento} />
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="rounded-lg border border-border p-5">
+                <h2 className="text-sm font-semibold mb-4">Tipo de Atendimento por Categoria</h2>
+                <AtendimentoBarChart data={dadosAnalitica.porCategoriaAtendimento} tipos={keepTiposAnalitica} />
+              </div>
+              <div className="rounded-lg border border-border p-5">
+                <h2 className="text-sm font-semibold mb-4">% que exige Desenvolvimento — por Categoria</h2>
+                <DevMeterList data={dadosAnalitica.porCategoriaAtendimento} />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="rounded-lg border border-border p-5">
+                <h2 className="text-sm font-semibold mb-4">Tipo de Atendimento por Técnico</h2>
+                <AtendimentoBarChart data={dadosAnalitica.porTecnicoAtendimento} tipos={keepTiposAnalitica} />
+              </div>
+              <div className="rounded-lg border border-border p-5">
+                <h2 className="text-sm font-semibold mb-4">% que exige Desenvolvimento — por Técnico</h2>
+                <DevMeterList data={dadosAnalitica.porTecnicoAtendimento} />
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+      )}
+
+      {mainTab === 'abertura' && (
+      <div className="space-y-5">
+        {/* ── Filters ── */}
+        <div className="rounded-lg border border-border px-4 py-3 flex flex-wrap items-center gap-3">
+          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Equipe</span>
+          <Select
+            value={aberturaGrupo}
+            onChange={(v) => { setAberturaGrupo(v); setAberturaMes(''); }}
+            className="min-w-[170px]"
+            options={[
+              { value: '', label: 'Todas as equipes' },
+              ...dados.grupos.map((g) => ({ value: g.nome, label: g.nome })),
+            ]}
+          />
+
+          <div className="w-px h-5 bg-border mx-1" />
+          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Solicitante</span>
+          <Select
+            value={aberturaDepartamento}
+            onChange={setAberturaDepartamento}
+            className="min-w-[170px]"
+            options={[
+              { value: '', label: 'Todos os departamentos' },
+              ...dados.departamentos.map((d) => ({ value: d, label: d })),
+            ]}
+          />
+
+          {aberturaAvailableMeses.length > 0 && (
+            <>
+              <div className="w-px h-5 bg-border mx-1" />
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Mês</span>
+              <Select
+                value={aberturaMes}
+                onChange={setAberturaMes}
+                className="min-w-[140px]"
+                options={[
+                  { value: '', label: 'Todos os meses' },
+                  ...aberturaAvailableMeses.map((m) => ({ value: m, label: fmtMes(m) })),
+                ]}
+              />
+            </>
+          )}
+
+          <div className="w-px h-5 bg-border mx-1" />
+          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Data</span>
+          <div className="flex items-center gap-2">
+            <DatePicker value={aberturaDataInicio} onChange={setAberturaDataInicio} placeholder="Início" maxDate={aberturaDataFim || undefined} />
+            <span className="text-xs text-muted-foreground">até</span>
+            <DatePicker value={aberturaDataFim} onChange={setAberturaDataFim} placeholder="Fim" minDate={aberturaDataInicio || undefined} />
+            {(aberturaDataInicio || aberturaDataFim) && (
+              <button
+                onClick={() => { setAberturaDataInicio(''); setAberturaDataFim(''); }}
+                className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                title="Limpar filtro de data">
+                <X size={12} />
+              </button>
+            )}
+          </div>
+          {loadingAbertura && <Loader2 size={14} className="animate-spin text-primary ml-1" />}
+        </div>
+
+        {!dadosAbertura ? (
+          <div className="flex items-center justify-center py-24 text-muted-foreground text-sm">
+            {loadingAbertura ? 'Carregando…' : 'Sem dados.'}
+          </div>
+        ) : (
+          <>
+            <p className="text-xs text-muted-foreground">
+              "Equipe" e "Solicitante" aqui se referem a quem <strong>abriu</strong> o chamado (Título cadastrado no usuário) — não ao técnico responsável pela resolução.
+            </p>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="rounded-lg border border-border p-5">
+                <h2 className="text-sm font-semibold mb-4 flex items-center gap-2">
+                  <Building2 size={15} className="text-primary" /> Abertura por Equipe (Departamento)
+                </h2>
+                {dadosAbertura.aberturaPorEquipe.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Sem dados para este filtro.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {dadosAbertura.aberturaPorEquipe.map((e) => (
+                      <HBarRow key={e.equipe} nome={e.equipe} count={e.count}
+                        max={Math.max(...dadosAbertura.aberturaPorEquipe.map((x) => x.count), 1)} color="#155DFC" />
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="rounded-lg border border-border p-5">
+                <h2 className="text-sm font-semibold mb-4">
+                  % de categoria {aberturaDepartamento ? `abertos por ${aberturaDepartamento}` : '(top 12)'}
+                </h2>
+                {dadosAbertura.porCategoria.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Sem dados para este filtro.</p>
+                ) : (
+                  <div className="space-y-2.5">
+                    {dadosAbertura.porCategoria.map((c) => (
+                      <HBarRow key={c.nome} nome={c.nome} count={c.count}
+                        max={Math.max(...dadosAbertura.porCategoria.map((x) => x.count), 1)} color="#872BFF"
+                        valueLabel={dadosAbertura.kpis.total > 0 ? `${Math.round((c.count / dadosAbertura.kpis.total) * 100)}%` : '0%'} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="rounded-lg border border-border p-5">
+                <h2 className="text-sm font-semibold mb-2">Tipo de Atendimento</h2>
+                <TipoAtendimentoPie data={dadosAbertura.tipoAtendimentoTotais} />
+              </div>
+              <div className="rounded-lg border border-border p-5">
+                <h2 className="text-sm font-semibold mb-2">Exige Desenvolvimento?</h2>
+                <DesenvolvimentoPie data={dadosAbertura.desenvolvimentoTotais} />
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-border p-5">
+              <h2 className="text-sm font-semibold mb-4 flex items-center gap-2">
+                <Users size={15} className="text-primary" /> Top 10 — quem mais abre chamados
+              </h2>
+              {dadosAbertura.topSolicitantes.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Sem dados para este filtro.</p>
+              ) : (
+                <div className="space-y-3">
+                  {dadosAbertura.topSolicitantes.map((s) => (
+                    <HBarRow key={s.nome} nome={s.nome} count={s.count}
+                      max={Math.max(...dadosAbertura.topSolicitantes.map((x) => x.count), 1)} color="#00A63E" />
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
       )}
 
     </div>

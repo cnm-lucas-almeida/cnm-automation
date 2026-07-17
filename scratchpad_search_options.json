@@ -1,0 +1,2271 @@
+{
+  "1": {
+    "name": "Título",
+    "table": "glpi_tickets",
+    "field": "name",
+    "datatype": "itemlink",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.name"
+  },
+  "2": {
+    "name": "ID",
+    "table": "glpi_tickets",
+    "field": "id",
+    "datatype": "number",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.id"
+  },
+  "3": {
+    "name": "Prioridade",
+    "table": "glpi_tickets",
+    "field": "priority",
+    "datatype": "specific",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "empty"
+    ],
+    "uid": "Ticket.priority"
+  },
+  "4": {
+    "name": "Requerente",
+    "table": "glpi_users",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.Ticket_User.User.name"
+  },
+  "5": {
+    "name": "Técnico",
+    "table": "glpi_users",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.Ticket_User.User.name"
+  },
+  "6": {
+    "name": "Atribuído a um fornecedor",
+    "table": "glpi_suppliers",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.Supplier_Ticket.Supplier.name"
+  },
+  "7": {
+    "name": "Categoria",
+    "table": "glpi_itilcategories",
+    "field": "completename",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty",
+      "under",
+      "notunder"
+    ],
+    "uid": "Ticket.ITILCategory.completename"
+  },
+  "8": {
+    "name": "Grupo técnico",
+    "table": "glpi_groups",
+    "field": "completename",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty",
+      "under",
+      "notunder"
+    ],
+    "uid": "Ticket.Group_Ticket.Group.completename"
+  },
+  "9": {
+    "name": "Origem da requisição",
+    "table": "glpi_requesttypes",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.RequestType.name"
+  },
+  "10": {
+    "name": "Urgência",
+    "table": "glpi_tickets",
+    "field": "urgency",
+    "datatype": "specific",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "empty"
+    ],
+    "uid": "Ticket.urgency"
+  },
+  "11": {
+    "name": "Impacto",
+    "table": "glpi_tickets",
+    "field": "impact",
+    "datatype": "specific",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "empty"
+    ],
+    "uid": "Ticket.impact"
+  },
+  "12": {
+    "name": "Status",
+    "table": "glpi_tickets",
+    "field": "status",
+    "datatype": "specific",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "empty"
+    ],
+    "uid": "Ticket.status"
+  },
+  "13": {
+    "name": "Elementos associados",
+    "table": "glpi_items_tickets",
+    "field": "items_id",
+    "datatype": "specific",
+    "nosearch": true,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.Item_Ticket.items_id"
+  },
+  "14": {
+    "name": "Tipo",
+    "table": "glpi_tickets",
+    "field": "type",
+    "datatype": "specific",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "empty"
+    ],
+    "uid": "Ticket.type"
+  },
+  "15": {
+    "name": "Data de abertura",
+    "table": "glpi_tickets",
+    "field": "date",
+    "datatype": "datetime",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "lessthan",
+      "morethan",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.date"
+  },
+  "16": {
+    "name": "Data de fechamento",
+    "table": "glpi_tickets",
+    "field": "closedate",
+    "datatype": "datetime",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "lessthan",
+      "morethan",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.closedate"
+  },
+  "17": {
+    "name": "Data da solução",
+    "table": "glpi_tickets",
+    "field": "solvedate",
+    "datatype": "datetime",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "lessthan",
+      "morethan",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.solvedate"
+  },
+  "18": {
+    "name": "Tempo para solução",
+    "table": "glpi_tickets",
+    "field": "time_to_resolve",
+    "datatype": "datetime",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "lessthan",
+      "morethan",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.time_to_resolve"
+  },
+  "19": {
+    "name": "Última atualização",
+    "table": "glpi_tickets",
+    "field": "date_mod",
+    "datatype": "datetime",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "lessthan",
+      "morethan",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.date_mod"
+  },
+  "20": {
+    "name": "Categoria",
+    "table": "glpi_taskcategories",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty",
+      "under",
+      "notunder"
+    ],
+    "uid": "Ticket.TicketTask.TaskCategory.name"
+  },
+  "21": {
+    "name": "Descrição",
+    "table": "glpi_tickets",
+    "field": "content",
+    "datatype": "text",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.content"
+  },
+  "22": {
+    "name": "Autor",
+    "table": "glpi_users",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.users_id_recipient.User.name"
+  },
+  "23": {
+    "name": "Tipo de solução",
+    "table": "glpi_solutiontypes",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.ITILSolution.SolutionType.name"
+  },
+  "24": {
+    "name": "Solução",
+    "table": "glpi_itilsolutions",
+    "field": "content",
+    "datatype": "text",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.ITILSolution.content"
+  },
+  "25": {
+    "name": "Descrição",
+    "table": "glpi_itilfollowups",
+    "field": "content",
+    "datatype": "text",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.ITILFollowup.content"
+  },
+  "26": {
+    "name": "Descrição",
+    "table": "glpi_tickettasks",
+    "field": "content",
+    "datatype": "text",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.TicketTask.content"
+  },
+  "27": {
+    "name": "Número de acompanhamentos",
+    "table": "glpi_itilfollowups",
+    "field": "id",
+    "datatype": "count",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.ITILFollowup.id"
+  },
+  "28": {
+    "name": "Número de tarefas",
+    "table": "glpi_tickettasks",
+    "field": "id",
+    "datatype": "count",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.TicketTask.id"
+  },
+  "29": {
+    "name": "Origem da requisição",
+    "table": "glpi_requesttypes",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.ITILFollowup.RequestType.name"
+  },
+  "30": {
+    "name": "SLA Tempo para solução",
+    "table": "glpi_slas",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.SLA.name"
+  },
+  "31": {
+    "name": "Tipo",
+    "table": "glpi_ticketsatisfactions",
+    "field": "type",
+    "datatype": "specific",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.TicketSatisfaction.type"
+  },
+  "32": {
+    "name": "SLA Nível de escalação",
+    "table": "glpi_slalevels",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.SlaLevel_Ticket.SlaLevel.name"
+  },
+  "33": {
+    "name": "Status",
+    "table": "glpi_tickettasks",
+    "field": "state",
+    "datatype": "specific",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "empty"
+    ],
+    "uid": "Ticket.TicketTask.state"
+  },
+  "34": {
+    "name": "E-mail para o acompanhamento",
+    "table": "glpi_tickets_users",
+    "field": "alternative_email",
+    "datatype": "email",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.Ticket_User.alternative_email"
+  },
+  "35": {
+    "name": "Acompanhamento por e-mail",
+    "table": "glpi_tickets_users",
+    "field": "use_notification",
+    "datatype": "bool",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.Ticket_User.use_notification"
+  },
+  "36": {
+    "name": "Data",
+    "table": "glpi_itilfollowups",
+    "field": "date",
+    "datatype": "datetime",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "lessthan",
+      "morethan",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.ITILFollowup.date"
+  },
+  "37": {
+    "name": "SLA Tempo para atendimento",
+    "table": "glpi_slas",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.SLA.name"
+  },
+  "38": {
+    "name": "Qualquer status da solução",
+    "table": "glpi_itilsolutions",
+    "field": "status",
+    "datatype": "specific",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.ITILSolution.status"
+  },
+  "39": {
+    "name": "Último status da solução",
+    "table": "glpi_itilsolutions",
+    "field": "status",
+    "datatype": "specific",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.ITILSolution.status"
+  },
+  "40": {
+    "name": "Todos chamados relacionados",
+    "table": "glpi_tickets_tickets",
+    "field": "tickets_id_1",
+    "datatype": "",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "empty"
+    ],
+    "uid": "Ticket.Ticket_Ticket.tickets_id_1"
+  },
+  "41": {
+    "name": "Número de todos chamados relacionados",
+    "table": "glpi_tickets_tickets",
+    "field": "id",
+    "datatype": "count",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.Ticket_Ticket.id"
+  },
+  "42": {
+    "name": "Custo de tempo",
+    "table": "glpi_ticketcosts",
+    "field": "cost_time",
+    "datatype": "decimal",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.TicketCost.cost_time"
+  },
+  "43": {
+    "name": "Custo fixo",
+    "table": "glpi_ticketcosts",
+    "field": "cost_fixed",
+    "datatype": "decimal",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.TicketCost.cost_fixed"
+  },
+  "44": {
+    "name": "Custo de material",
+    "table": "glpi_ticketcosts",
+    "field": "cost_material",
+    "datatype": "decimal",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.TicketCost.cost_material"
+  },
+  "45": {
+    "name": "Duração total",
+    "table": "glpi_tickets",
+    "field": "actiontime",
+    "datatype": "timestamp",
+    "nosearch": true,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.actiontime"
+  },
+  "46": {
+    "name": "Número de chamados duplicados",
+    "table": "glpi_tickets_tickets",
+    "field": "id",
+    "datatype": "count",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.Ticket_Ticket.id"
+  },
+  "47": {
+    "name": "Chamados duplicados",
+    "table": "glpi_tickets_tickets",
+    "field": "tickets_id_1",
+    "datatype": "",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "empty"
+    ],
+    "uid": "Ticket.Ticket_Ticket.tickets_id_1"
+  },
+  "48": {
+    "name": "Custo total",
+    "table": "glpi_ticketcosts",
+    "field": "totalcost",
+    "datatype": "decimal",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.TicketCost.totalcost"
+  },
+  "49": {
+    "name": "Custo - Duração",
+    "table": "glpi_ticketcosts",
+    "field": "actiontime",
+    "datatype": "timestamp",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.TicketCost.actiontime"
+  },
+  "50": {
+    "name": "Chamados pai",
+    "table": "glpi_tickets",
+    "field": "id",
+    "datatype": "itemlink",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "empty"
+    ],
+    "uid": "Ticket.tickets_id_2.Ticket_Ticket.Ticket.id"
+  },
+  "52": {
+    "name": "Aprovação",
+    "table": "glpi_tickets",
+    "field": "global_validation",
+    "datatype": "specific",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "empty"
+    ],
+    "uid": "Ticket.global_validation"
+  },
+  "53": {
+    "name": "Comentários da requisição",
+    "table": "glpi_ticketvalidations",
+    "field": "comment_submission",
+    "datatype": "text",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.TicketValidation.comment_submission"
+  },
+  "54": {
+    "name": "Comentários da validação",
+    "table": "glpi_ticketvalidations",
+    "field": "comment_validation",
+    "datatype": "text",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.TicketValidation.comment_validation"
+  },
+  "55": {
+    "name": "Status de aprovação",
+    "table": "glpi_ticketvalidations",
+    "field": "status",
+    "datatype": "specific",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "empty"
+    ],
+    "uid": "Ticket.TicketValidation.status"
+  },
+  "56": {
+    "name": "Data da requisição",
+    "table": "glpi_ticketvalidations",
+    "field": "submission_date",
+    "datatype": "datetime",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "lessthan",
+      "morethan",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.TicketValidation.submission_date"
+  },
+  "57": {
+    "name": "Data da validação",
+    "table": "glpi_ticketvalidations",
+    "field": "validation_date",
+    "datatype": "datetime",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "lessthan",
+      "morethan",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.TicketValidation.validation_date"
+  },
+  "58": {
+    "name": "Requerente",
+    "table": "glpi_users",
+    "field": "name",
+    "datatype": "itemlink",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.TicketValidation.User.name"
+  },
+  "59": {
+    "name": "Aprovador",
+    "table": "glpi_users",
+    "field": "name",
+    "datatype": "itemlink",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.items_id_target.TicketValidation.User.name"
+  },
+  "60": {
+    "name": "Data de criação",
+    "table": "glpi_ticketsatisfactions",
+    "field": "date_begin",
+    "datatype": "datetime",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "lessthan",
+      "morethan",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.TicketSatisfaction.date_begin"
+  },
+  "61": {
+    "name": "Data de resposta",
+    "table": "glpi_ticketsatisfactions",
+    "field": "date_answered",
+    "datatype": "datetime",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "lessthan",
+      "morethan",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.TicketSatisfaction.date_answered"
+  },
+  "62": {
+    "name": "Satisfação",
+    "table": "glpi_ticketsatisfactions",
+    "field": "satisfaction",
+    "datatype": "number",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.TicketSatisfaction.satisfaction"
+  },
+  "63": {
+    "name": "Comentários",
+    "table": "glpi_ticketsatisfactions",
+    "field": "comment",
+    "datatype": "text",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.TicketSatisfaction.comment"
+  },
+  "64": {
+    "name": "Última edição por",
+    "table": "glpi_users",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.users_id_lastupdater.User.name"
+  },
+  "65": {
+    "name": "Grupo observador",
+    "table": "glpi_groups",
+    "field": "completename",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty",
+      "under",
+      "notunder"
+    ],
+    "uid": "Ticket.Group_Ticket.Group.completename"
+  },
+  "66": {
+    "name": "Observador",
+    "table": "glpi_users",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.Ticket_User.User.name"
+  },
+  "67": {
+    "name": "Chamados filhos",
+    "table": "glpi_tickets",
+    "field": "id",
+    "datatype": "itemlink",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "empty"
+    ],
+    "uid": "Ticket.tickets_id_1.Ticket_Ticket.Ticket.id"
+  },
+  "68": {
+    "name": "Número de chamados filho",
+    "table": "glpi_tickets_tickets",
+    "field": "id",
+    "datatype": "count",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.Ticket_Ticket.id"
+  },
+  "69": {
+    "name": "Número de chamados pai",
+    "table": "glpi_tickets_tickets",
+    "field": "id",
+    "datatype": "count",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.Ticket_Ticket.id"
+  },
+  "70": {
+    "name": "Tempo desde a abertura",
+    "table": "glpi_tickets",
+    "field": "_virtual_age",
+    "datatype": "specific",
+    "nosearch": true,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket._virtual_age"
+  },
+  "71": {
+    "name": "Grupo requerente",
+    "table": "glpi_groups",
+    "field": "completename",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty",
+      "under",
+      "notunder"
+    ],
+    "uid": "Ticket.Group_Ticket.Group.completename"
+  },
+  "72": {
+    "name": "Última data",
+    "table": "glpi_itilfollowups",
+    "field": "date",
+    "datatype": "datetime",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "lessthan",
+      "morethan",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.ITILFollowup.date"
+  },
+  "73": {
+    "name": "Última data",
+    "table": "glpi_tickettasks",
+    "field": "date",
+    "datatype": "datetime",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "lessthan",
+      "morethan",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.TicketTask.date"
+  },
+  "74": {
+    "name": "Última data",
+    "table": "glpi_itilsolutions",
+    "field": "date_creation",
+    "datatype": "datetime",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "lessthan",
+      "morethan",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.ITILSolution.date_creation"
+  },
+  "75": {
+    "name": "Data final",
+    "table": "glpi_ticketsatisfactions",
+    "field": "inquest_duration",
+    "datatype": "datetime",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "lessthan",
+      "morethan",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.TicketSatisfaction.inquest_duration"
+  },
+  "80": {
+    "name": "Entidade",
+    "table": "glpi_entities",
+    "field": "completename",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty",
+      "under",
+      "notunder"
+    ],
+    "uid": "Ticket.Entity.completename"
+  },
+  "82": {
+    "name": "Tempo para resolver excedido",
+    "table": "glpi_tickets",
+    "field": "sla_ttr_is_late",
+    "datatype": "bool",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.sla_ttr_is_late"
+  },
+  "83": {
+    "name": "Localização",
+    "table": "glpi_locations",
+    "field": "completename",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty",
+      "under",
+      "notunder"
+    ],
+    "uid": "Ticket.Location.completename"
+  },
+  "84": {
+    "name": "Número do prédio",
+    "table": "glpi_locations",
+    "field": "building",
+    "datatype": "string",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.Location.building"
+  },
+  "85": {
+    "name": "Número da sala",
+    "table": "glpi_locations",
+    "field": "room",
+    "datatype": "string",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.Location.room"
+  },
+  "86": {
+    "name": "Comentários da localização",
+    "table": "glpi_locations",
+    "field": "comment",
+    "datatype": "text",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.Location.comment"
+  },
+  "87": {
+    "name": "ID externo",
+    "table": "glpi_tickets",
+    "field": "externalid",
+    "datatype": "string",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.externalid"
+  },
+  "91": {
+    "name": "Acompanhamento privado",
+    "table": "glpi_itilfollowups",
+    "field": "is_private",
+    "datatype": "bool",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.ITILFollowup.is_private"
+  },
+  "92": {
+    "name": "Chamado privado",
+    "table": "glpi_tickettasks",
+    "field": "is_private",
+    "datatype": "bool",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.TicketTask.is_private"
+  },
+  "93": {
+    "name": "Autor",
+    "table": "glpi_users",
+    "field": "name",
+    "datatype": "itemlink",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.ITILFollowup.User.name"
+  },
+  "94": {
+    "name": "Autor",
+    "table": "glpi_users",
+    "field": "name",
+    "datatype": "itemlink",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.TicketTask.User.name"
+  },
+  "95": {
+    "name": "Técnico encarregado",
+    "table": "glpi_users",
+    "field": "name",
+    "datatype": "itemlink",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.users_id_tech.TicketTask.User.name"
+  },
+  "96": {
+    "name": "Duração",
+    "table": "glpi_tickettasks",
+    "field": "actiontime",
+    "datatype": "timestamp",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.TicketTask.actiontime"
+  },
+  "97": {
+    "name": "Data",
+    "table": "glpi_tickettasks",
+    "field": "date",
+    "datatype": "datetime",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "lessthan",
+      "morethan",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.TicketTask.date"
+  },
+  "101": {
+    "name": "Endereço",
+    "table": "glpi_locations",
+    "field": "address",
+    "datatype": "string",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.Location.address"
+  },
+  "102": {
+    "name": "Código postal",
+    "table": "glpi_locations",
+    "field": "postcode",
+    "datatype": "string",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.Location.postcode"
+  },
+  "103": {
+    "name": "Cidade",
+    "table": "glpi_locations",
+    "field": "town",
+    "datatype": "string",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.Location.town"
+  },
+  "104": {
+    "name": "Estado",
+    "table": "glpi_locations",
+    "field": "state",
+    "datatype": "string",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.Location.state"
+  },
+  "105": {
+    "name": "País",
+    "table": "glpi_locations",
+    "field": "country",
+    "datatype": "string",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.Location.country"
+  },
+  "106": {
+    "name": "Código da localização",
+    "table": "glpi_locations",
+    "field": "code",
+    "datatype": "string",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.Location.code"
+  },
+  "107": {
+    "name": "Apelido (alias) da localização",
+    "table": "glpi_locations",
+    "field": "alias",
+    "datatype": "string",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.Location.alias"
+  },
+  "111": {
+    "name": "Tarefa do projeto",
+    "table": "glpi_projecttasks",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.ProjectTask_Ticket.ProjectTask.name"
+  },
+  "112": {
+    "name": "Grupo encarregado",
+    "table": "glpi_groups",
+    "field": "completename",
+    "datatype": "itemlink",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty",
+      "under",
+      "notunder"
+    ],
+    "uid": "Ticket.groups_id_tech.TicketTask.Group.completename"
+  },
+  "119": {
+    "name": "Número de documentos",
+    "table": "glpi_documents_items",
+    "field": "id",
+    "datatype": "count",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.Document_Item.id"
+  },
+  "120": {
+    "name": "Respostas",
+    "table": "glpi_forms_answerssets",
+    "field": "name",
+    "datatype": "itemlink",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "empty"
+    ],
+    "uid": "Ticket.Glpi\\Form\\Destination\\AnswersSet_FormDestinationItem.Glpi\\Form\\AnswersSet.name"
+  },
+  "131": {
+    "name": "Tipos de itens associados",
+    "table": "glpi_items_tickets",
+    "field": "itemtype",
+    "datatype": "itemtypename",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.Item_Ticket.itemtype"
+  },
+  "142": {
+    "name": "Documentos",
+    "table": "glpi_documents",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": true,
+    "nodisplay": true,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.Document_Item.Document.name"
+  },
+  "150": {
+    "name": "Leve em conta o tempo",
+    "table": "glpi_tickets",
+    "field": "takeintoaccount_delay_stat",
+    "datatype": "timestamp",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.takeintoaccount_delay_stat"
+  },
+  "151": {
+    "name": "Tempo para solução + Progresso",
+    "table": "glpi_tickets",
+    "field": "time_to_resolve",
+    "datatype": "",
+    "nosearch": true,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.time_to_resolve"
+  },
+  "152": {
+    "name": "Hora de fechamento",
+    "table": "glpi_tickets",
+    "field": "close_delay_stat",
+    "datatype": "timestamp",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.close_delay_stat"
+  },
+  "153": {
+    "name": "Tempo de espera",
+    "table": "glpi_tickets",
+    "field": "waiting_duration",
+    "datatype": "timestamp",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.waiting_duration"
+  },
+  "154": {
+    "name": "Tempo de solução",
+    "table": "glpi_tickets",
+    "field": "solve_delay_stat",
+    "datatype": "timestamp",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.solve_delay_stat"
+  },
+  "155": {
+    "name": "Tempo para atendimento",
+    "table": "glpi_tickets",
+    "field": "time_to_own",
+    "datatype": "datetime",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "lessthan",
+      "morethan",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.time_to_own"
+  },
+  "158": {
+    "name": "Tempo para atendimento + Progresso",
+    "table": "glpi_tickets",
+    "field": "time_to_own",
+    "datatype": "",
+    "nosearch": true,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.time_to_own"
+  },
+  "159": {
+    "name": "Tempo para adquirir excedido",
+    "table": "glpi_tickets",
+    "field": "sla_tto_is_late",
+    "datatype": "bool",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.sla_tto_is_late"
+  },
+  "173": {
+    "name": "Data inicial",
+    "table": "glpi_tickettasks",
+    "field": "begin",
+    "datatype": "datetime",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "lessthan",
+      "morethan",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.TicketTask.begin"
+  },
+  "174": {
+    "name": "Data final",
+    "table": "glpi_tickettasks",
+    "field": "end",
+    "datatype": "datetime",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "lessthan",
+      "morethan",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.TicketTask.end"
+  },
+  "175": {
+    "name": "Modelo de tarefa",
+    "table": "glpi_tasktemplates",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.TicketTask.TaskTemplate.name"
+  },
+  "180": {
+    "name": "Tempo interno para solução",
+    "table": "glpi_tickets",
+    "field": "internal_time_to_resolve",
+    "datatype": "datetime",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "lessthan",
+      "morethan",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.internal_time_to_resolve"
+  },
+  "181": {
+    "name": "Tempo interno para solução + Progresso",
+    "table": "glpi_tickets",
+    "field": "internal_time_to_resolve",
+    "datatype": "",
+    "nosearch": true,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.internal_time_to_resolve"
+  },
+  "182": {
+    "name": "Tempo interno para solução excedido",
+    "table": "glpi_tickets",
+    "field": "ola_ttr_is_late",
+    "datatype": "bool",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.ola_ttr_is_late"
+  },
+  "185": {
+    "name": "Tempo interno para atendimento",
+    "table": "glpi_tickets",
+    "field": "internal_time_to_own",
+    "datatype": "datetime",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "lessthan",
+      "morethan",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.internal_time_to_own"
+  },
+  "186": {
+    "name": "Tempo interno para atendimento + Progresso",
+    "table": "glpi_tickets",
+    "field": "internal_time_to_own",
+    "datatype": "",
+    "nosearch": true,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.internal_time_to_own"
+  },
+  "187": {
+    "name": "Tempo interno para atendimento excedido",
+    "table": "glpi_tickets",
+    "field": "ola_tto_is_late",
+    "datatype": "bool",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.ola_tto_is_late"
+  },
+  "188": {
+    "name": "Próximo nível de escalonamento",
+    "table": "glpi_tickets",
+    "field": "next_escalation_level",
+    "datatype": "datetime",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "lessthan",
+      "morethan",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.next_escalation_level"
+  },
+  "190": {
+    "name": "OLA Tempo interno para atendimento",
+    "table": "glpi_olas",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.OLA.name"
+  },
+  "191": {
+    "name": "OLA Tempo interno para solução",
+    "table": "glpi_olas",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.OLA.name"
+  },
+  "192": {
+    "name": "OLA Nível de escalação",
+    "table": "glpi_olalevels",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.OlaLevel_Ticket.OlaLevel.name"
+  },
+  "193": {
+    "name": "Contrato",
+    "table": "glpi_contracts",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.Ticket_Contract.Contract.name"
+  },
+  "194": {
+    "name": "Tipo de contrato",
+    "table": "glpi_contracttypes",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.Ticket_Contract.Contract.ContractType.name"
+  },
+  "195": {
+    "name": "Substituto do aprovador",
+    "table": "glpi_users",
+    "field": "name",
+    "datatype": "itemlink",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.users_id_substitute.TicketValidation.User.ValidatorSubstitute.User.name"
+  },
+  "196": {
+    "name": "Grupo aprovador",
+    "table": "glpi_groups",
+    "field": "completename",
+    "datatype": "itemlink",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty",
+      "under",
+      "notunder"
+    ],
+    "uid": "Ticket.items_id_target.TicketValidation.Group.completename"
+  },
+  "197": {
+    "name": "Substituto de um membro do grupo de aprovadores",
+    "table": "glpi_users",
+    "field": "name",
+    "datatype": "itemlink",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.users_id_substitute.TicketValidation.Group.Group_User.User.ValidatorSubstitute.User.name"
+  },
+  "198": {
+    "name": "Status de aprovação por usuários",
+    "table": "glpi_ticketvalidations",
+    "field": "status",
+    "datatype": "specific",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "empty"
+    ],
+    "uid": "Ticket.TicketValidation.status"
+  },
+  "200": {
+    "name": "Número de problemas",
+    "table": "glpi_problems_tickets",
+    "field": "id",
+    "datatype": "count",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.Problem_Ticket.id"
+  },
+  "201": {
+    "name": "Problema",
+    "table": "glpi_problems",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.Problem_Ticket.Problem.name"
+  },
+  "202": {
+    "name": "Status",
+    "table": "glpi_problems",
+    "field": "status",
+    "datatype": "specific",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "empty"
+    ],
+    "uid": "Ticket.Problem_Ticket.Problem.status"
+  },
+  "203": {
+    "name": "Data da solução",
+    "table": "glpi_problems",
+    "field": "solvedate",
+    "datatype": "datetime",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "lessthan",
+      "morethan",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.Problem_Ticket.Problem.solvedate"
+  },
+  "204": {
+    "name": "Data de abertura",
+    "table": "glpi_problems",
+    "field": "date",
+    "datatype": "datetime",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "lessthan",
+      "morethan",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.Problem_Ticket.Problem.date"
+  },
+  "210": {
+    "name": "Número de mudanças",
+    "table": "glpi_changes_tickets",
+    "field": "id",
+    "datatype": "count",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.Change_Ticket.id"
+  },
+  "400": {
+    "name": "Motivo de pendência",
+    "table": "glpi_pendingreasons",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.PendingReason_Item.PendingReason.name"
+  },
+  "401": {
+    "name": "Modelo",
+    "table": "glpi_tickettemplates",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.TicketTemplate.name"
+  },
+  "450": {
+    "name": "Projeto",
+    "table": "glpi_projects",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.Itil_Project.Project.name"
+  },
+  "500": {
+    "name": "Categoria do requerente",
+    "table": "glpi_usercategories",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.Ticket_User.User.UserCategory.name"
+  },
+  "501": {
+    "name": "Categoria do observador",
+    "table": "glpi_usercategories",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.Ticket_User.User.UserCategory.name"
+  },
+  "502": {
+    "name": "Categoria de técnico",
+    "table": "glpi_usercategories",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "Ticket.Ticket_User.User.UserCategory.name"
+  },
+  "998": {
+    "name": "Latitude",
+    "table": "glpi_locations",
+    "field": "latitude",
+    "datatype": "text",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.Location.latitude"
+  },
+  "999": {
+    "name": "Longitude",
+    "table": "glpi_locations",
+    "field": "longitude",
+    "datatype": "text",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.Location.longitude"
+  },
+  "76666": {
+    "name": "Tipo de Atendimento - Tipo de Atendimento",
+    "table": "glpi_plugin_fields_tipodeatendimentofielddropdowns",
+    "field": "completename",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty",
+      "under",
+      "notunder"
+    ],
+    "uid": "Ticket.PluginFieldsTickettipodeatendimento.PluginFieldsTipodeatendimentofieldDropdown.completename"
+  },
+  "76668": {
+    "name": "Tipo de Atendimento - Desenvolvimento",
+    "table": "glpi_plugin_fields_tickettipodeatendimentos",
+    "field": "desenvolvimentofield",
+    "datatype": "bool",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "notequals",
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "Ticket.PluginFieldsTickettipodeatendimento.desenvolvimentofield"
+  },
+  "common": {
+    "name": "Características"
+  },
+  "requester": {
+    "name": "Requerente"
+  },
+  "observer": {
+    "name": "Observador"
+  },
+  "assign": {
+    "name": "Atribuído"
+  },
+  "notification": {
+    "name": "Notificações"
+  },
+  "sla": {
+    "name": "SLA"
+  },
+  "ola": {
+    "name": "OLA"
+  },
+  "validation": {
+    "name": "Aprovação"
+  },
+  "satisfaction": {
+    "name": "Pesquisa de satisfação"
+  },
+  "followup": {
+    "name": "Acompanhamentos"
+  },
+  "task": {
+    "name": "Tarefas"
+  },
+  "stats": {
+    "name": "Estatísticas"
+  },
+  "linktickets": {
+    "name": "Chamados relacionados"
+  },
+  "solution": {
+    "name": "Solução"
+  },
+  "cost": {
+    "name": "Custo"
+  },
+  "problem": {
+    "name": "Problemas"
+  },
+  "change": {
+    "name": "Mudanças"
+  },
+  "tools": {
+    "name": "Ferramentas"
+  },
+  "document": {
+    "name": "Documentos"
+  },
+  "plugins": {
+    "name": "Plug-ins"
+  }
+}

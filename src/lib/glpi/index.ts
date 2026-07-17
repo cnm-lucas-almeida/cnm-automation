@@ -21,9 +21,18 @@ export type TicketResolvidoItem = {
 
 export type TechRow = {
   id: string; nome: string; grupo: string;
-  emAberto: number; resolvidos: number; tmaDias: number; oldestDias: number;
+  emAberto: number; pendentes: number; emAndamento: number;
+  resolvidos: number; tmaDias: number; oldestDias: number;
   ticketsAbertos: TicketItem[];
   ticketsResolvidos: TicketResolvidoItem[];
+};
+
+export type AtendimentoBreakdown = {
+  nome: string;
+  total: number;
+  porTipo: Record<string, number>;
+  devSim: number;
+  devNao: number;
 };
 
 export type DashboardData = {
@@ -41,6 +50,15 @@ export type DashboardData = {
   porGrupo: Array<{ nome: string; count: number }>;
   grupos: Array<{ id: string; nome: string }>;
   porTecnico: TechRow[];
+  tiposAtendimento: string[];
+  porCategoriaAtendimento: AtendimentoBreakdown[];
+  porTecnicoAtendimento: AtendimentoBreakdown[];
+  aberturaPorEquipe: Array<{ equipe: string; count: number }>;
+  porGrupoAtendimento: AtendimentoBreakdown[];
+  tipoAtendimentoTotais: Array<{ tipo: string; count: number }>;
+  desenvolvimentoTotais: { sim: number; nao: number };
+  topSolicitantes: Array<{ nome: string; count: number }>;
+  departamentos: string[];
 };
 
 const _cache = new Map<string, { data: DashboardData; ts: number }>();
@@ -114,6 +132,15 @@ const PRIORITY_NAMES: Record<number, string> = {
   6: 'Maior',
 };
 
+// Deriva o departamento a partir do Título do usuário (formato "Departamento: Cargo").
+// "Acesso Total (exceto criação de perfis)" é o Título usado pelas contas de TI/admin, não um departamento de negócio.
+function deriveDepartamento(tituloRaw: unknown): string {
+  const t = tituloRaw && tituloRaw !== '0' && tituloRaw !== 0 ? String(tituloRaw) : '';
+  if (!t) return 'Sem título';
+  const dep = t.split(':')[0].trim();
+  return dep === 'Acesso Total (exceto criação de perfis)' ? 'TI' : dep;
+}
+
 function aggregate(
   tickets: any[],
   users: any[],
@@ -136,6 +163,15 @@ function aggregate(
   const ticketMap: Record<number, { nome: string; prioridade: number }> = {};
   for (const t of tickets) {
     ticketMap[t.id] = { nome: t.name || `Chamado #${t.id}`, prioridade: t.priority ?? 3 };
+  }
+
+  // Ticket ID → category name
+  const ticketCategoriaMap: Record<number, string> = {};
+  for (const t of tickets) {
+    ticketCategoriaMap[t.id] =
+      t.itilcategories_id && t.itilcategories_id !== '0' && t.itilcategories_id !== 0
+        ? String(t.itilcategories_id)
+        : 'Sem categoria';
   }
 
   // ── Global aggregations ────────────────────────────────────────
@@ -226,7 +262,7 @@ function aggregate(
   // ── Open tickets per technician ────────────────────────────────
 
   const techOpenMap: Record<string, {
-    count: number; group: string; oldestDias: number;
+    count: number; pendentes: number; emAndamento: number; group: string; oldestDias: number;
     tickets: { id: number; openDate: string }[];
   }> = {};
   for (const row of openRows || []) {
@@ -234,13 +270,16 @@ function aggregate(
     const techStr = String(row['5'] ?? '').trim();
     const group = String(row['8'] ?? '');
     const openDateStr = String(row['15'] ?? '');
+    const status = Number(row['12'] ?? 0);
     if (!techStr) continue;
     const dias = openDateStr
       ? Math.floor((now.getTime() - new Date(openDateStr).getTime()) / 86400000)
       : 0;
-    for (const tid of techStr.split(/\s+/).filter(Boolean)) {
-      if (!techOpenMap[tid]) techOpenMap[tid] = { count: 0, group, oldestDias: 0, tickets: [] };
+    for (const tid of techStr.split(/[,\s]+/).filter(Boolean)) {
+      if (!techOpenMap[tid]) techOpenMap[tid] = { count: 0, pendentes: 0, emAndamento: 0, group, oldestDias: 0, tickets: [] };
       techOpenMap[tid].count++;
+      if (status === 4) techOpenMap[tid].pendentes++;
+      else if (status === 2 || status === 3) techOpenMap[tid].emAndamento++;
       if (dias > techOpenMap[tid].oldestDias) techOpenMap[tid].oldestDias = dias;
       if (ticketId) techOpenMap[tid].tickets.push({ id: ticketId, openDate: openDateStr });
     }
@@ -260,7 +299,7 @@ function aggregate(
       const group = String(row['8'] ?? '');
       const solveDate = String(row['17'] ?? '');
       if (!techStr) continue;
-      for (const tid of techStr.split(/\s+/).filter(Boolean)) {
+      for (const tid of techStr.split(/[,\s]+/).filter(Boolean)) {
         if (!m[tid]) m[tid] = { count: 0, totalDelay: 0, group, tickets: [] };
         m[tid].count++;
         if (delay > 0) m[tid].totalDelay += delay;
@@ -312,6 +351,8 @@ function aggregate(
           nome: userMap[Number(tid)] || `Técnico #${tid}`,
           grupo: (open?.group || res?.group || '').split(' > ')[0].trim(),
           emAberto: open?.count || 0,
+          pendentes: open?.pendentes || 0,
+          emAndamento: open?.emAndamento || 0,
           resolvidos: res?.count || 0,
           tmaDias: avgDelay > 0 ? Math.round((avgDelay / 86400) * 10) / 10 : 0,
           oldestDias: open?.oldestDias || 0,
@@ -321,6 +362,100 @@ function aggregate(
       })
       .sort((a, b) => b.emAberto - a.emAberto || b.resolvidos - a.resolvidos);
   }
+
+  // ── Tipo de Atendimento / Desenvolvimento breakdowns ────────────
+
+  type AtendAcc = { total: number; porTipo: Record<string, number>; devSim: number; devNao: number };
+  const newAtendAcc = (): AtendAcc => ({ total: 0, porTipo: {}, devSim: 0, devNao: 0 });
+  const addAtendAcc = (acc: AtendAcc, tipo: string, dev: boolean) => {
+    acc.total++;
+    acc.porTipo[tipo] = (acc.porTipo[tipo] || 0) + 1;
+    if (dev) acc.devSim++; else acc.devNao++;
+  };
+
+  const catAcc: Record<string, AtendAcc> = {};
+  const tecAcc: Record<string, AtendAcc> = {};
+  const grpAcc: Record<string, AtendAcc> = {};
+  const tiposAtendimentoSet = new Set<string>();
+  const tipoAtendimentoTotaisMap: Record<string, number> = {};
+  let devTotalSim = 0;
+  let devTotalNao = 0;
+
+  const allAtendRows = [...(openRows || []), ...(resolvedRows || [])];
+  for (const row of allAtendRows) {
+    const tipo = String(row['76666'] ?? '').trim();
+    if (!tipo) continue;
+    const dev = Number(row['76668'] ?? 0) === 1;
+    tiposAtendimentoSet.add(tipo);
+    tipoAtendimentoTotaisMap[tipo] = (tipoAtendimentoTotaisMap[tipo] || 0) + 1;
+    if (dev) devTotalSim++; else devTotalNao++;
+
+    const ticketId = Number(row['2'] ?? 0);
+    const categoria = ticketCategoriaMap[ticketId] || 'Sem categoria';
+    if (!catAcc[categoria]) catAcc[categoria] = newAtendAcc();
+    addAtendAcc(catAcc[categoria], tipo, dev);
+
+    const techStr = String(row['5'] ?? '').trim();
+    for (const tid of techStr.split(/[,\s]+/).filter(Boolean)) {
+      const nomeTec = userMap[Number(tid)] || `Técnico #${tid}`;
+      if (!tecAcc[nomeTec]) tecAcc[nomeTec] = newAtendAcc();
+      addAtendAcc(tecAcc[nomeTec], tipo, dev);
+    }
+
+    const groupRaw = Array.isArray(row['8']) ? row['8'][0] : row['8'];
+    const grupoNome = String(groupRaw ?? '').split(' > ')[0].trim();
+    if (grupoNome) {
+      if (!grpAcc[grupoNome]) grpAcc[grupoNome] = newAtendAcc();
+      addAtendAcc(grpAcc[grupoNome], tipo, dev);
+    }
+  }
+
+  const toBreakdown = (acc: Record<string, AtendAcc>): AtendimentoBreakdown[] =>
+    Object.entries(acc)
+      .map(([nome, a]) => ({ nome, total: a.total, porTipo: a.porTipo, devSim: a.devSim, devNao: a.devNao }))
+      .sort((a, b) => b.total - a.total);
+
+  const porCategoriaAtendimento = toBreakdown(catAcc);
+  const porTecnicoAtendimento = toBreakdown(tecAcc);
+  const porGrupoAtendimento = toBreakdown(grpAcc);
+  const tiposAtendimento = Array.from(tiposAtendimentoSet).sort();
+  const tipoAtendimentoTotais = Object.entries(tipoAtendimentoTotaisMap)
+    .map(([tipo, count]) => ({ tipo, count }))
+    .sort((a, b) => b.count - a.count);
+  const desenvolvimentoTotais = { sim: devTotalSim, nao: devTotalNao };
+
+  // ── Abertura de chamados por equipe/solicitante ─────────────────
+  // GLPI não usa "Grupo requerente"; a equipe vem do Título do usuário
+  // (formato "Departamento: Cargo"), cadastrado no perfil de cada solicitante.
+
+  const userTituloMap: Record<number, string> = {};
+  for (const u of users || []) {
+    userTituloMap[u.id] = deriveDepartamento(u.usertitles_id);
+  }
+  const departamentos = Array.from(new Set(Object.values(userTituloMap)))
+    .filter((d) => d !== 'Sem título')
+    .sort();
+
+  const equipeAberturaMap: Record<string, number> = {};
+  const solicitanteAcc: Record<string, number> = {};
+  for (const row of allAtendRows) {
+    const reqRaw = row['4'];
+    const reqIds = Array.isArray(reqRaw) ? reqRaw : String(reqRaw ?? '').split(/[,\s]+/);
+    for (const ridStr of reqIds.filter(Boolean)) {
+      const rid = Number(ridStr);
+      const equipe = userTituloMap[rid] || 'Sem título';
+      equipeAberturaMap[equipe] = (equipeAberturaMap[equipe] || 0) + 1;
+      const nomeSolic = userMap[rid] || `Usuário #${rid}`;
+      solicitanteAcc[nomeSolic] = (solicitanteAcc[nomeSolic] || 0) + 1;
+    }
+  }
+  const aberturaPorEquipe = Object.entries(equipeAberturaMap)
+    .map(([equipe, count]) => ({ equipe, count }))
+    .sort((a, b) => b.count - a.count);
+  const topSolicitantes = Object.entries(solicitanteAcc)
+    .map(([nome, count]) => ({ nome, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
 
   // KPIs
   const kpis = {
@@ -344,6 +479,15 @@ function aggregate(
     porGrupo,
     grupos,
     porTecnico: buildTechTable(resolved),
+    tiposAtendimento,
+    porCategoriaAtendimento,
+    porTecnicoAtendimento,
+    porGrupoAtendimento,
+    aberturaPorEquipe,
+    tipoAtendimentoTotais,
+    desenvolvimentoTotais,
+    topSolicitantes,
+    departamentos,
   };
 }
 
@@ -352,8 +496,9 @@ export async function getDashboardData(
   mes?: string,
   dataInicio?: string,
   dataFim?: string,
+  departamento?: string,
 ): Promise<DashboardData> {
-  const cacheKey = `${grupoNome || ''}_${mes || ''}_${dataInicio || ''}_${dataFim || ''}`;
+  const cacheKey = `${grupoNome || ''}_${mes || ''}_${dataInicio || ''}_${dataFim || ''}_${departamento || ''}`;
   const now = Date.now();
   const cached = _cache.get(cacheKey);
   if (cached && now - cached.ts < CACHE_TTL) return cached.data;
@@ -362,19 +507,19 @@ export async function getDashboardData(
   try {
     const [tickets, users, groups, resolvedRes, openRes] = await Promise.all([
       glpiFetch('/Ticket?range=0-9999&expand_dropdowns=true', session),
-      glpiFetch('/User?range=0-9999', session),
+      glpiFetch('/User?range=0-9999&expand_dropdowns=true', session),
       glpiFetch('/Group?range=0-9999', session),
       glpiFetch(
         searchUrl(
           [{ field: '12', searchtype: 'equals', value: 'old' }],
-          [2, 5, 8, 154, 17]
+          [2, 5, 8, 154, 17, 76666, 76668, 4]
         ),
         session
       ),
       glpiFetch(
         searchUrl(
           [{ field: '12', searchtype: 'equals', value: 'notold' }],
-          [2, 5, 8, 15]
+          [2, 5, 8, 15, 12, 76666, 76668, 4]
         ),
         session
       ),
@@ -428,6 +573,27 @@ export async function getDashboardData(
       filteredTickets = filteredTickets.filter((t: any) => inRange(t.date_creation));
       filteredOpenRows = filteredOpenRows.filter((row: any) => inRange(row['15']));
       filteredResolvedRows = filteredResolvedRows.filter((row: any) => inRange(row['17']));
+    }
+
+    if (departamento) {
+      // Departamento vem do Título do solicitante (campo 4), não existe como coluna direta do Ticket.
+      const userTituloMapForFilter: Record<number, string> = {};
+      for (const u of Array.isArray(users) ? users : []) {
+        userTituloMapForFilter[u.id] = deriveDepartamento(u.usertitles_id);
+      }
+      const ticketDepartamentoMap: Record<number, string> = {};
+      for (const row of [...allOpenRows, ...allResolvedRows]) {
+        const id = Number(row['2']);
+        const reqRaw = row['4'];
+        const reqIds = Array.isArray(reqRaw) ? reqRaw : String(reqRaw ?? '').split(/[,\s]+/);
+        for (const ridStr of reqIds.filter(Boolean)) {
+          const dep = userTituloMapForFilter[Number(ridStr)] || 'Sem título';
+          if (id) ticketDepartamentoMap[id] = dep;
+        }
+      }
+      filteredTickets = filteredTickets.filter((t: any) => ticketDepartamentoMap[t.id] === departamento);
+      filteredOpenRows = filteredOpenRows.filter((row: any) => ticketDepartamentoMap[Number(row['2'])] === departamento);
+      filteredResolvedRows = filteredResolvedRows.filter((row: any) => ticketDepartamentoMap[Number(row['2'])] === departamento);
     }
 
     const data = aggregate(

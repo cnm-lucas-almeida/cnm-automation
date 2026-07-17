@@ -107,10 +107,11 @@ async function postOmieWithRetry(path: string, payload: any, attempts = 2) {
       return response.data;
     } catch (error: any) {
       const details = getOmieErrorDetails(error);
-      const shouldRetry = isRedundantError(details) && attempt < attempts;
+      const isTooManyRequests = error?.response?.status === 429;
+      const shouldRetry = (isRedundantError(details) || isTooManyRequests) && attempt < attempts;
 
       if (shouldRetry) {
-        const delay = getRedundantRetryDelay(details);
+        const delay = isTooManyRequests ? 1500 : getRedundantRetryDelay(details);
         console.warn(`Omie bloqueou temporariamente ${path}. Nova tentativa em ${Math.ceil(delay / 1000)}s.`);
         await sleep(delay);
         continue;
@@ -121,10 +122,10 @@ async function postOmieWithRetry(path: string, payload: any, attempts = 2) {
   }
 }
 
-async function fetchWithCache(key: string, fetchFn: () => Promise<any>) {
+async function fetchWithCache(key: string, fetchFn: () => Promise<any>, ttlMs: number = CACHE_TTL) {
   const now = Date.now();
   const cachedEntry = await getCacheEntry(key);
-  if (cachedEntry && (now - cachedEntry.timestamp < CACHE_TTL)) {
+  if (cachedEntry && (now - cachedEntry.timestamp < ttlMs)) {
     return cachedEntry.data;
   }
 
@@ -478,6 +479,60 @@ export async function lancarPagamento(param: any) {
     throw new Error(`Falha na comunicação com Omie: ${typeof details === 'string' ? details : JSON.stringify(details)}`);
   }
 }
+// A Omie devolve HTTP 429 acima de ~4 chamadas simultâneas a este endpoint, e cada página
+// leva ~2-2.5s independente do offset — buscar sequencialmente (uma página por vez) faz uma
+// consulta de um mês levar minutos. Por isso as páginas são buscadas em lotes concorrentes.
+const OMIE_NFSE_CONCURRENCIA = 4;
+const NFSE_CACHE_TTL_PERIODO_FECHADO = 1000 * 60 * 60 * 12; // 12h: período já encerrado não ganha nota nova
+
+function periodoJaEncerrado(dataFinalBR: string): boolean {
+  const [d, m, y] = dataFinalBR.split('/').map(Number);
+  const fimDoDia = new Date(y, m - 1, d, 23, 59, 59);
+  return fimDoDia.getTime() < Date.now() - 1000 * 60 * 60 * 24; // margem de 1 dia
+}
+
+export async function listarNFSePorPeriodo(dataEmissaoInicial: string, dataEmissaoFinal: string) {
+  const cacheKey = `nfse-periodo:${dataEmissaoInicial}:${dataEmissaoFinal}`;
+  const ttl = periodoJaEncerrado(dataEmissaoFinal) ? NFSE_CACHE_TTL_PERIODO_FECHADO : CACHE_TTL;
+
+  return fetchWithCache(cacheKey, async () => {
+    const buscarPagina = (pagina: number) => postOmieWithRetry('servicos/nfse/', {
+      call: "ListarNFSEs",
+      app_key: OMIE_APP_KEY,
+      app_secret: OMIE_APP_SECRET,
+      param: [
+        {
+          nPagina: pagina,
+          nRegPorPagina: 500,
+          dEmiInicial: dataEmissaoInicial,
+          dEmiFinal: dataEmissaoFinal
+        }
+      ]
+    }, 4);
+
+    try {
+      const primeira = await buscarPagina(1);
+      let todasNFSe: any[] = primeira.nfseEncontradas ?? [];
+      const totalPaginas = primeira.nTotPaginas || 1;
+
+      const paginasRestantes = Array.from({ length: Math.max(0, totalPaginas - 1) }, (_, i) => i + 2);
+      for (let i = 0; i < paginasRestantes.length; i += OMIE_NFSE_CONCURRENCIA) {
+        const lote = paginasRestantes.slice(i, i + OMIE_NFSE_CONCURRENCIA);
+        const respostas = await Promise.all(lote.map(buscarPagina));
+        for (const data of respostas) {
+          if (data.nfseEncontradas) todasNFSe = todasNFSe.concat(data.nfseEncontradas);
+        }
+      }
+
+      return { nfseEncontradas: todasNFSe };
+    } catch (error: any) {
+      const details = getOmieErrorDetails(error);
+      console.error('Erro ao listar NFS-e na Omie:', details);
+      throw new Error(`Falha na comunicação com Omie: ${formatOmieError(details)}`);
+    }
+  }, ttl);
+}
+
 export async function listarContasPagar(filtro: any) {
   const cacheKey = `contas-pagar:${JSON.stringify(filtro || {})}`;
 

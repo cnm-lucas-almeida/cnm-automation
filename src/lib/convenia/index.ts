@@ -4,6 +4,11 @@ const CONVENIA_TOKEN = process.env.CONVENIA_TOKEN!;
 const CACHE_TTL = 5 * 60 * 1000;
 const PAGE_SIZE = 100;
 
+export interface ExperiencePeriod {
+  firstEnd: string | null;
+  secondEnd: string | null;
+}
+
 export interface Colaborador {
   id: string;
   nome: string;
@@ -14,6 +19,8 @@ export interface Colaborador {
   departamento: string | null;
   dataAdmissao: string | null;
   email: string | null;
+  gestorNome: string | null;
+  experiencePeriod: ExperiencePeriod | null;
 }
 
 let cache: { data: Colaborador[]; ts: number } | null = null;
@@ -51,6 +58,10 @@ function mapColaborador(raw: any): Colaborador {
     departamento: raw.department?.name ?? null,
     dataAdmissao: raw.hiring_date ?? null,
     email: raw.contact_information?.personal_email ?? null,
+    gestorNome: raw.supervisor ? [raw.supervisor.name, raw.supervisor.last_name].filter(Boolean).join(' ') : null,
+    experiencePeriod: raw.experience_period
+      ? { firstEnd: raw.experience_period.first_end ?? null, secondEnd: raw.experience_period.second_end ?? null }
+      : null,
   };
 }
 

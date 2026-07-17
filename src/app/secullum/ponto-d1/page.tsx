@@ -1,6 +1,9 @@
 'use client';
 
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
+import { Users, AlertTriangle, CalendarX2, AlertCircle, Search, Info } from 'lucide-react';
+import { loadSessionState, saveSessionState } from '@/lib/sessionCache';
+import { DatePicker } from '@/components/ui/DatePicker';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -81,18 +84,70 @@ const PERIODOS: Array<[keyof BatidaResumo, keyof BatidaResumo]> = [
   ['entrada5', 'saida5'],
 ];
 
+interface CacheState {
+  data: string;
+  resumo: Resumo;
+  resultados: ResultadoColaborador[];
+}
+
+const CACHE_KEY = 'secullum-ponto-d1';
+
+// ── KpiCard ───────────────────────────────────────────────────────────────────
+
+function KpiCard({
+  title, value, sub, icon: Icon, color, borderColor, tooltip, active, onClick,
+}: {
+  title: string; value: string | number; sub?: string;
+  icon: any; color: string; borderColor: string;
+  tooltip?: string; active?: boolean; onClick?: () => void;
+}) {
+  const Wrapper = onClick ? 'button' : 'div';
+  return (
+    <Wrapper
+      type={onClick ? 'button' : undefined}
+      onClick={onClick}
+      className={`rounded-lg border p-5 text-left transition-colors ${
+        active ? 'border-primary ring-1 ring-primary bg-primary/5' : 'border-border'
+      } ${onClick ? 'hover:border-primary/50 cursor-pointer' : ''}`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{title}</p>
+          <p className="text-3xl font-bold mt-1 tabular-nums" style={{ color }}>{value}</p>
+          {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
+        </div>
+        <span title={tooltip} className={tooltip ? 'cursor-help' : undefined}>
+          <Icon size={20} style={{ color: borderColor }} className="opacity-60 flex-shrink-0 mt-1" />
+        </span>
+      </div>
+    </Wrapper>
+  );
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function PontoD1Page() {
+  // Estado inicial precisa ser igual no servidor e no cliente (sessionStorage não
+  // existe durante o SSR) — o cache salvo só é restaurado depois de montar, no
+  // useEffect abaixo, senão dá mismatch de hidratação quando já há relatório salvo.
   const [data, setData] = useState(dataD1Padrao());
   const [resumo, setResumo] = useState<Resumo | null>(null);
   const [resultados, setResultados] = useState<ResultadoColaborador[]>([]);
   const [progresso, setProgresso] = useState({ processed: 0, total: 0 });
   const [carregando, setCarregando] = useState(false);
   const [erroGlobal, setErroGlobal] = useState('');
-  const [verTodos, setVerTodos] = useState(false);
+  const [filtroStatus, setFiltroStatus] = useState<'todos' | 'violacao' | 'sem_batida' | 'erro'>('violacao');
   const [filtro, setFiltro] = useState('');
   const [expandido, setExpandido] = useState<string | null>(null);
+
+  useEffect(() => {
+    const cache = loadSessionState<CacheState>(CACHE_KEY);
+    if (cache) {
+      setData(cache.data);
+      setResumo(cache.resumo);
+      setResultados(cache.resultados);
+    }
+  }, []);
 
   async function carregar() {
     if (!data) return;
@@ -135,6 +190,7 @@ export default function PontoD1Page() {
             setResultados([...acumulado]);
           } else if (evento.type === 'done') {
             setResumo(evento.resumo);
+            saveSessionState<CacheState>(CACHE_KEY, { data, resumo: evento.resumo, resultados: acumulado });
           } else if (evento.type === 'error') {
             throw new Error(evento.message);
           }
@@ -147,155 +203,240 @@ export default function PontoD1Page() {
     }
   }
 
+  function toggleFiltroStatus(status: 'violacao' | 'sem_batida' | 'erro') {
+    setFiltroStatus((prev) => (prev === status ? 'todos' : status));
+  }
+
   const listados = resultados
-    .filter((r) => (verTodos ? true : r.status === 'violacao'))
+    .filter((r) => (filtroStatus === 'todos' ? true : r.status === filtroStatus))
     .filter(
       (r) =>
         r.nome.toLowerCase().includes(filtro.toLowerCase()) ||
         r.cpf.includes(filtro.replace(/\D/g, ''))
     );
 
+  const TITULO_TABELA: Record<typeof filtroStatus, string> = {
+    todos: 'Todos os colaboradores',
+    violacao: 'Colaboradores em violação',
+    sem_batida: 'Colaboradores sem batida no dia',
+    erro: 'Colaboradores com erro de consulta',
+  };
+
+  const VAZIO_TABELA: Record<typeof filtroStatus, string> = {
+    todos: 'Nenhum colaborador encontrado.',
+    violacao: 'Nenhuma violação encontrada para esse dia.',
+    sem_batida: 'Nenhum colaborador sem batida nesse dia.',
+    erro: 'Nenhum erro de consulta nesse dia.',
+  };
+
+  const iniciado = resumo !== null;
+
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
-      <div className="max-w-[96rem] mx-auto flex flex-col gap-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+    <div className="max-w-[1800px] mx-auto p-6 space-y-5">
+
+      {!iniciado ? (
+        /* ── Estado inicial: título e busca centralizados ── */
+        <div className="min-h-[65vh] flex flex-col items-center justify-center text-center gap-5">
           <div>
-            <h1 className="text-2xl font-bold text-slate-800">Intervalo de Almoço — Ponto D-1</h1>
-            <p className="text-sm text-slate-500 mt-1">
+            <h1 className="text-2xl font-semibold tracking-tight">Intervalo de Almoço — Ponto D-1</h1>
+            <p className="text-sm text-muted-foreground mt-0.5 max-w-md mx-auto">
               Verifica se o maior intervalo entre batidas do dia atingiu o mínimo de 1h para jornadas acima de 6h.
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <input
-              type="date"
-              value={data}
-              onChange={(e) => setData(e.target.value)}
-              disabled={carregando}
-              className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100"
-            />
+            <DatePicker value={data} onChange={setData} placeholder="Selecionar data" />
             <button
               onClick={carregar}
               disabled={carregando || !data}
-              className="px-4 py-2 text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-lg transition-colors whitespace-nowrap"
+              className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:pointer-events-none transition-colors whitespace-nowrap"
             >
               {carregando ? 'Analisando...' : 'Analisar'}
             </button>
           </div>
+
+          {erroGlobal && (
+            <p className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">{erroGlobal}</p>
+          )}
+
+          {carregando && (
+            <div className="rounded-lg border border-border p-4 flex flex-col gap-2 w-full max-w-md">
+              <p className="text-sm text-muted-foreground">
+                {progresso.total > 0
+                  ? `Analisando ${progresso.processed} de ${progresso.total} colaboradores...`
+                  : 'Buscando lista de colaboradores ativos...'}
+              </p>
+              <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                <div
+                  className="h-2 bg-primary rounded-full transition-all duration-200"
+                  style={{
+                    width: progresso.total > 0 ? `${(progresso.processed / progresso.total) * 100}%` : '5%',
+                  }}
+                />
+              </div>
+            </div>
+          )}
         </div>
-
-        {erroGlobal && (
-          <p className="text-sm text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{erroGlobal}</p>
-        )}
-
-        {carregando && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col gap-2">
-            <p className="text-sm text-slate-600">
-              {progresso.total > 0
-                ? `Analisando ${progresso.processed} de ${progresso.total} colaboradores...`
-                : 'Buscando lista de colaboradores ativos...'}
-            </p>
-            <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-              <div
-                className="h-2 bg-indigo-600 rounded-full transition-all duration-200"
-                style={{
-                  width: progresso.total > 0 ? `${(progresso.processed / progresso.total) * 100}%` : '5%',
-                }}
-              />
+      ) : (
+        <>
+          {/* ── Header ── */}
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-3">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">Intervalo de Almoço — Ponto D-1</h1>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Verifica se o maior intervalo entre batidas do dia atingiu o mínimo de 1h para jornadas acima de 6h.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 sm:justify-self-center">
+              <DatePicker value={data} onChange={setData} placeholder="Selecionar data" />
+              <button
+                onClick={carregar}
+                disabled={carregando || !data}
+                className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:pointer-events-none transition-colors whitespace-nowrap"
+              >
+                {carregando ? 'Analisando...' : 'Analisar'}
+              </button>
             </div>
           </div>
-        )}
 
-        {resumo && (
-          <>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <StatCard label={`Colaboradores · ${formatarData(data)}`} value={String(resumo.totalColaboradores)} />
-              <StatCard label="Violações" value={String(resumo.totalViolacoes)} highlight={resumo.totalViolacoes > 0} />
-              <StatCard label="Sem batida no dia" value={String(resumo.totalSemBatida)} />
-              <StatCard label="Erros de consulta" value={String(resumo.totalErros)} />
+          {erroGlobal && (
+            <p className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">{erroGlobal}</p>
+          )}
+
+          {carregando && (
+            <div className="rounded-lg border border-border p-4 flex flex-col gap-2 max-w-md mx-auto">
+              <p className="text-sm text-muted-foreground">
+                {progresso.total > 0
+                  ? `Analisando ${progresso.processed} de ${progresso.total} colaboradores...`
+                  : 'Buscando lista de colaboradores ativos...'}
+              </p>
+              <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                <div
+                  className="h-2 bg-primary rounded-full transition-all duration-200"
+                  style={{
+                    width: progresso.total > 0 ? `${(progresso.processed / progresso.total) * 100}%` : '5%',
+                  }}
+                />
+              </div>
             </div>
+          )}
 
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
-                <h2 className="font-semibold text-slate-700">
-                  {verTodos ? 'Todos os colaboradores' : 'Colaboradores em violação'}
-                </h2>
-                <div className="flex gap-2 items-center">
+          {/* ── Resultados ── */}
+          {resumo && (
+          <>
+          {/* ── KPI Row ── */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <KpiCard title={`Colaboradores · ${formatarData(data)}`} value={resumo.totalColaboradores}
+              icon={Users} color="#323131" borderColor="#6F686B"
+              tooltip="Total de colaboradores ativos consultados nesse dia."
+              active={filtroStatus === 'todos'} onClick={() => setFiltroStatus('todos')} />
+            <KpiCard title="Violações" value={resumo.totalViolacoes}
+              sub={resumo.totalViolacoes > 0 ? 'exige atenção' : undefined}
+              icon={AlertTriangle} color={resumo.totalViolacoes > 0 ? '#CA3500' : '#323131'} borderColor="#FF6900"
+              tooltip="Maior intervalo entre batidas do dia ficou abaixo do mínimo de 1h exigido para jornadas acima de 6h."
+              active={filtroStatus === 'violacao'} onClick={() => toggleFiltroStatus('violacao')} />
+            <KpiCard title="Sem batida no dia" value={resumo.totalSemBatida}
+              icon={CalendarX2} color="#323131" borderColor="#6F686B"
+              tooltip="Colaborador ativo sem nenhuma batida registrada no Secullum nesse dia — pode ser falta, folga, férias ou batida ainda não lançada."
+              active={filtroStatus === 'sem_batida'} onClick={() => toggleFiltroStatus('sem_batida')} />
+            <KpiCard title="Erros de consulta" value={resumo.totalErros}
+              icon={AlertCircle} color={resumo.totalErros > 0 ? '#A65F00' : '#323131'} borderColor="#D08700"
+              tooltip="Falha ao consultar as batidas desse colaborador no Secullum. Veja a mensagem na tabela abaixo."
+              active={filtroStatus === 'erro'} onClick={() => toggleFiltroStatus('erro')} />
+          </div>
+
+          {/* ── Tabela ── */}
+          <div className="rounded-lg border border-border">
+            <div className="px-5 py-4 border-b border-border flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+              <h2 className="text-sm font-semibold">
+                {TITULO_TABELA[filtroStatus]}
+              </h2>
+              <div className="flex gap-3 items-center">
+                <div className="relative">
+                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <input
                     type="text"
                     placeholder="Filtrar por nome ou CPF..."
                     value={filtro}
                     onChange={(e) => setFiltro(e.target.value)}
-                    className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="border border-border rounded-lg pl-8 pr-3 py-1.5 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-ring"
                   />
-                  <label className="flex items-center gap-2 text-sm text-slate-600 whitespace-nowrap">
-                    <input type="checkbox" checked={verTodos} onChange={(e) => setVerTodos(e.target.checked)} />
-                    Ver todos
-                  </label>
                 </div>
+                {filtroStatus !== 'todos' && (
+                  <button
+                    onClick={() => setFiltroStatus('todos')}
+                    className="text-xs text-muted-foreground hover:text-primary underline whitespace-nowrap"
+                  >
+                    Limpar filtro
+                  </button>
+                )}
               </div>
+            </div>
 
+            {listados.length === 0 ? (
+              <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">
+                {VAZIO_TABELA[filtroStatus]}
+              </div>
+            ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                    <tr>
-                      <th className="px-4 py-3 text-left">Funcionário</th>
-                      <th className="px-4 py-3 text-left">Departamento</th>
-                      <th className="px-4 py-3 text-center">CPF</th>
-                      <th className="px-4 py-3 text-center">Horas no dia</th>
-                      <th className="px-4 py-3 text-center">Maior intervalo</th>
-                      <th className="px-4 py-3 text-center">Status</th>
-                      <th className="px-4 py-3 text-center">Ponto</th>
+                  <thead>
+                    <tr className="text-left text-[11px] text-muted-foreground uppercase tracking-wider border-b border-border">
+                      <th className="px-5 py-3 font-semibold">Funcionário</th>
+                      <th className="px-4 py-3 font-semibold">Departamento</th>
+                      <th className="px-4 py-3 font-semibold text-center">CPF</th>
+                      <th className="px-4 py-3 font-semibold text-center">Horas no dia</th>
+                      <th className="px-4 py-3 font-semibold text-center">Maior intervalo</th>
+                      <th className="px-4 py-3 font-semibold text-center">Status</th>
+                      <th className="px-5 py-3 font-semibold text-center">Ponto</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-border">
                     {listados.map((r) => (
                       <Fragment key={r.cpf}>
-                        <tr
-                          className={`hover:bg-slate-50 transition-colors ${r.status === 'violacao' ? 'bg-red-50' : ''}`}
-                        >
-                          <td className="px-4 py-3 font-medium text-slate-800">
-                            <div>{r.nome}</div>
-                            {r.cargo && <div className="text-xs text-slate-400 font-normal">{r.cargo}</div>}
+                        <tr className="hover:bg-muted/50 transition-colors">
+                          <td className="px-5 py-3">
+                            <div className="font-medium">{r.nome}</div>
+                            {r.cargo && <div className="text-xs text-muted-foreground">{r.cargo}</div>}
                           </td>
-                          <td className="px-4 py-3 text-slate-500">{r.departamento || '—'}</td>
-                          <td className="px-4 py-3 text-center text-slate-500 font-mono text-xs">{formatarCpf(r.cpf)}</td>
-                          <td className="px-4 py-3 text-center text-slate-700">
+                          <td className="px-4 py-3 text-muted-foreground text-xs">{r.departamento || '—'}</td>
+                          <td className="px-4 py-3 text-center text-muted-foreground font-mono text-xs">{formatarCpf(r.cpf)}</td>
+                          <td className="px-4 py-3 text-center tabular-nums">
                             {r.analise ? formatarHorasTrabalhadas(r.analise.totalHorasTrabalhadas) : '—'}
                           </td>
-                          <td className="px-4 py-3 text-center text-slate-700">
+                          <td className="px-4 py-3 text-center tabular-nums">
                             {r.analise?.maiorIntervaloMinutos != null ? formatarMin(r.analise.maiorIntervaloMinutos) : '—'}
                           </td>
                           <td className="px-4 py-3 text-center">
                             {r.status === 'violacao' && r.analise && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                              <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-destructive/10 text-destructive">
                                 {VIOLACAO_LABEL[r.analise.violacao!]} · faltam {formatarMin(r.analise.minutosFaltantes)}
                               </span>
                             )}
                             {r.status === 'ok' && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+                              <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-success-bg text-success">
                                 OK
                               </span>
                             )}
                             {r.status === 'sem_batida' && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">
+                              <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-muted text-muted-foreground">
                                 Sem batida
                               </span>
                             )}
                             {r.status === 'erro' && (
                               <span
-                                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700"
-                                title={r.erro}
+                                className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-warning-bg text-warning cursor-help"
+                                title={r.erro || 'Erro desconhecido ao consultar o Secullum.'}
                               >
+                                <Info size={11} />
                                 Erro na consulta
                               </span>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-center">
+                          <td className="px-5 py-3 text-center">
                             {r.batida && (
                               <button
                                 onClick={() => setExpandido(expandido === r.cpf ? null : r.cpf)}
-                                className="text-xs text-indigo-600 hover:text-indigo-800 hover:underline"
+                                className="text-xs text-info hover:underline font-medium"
                               >
                                 {expandido === r.cpf ? 'Fechar' : 'Ver ponto'}
                               </button>
@@ -304,7 +445,7 @@ export default function PontoD1Page() {
                         </tr>
 
                         {expandido === r.cpf && r.batida && (
-                          <tr className="bg-slate-50">
+                          <tr className="bg-muted/40">
                             <td colSpan={7} className="px-6 py-4">
                               <div className="flex flex-wrap gap-2">
                                 {PERIODOS.map(([entradaKey, saidaKey], i) => {
@@ -314,15 +455,15 @@ export default function PontoD1Page() {
                                   return (
                                     <div
                                       key={i}
-                                      className="px-3 py-1.5 rounded-lg text-xs border bg-white border-slate-200 text-slate-700"
+                                      className="px-3 py-1.5 rounded-lg text-xs border border-border bg-card"
                                     >
-                                      <div className="font-medium text-slate-400">Período {i + 1}</div>
-                                      <div>{entrada ?? '—'} → {saida ?? '—'}</div>
+                                      <div className="font-medium text-muted-foreground">Período {i + 1}</div>
+                                      <div className="tabular-nums">{entrada ?? '—'} → {saida ?? '—'}</div>
                                     </div>
                                   );
                                 })}
                                 {r.analise?.batidaIncompleta && (
-                                  <div className="px-3 py-1.5 rounded-lg text-xs border bg-amber-50 border-amber-200 text-amber-700">
+                                  <div className="px-3 py-1.5 rounded-lg text-xs border border-warning/30 bg-warning-bg text-warning">
                                     Batida incompleta (entrada ou saída faltando em algum período)
                                   </div>
                                 )}
@@ -334,28 +475,13 @@ export default function PontoD1Page() {
                     ))}
                   </tbody>
                 </table>
-
-                {listados.length === 0 && (
-                  <div className="py-10 text-center text-sm text-slate-400">
-                    {verTodos ? 'Nenhum colaborador encontrado.' : 'Nenhuma violação encontrada para esse dia.'}
-                  </div>
-                )}
               </div>
-            </div>
+            )}
+          </div>
           </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── StatCard ──────────────────────────────────────────────────────────────────
-
-function StatCard({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
-  return (
-    <div className={`rounded-2xl border p-5 shadow-sm ${highlight ? 'bg-red-600 border-red-600 text-white' : 'bg-white border-slate-200 text-slate-800'}`}>
-      <p className={`text-xs font-medium uppercase tracking-wide mb-1 ${highlight ? 'text-red-200' : 'text-slate-500'}`}>{label}</p>
-      <p className={`text-2xl font-bold ${highlight ? 'text-white' : 'text-slate-800'}`}>{value}</p>
+          )}
+        </>
+      )}
     </div>
   );
 }

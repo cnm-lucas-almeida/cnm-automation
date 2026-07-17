@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Design System — Chaves na Mão</title>
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    /* ===== PRIMITIVAS ===== */
+    --color-scarlet-50:  #FFF0F2;
+    --color-scarlet-100: #FFDDE3;
+    --color-scarlet-200: #FFC1CB;
+    --color-scarlet-300: #FF95A7;
+    --color-scarlet-400: #FF5975;
+    --color-scarlet-500: #FF264A;
+    --color-scarlet-600: #FC062F;
+    --color-scarlet-700: #EB0027;
+    --color-scarlet-800: #AF0521;
+    --color-scarlet-900: #900C22;
+    --color-scarlet-950: #50000D;
+
+    --color-grey-50:  #F6F5F5;
+    --color-grey-100: #E7E6E6;
+    --color-grey-200: #D1D0D0;
+    --color-grey-300: #B1AFB0;
+    --color-grey-400: #8A8686;
+    --color-grey-500: #6F686B;
+    --color-grey-600: #5E5C5D;
+    --color-grey-700: #504E4F;
+    --color-grey-800: #464444;
+    --color-grey-900: #323131;
+    --color-grey-950: #262626;
+
+    /* ===== TOKENS — TEXTO ===== */
+    --color-txt-invert:        #FFFFFF;
+    --color-txt-placeholder:   #8A8686;
+    --color-txt-secondary:     #5E5C5D;
+    --color-txt-primary:       #323131;
+    --color-txt-brand-primary: #EB0027;
+    --color-txt-success:       #00A63E;
+    --color-txt-warning:       #D08700;
+    --color-txt-error:         #CA3500;
+    --color-txt-info:          #155DFC;
+    --color-txt-launches:      #872BFF;
+
+    /* ===== TOKENS — FUNDOS ===== */
+    --color-bg-primary:             #FFFFFF;
+    --color-bg-secondary:           #F6F5F5;
+    --color-bg-tertiary:            #D1D0D0;
+    --color-bg-disabled:            #E7E6E6;
+    --color-bg-brand-primary:       #EB0027;
+    --color-bg-brand-primary-light: #FFF0F2;
+    --color-bg-brand-secondary:     #323131;
+
+    /* ===== TOKENS — BORDAS ===== */
+    --color-brd-primary:       #D1D0D0;
+    --color-brd-brand-primary: #EB0027;
+
+    /* ===== ESPAÇAMENTO ===== */
+    --space-none: 0px;
+    --space-xs:  4px;
+    --space-sm:  8px;
+    --space-md:  16px;
+    --space-lg:  24px;
+    --space-xl:  32px;
+    --space-2xl: 40px;
+    --space-3xl: 48px;
+    --space-4xl: 56px;
+    --space-5xl: 64px;
+    --space-6xl: 72px;
+    --space-7xl: 80px;
+
+    /* ===== BORDAS ===== */
+    --border-radius-none: 0px;
+    --border-radius-sm:   4px;
+    --border-radius-md:   8px;
+    --border-radius-lg:   16px;
+    --border-radius-full: 80px;
+    --border-none: none;
+    --border-width-sm: 1px;
+    --border-width-md: 2px;
+    --border-width-lg: 3px;
+    --border-width-xl: 4px;
+
+    /* ===== SOMBRAS ===== */
+    --shadow-none: none;
+    --shadow-sm:  0 2px 4px 1px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.0009);
+    --shadow-md:  0 3px 6px 1px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.0009);
+    --shadow-lg:  0 6px 12px 0 rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.0009);
+    --shadow-xl:  0 9px 18px 0 rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.0009);
+    --shadow-2xl: 0 12px 36px 0 rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.0009);
+    --shadow-top: 0 -2px 4px 1px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.0009);
+
+    /* fontes da página */
+    --font: 'Open Sans', sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+  }
+
+  body {
+    font-family: var(--font);
+    background: var(--color-bg-secondary);
+    color: var(--color-txt-primary);
+    line-height: 1.6;
+  }
+
+  .material-symbols-rounded {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    font-size: 24px;
+    color: var(--color-txt-primary);
+  }
+
+  /* HEADER */
+  .ds-header {
+    background: var(--color-bg-brand-secondary);
+    color: white;
+    padding: var(--space-3xl) var(--space-5xl);
+  }
+  .ds-header-inner { }
+  .ds-badge {
+    display: inline-block;
+    background: var(--color-bg-brand-primary);
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: var(--space-xs) var(--space-sm);
+    border-radius: var(--border-radius-md);
+    margin-bottom: var(--space-md);
+  }
+  .ds-header h1 {
+    font-size: 44px; /* display */
+    font-weight: 800;
+    line-height: 1.1;
+    margin-bottom: var(--space-sm);
+  }
+  .ds-header h1 span { color: var(--color-txt-brand-primary); }
+  .ds-header p {
+    color: rgba(255,255,255,0.6);
+    font-size: 16px; /* body-large */
+    font-weight: 400;
+  }
+  .ds-header-meta {
+    display: flex;
+    gap: var(--space-xl);
+    margin-top: var(--space-xl);
+  }
+  .ds-meta-item { display: flex; flex-direction: column; }
+  .ds-meta-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: rgba(255,255,255,0.4); }
+  .ds-meta-value { font-size: 14px; font-weight: 600; color: white; margin-top: 2px; }
+
+  /* NAV */
+  .ds-nav {
+    background: white;
+    border-bottom: var(--border-width-sm) solid var(--color-brd-primary);
+    padding: 0 var(--space-5xl);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    gap: 0;
+    overflow-x: auto;
+  }
+  .ds-nav a {
+    display: block;
+    padding: var(--space-md) var(--space-lg);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-txt-secondary);
+    text-decoration: none;
+    border-bottom: var(--border-width-md) solid transparent;
+    white-space: nowrap;
+    transition: all 0.2s;
+  }
+  .ds-nav a:hover, .ds-nav a.active {
+    color: var(--color-txt-brand-primary);
+    border-bottom-color: var(--color-txt-brand-primary);
+  }
+
+  /* LAYOUT */
+  .ds-content { max-width: 1200px; margin: 0 auto; padding: var(--space-5xl); }
+  .ds-section { margin-bottom: var(--space-7xl); scroll-margin-top: var(--space-7xl); }
+  .ds-section-header { margin-bottom: var(--space-xl); }
+  .ds-section-title {
+    font-size: 24px; /* headline-medium */
+    font-weight: 800;
+    color: var(--color-txt-primary);
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+  .ds-section-title::before {
+    content: '';
+    display: block;
+    width: 4px;
+    height: 28px;
+    background: var(--color-bg-brand-primary);
+    border-radius: var(--border-radius-md);
+    flex-shrink: 0;
+  }
+  .ds-section-desc {
+    color: var(--color-txt-secondary);
+    font-size: 14px; /* body-medium */
+    margin-top: var(--space-sm);
+    padding-left: var(--space-md);
+  }
+
+  /* CARD */
+  .ds-card {
+    background: white;
+    border-radius: var(--border-radius-md);
+    border: var(--border-width-sm) solid var(--color-brd-primary);
+    overflow: hidden;
+  }
+  .ds-card-header {
+    padding: var(--space-md) var(--space-lg);
+    border-bottom: var(--border-width-sm) solid var(--color-brd-primary);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--color-txt-secondary);
+    background: var(--color-bg-secondary);
+  }
+  .ds-card-body { padding: var(--space-lg); }
+
+  /* PALETAS PRIMITIVAS */
+  .palette-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-txt-primary);
+    margin: var(--space-lg) 0 var(--space-sm);
+  }
+  .palette-label:first-child { margin-top: 0; }
+  .palette-row {
+    display: grid;
+    grid-template-columns: repeat(11, 1fr);
+    border-radius: var(--border-radius-md);
+    overflow: hidden;
+    border: var(--border-width-sm) solid var(--color-brd-primary);
+  }
+  .palette-cell {
+    padding: var(--space-md) var(--space-xs) var(--space-sm);
+    text-align: center;
+    cursor: pointer;
+    font-size: 10px;
+    line-height: 1.5;
+  }
+  .palette-cell .shade { font-weight: 800; font-size: 11px; display: block; }
+  .palette-cell .hex { font-family: var(--mono); font-size: 9px; opacity: 0.85; display: block; }
+  .palette-cell.on-light { color: var(--color-txt-primary); }
+  .palette-cell.on-dark { color: white; }
+
+  /* CORES — SWATCHES SOLTOS */
+  .color-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--space-sm); }
+  .color-swatch {
+    border-radius: var(--border-radius-md);
+    overflow: hidden;
+    border: var(--border-width-sm) solid var(--color-brd-primary);
+    cursor: pointer;
+  }
+  .color-preview { height: 56px; }
+  .color-info { padding: var(--space-sm); background: white; }
+  .color-name { font-size: 11px; font-weight: 700; color: var(--color-txt-primary); text-transform: uppercase; letter-spacing: 0.5px; }
+  .color-hex { font-family: var(--mono); font-size: 12px; color: var(--color-txt-secondary); margin-top: 2px; }
+
+  .color-section-label {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--color-txt-secondary);
+    margin: var(--space-lg) 0 var(--space-sm);
+    padding-bottom: var(--space-sm);
+    border-bottom: var(--border-width-sm) solid var(--color-brd-primary);
+  }
+  .color-section-label:first-child { margin-top: 0; }
+
+  /* TOKENS TABLE */
+  .tokens-table { width: 100%; border-collapse: collapse; }
+  .tokens-table th {
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--color-txt-secondary);
+    padding: var(--space-sm) var(--space-md);
+    border-bottom: var(--border-width-sm) solid var(--color-brd-primary);
+    background: var(--color-bg-secondary);
+  }
+  .tokens-table td {
+    padding: var(--space-sm) var(--space-md);
+    border-bottom: var(--border-width-sm) solid var(--color-grey-100);
+    font-size: 13px;
+  }
+  .tokens-table tr:last-child td { border-bottom: none; }
+  .token-name { font-family: var(--mono); font-weight: 600; color: var(--color-txt-brand-primary); font-size: 12px; }
+  .token-val { font-family: var(--mono); color: var(--color-txt-primary); font-size: 12px; }
+  .token-preview-swatch { width: 20px; height: 20px; border-radius: var(--border-radius-md); border: var(--border-width-sm) solid var(--color-brd-primary); display: inline-block; vertical-align: middle; }
+
+  /* TIPOGRAFIA */
+  .type-scale { display: flex; flex-direction: column; gap: 0; }
+  .type-row {
+    display: grid;
+    grid-template-columns: 160px 1fr 140px;
+    align-items: center;
+    padding: var(--space-md) var(--space-lg);
+    border-bottom: var(--border-width-sm) solid var(--color-brd-primary);
+    gap: var(--space-lg);
+  }
+  .type-row:last-child { border-bottom: none; }
+  .type-meta { display: flex; flex-direction: column; gap: 2px; }
+  .type-token { font-family: var(--mono); font-size: 11px; color: var(--color-txt-brand-primary); font-weight: 600; }
+  .type-specs { font-size: 12px; color: var(--color-txt-secondary); }
+  .type-preview { font-family: var(--font); color: var(--color-txt-primary); }
+  .type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    background: var(--color-bg-secondary);
+    border: var(--border-width-sm) solid var(--color-brd-primary);
+    border-radius: var(--border-radius-md);
+    padding: var(--space-xs) var(--space-sm);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--color-txt-secondary);
+  }
+
+  /* SAMPLE ROWS (space / opacity / border) */
+  .sample-list { display: flex; flex-direction: column; }
+  .sample-row {
+    display: grid;
+    grid-template-columns: 120px 200px 120px;
+    align-items: center;
+    padding: var(--space-sm) var(--space-lg);
+    border-bottom: var(--border-width-sm) solid var(--color-grey-100);
+    gap: var(--space-lg);
+  }
+  .sample-row:last-child { border-bottom: none; }
+  .sample-head {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1px; color: var(--color-txt-secondary); background: var(--color-bg-secondary);
+    border-bottom: var(--border-width-sm) solid var(--color-brd-primary);
+  }
+  .sample-token { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--color-txt-brand-primary); }
+  .sample-value { font-family: var(--mono); font-size: 12px; color: var(--color-txt-secondary); }
+  .space-square { background: var(--color-bg-brand-primary); }
+  .opacity-square { width: 48px; height: 48px; background: var(--color-bg-brand-primary); border-radius: var(--border-radius-md); }
+
+  /* BORDAS */
+  .radius-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--space-sm); }
+  .radius-card {
+    background: white;
+    border: var(--border-width-sm) solid var(--color-brd-primary);
+    border-radius: var(--border-radius-md);
+    padding: var(--space-lg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+  .radius-preview {
+    width: 64px; height: 64px;
+    background: white;
+    border: var(--border-width-sm) solid var(--color-brd-brand-primary);
+  }
+  .radius-token { font-family: var(--mono); font-size: 11px; color: var(--color-txt-brand-primary); font-weight: 600; text-align: center; }
+  .radius-value { font-family: var(--mono); font-size: 13px; color: var(--color-txt-primary); font-weight: 700; }
+  .radius-desc { font-size: 12px; color: var(--color-txt-secondary); text-align: center; }
+
+  /* SOMBRAS */
+  .shadow-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--space-lg); }
+  .shadow-card {
+    background: var(--color-bg-secondary);
+    border-radius: var(--border-radius-md);
+    padding: var(--space-lg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-md);
+  }
+  .shadow-preview {
+    width: 80px; height: 80px;
+    background: white;
+    border-radius: var(--border-radius-md);
+    border: var(--border-width-sm) solid var(--color-brd-primary);
+  }
+  .shadow-token { font-family: var(--mono); font-size: 11px; color: var(--color-txt-brand-primary); font-weight: 600; }
+
+  /* ESTADOS */
+  .states-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-lg); }
+  .state-btn {
+    padding: var(--space-lg);
+    border-radius: var(--border-radius-md);
+    text-align: center;
+    font-size: 15px;
+    font-weight: 600;
+    color: white;
+    margin-bottom: var(--space-sm);
+  }
+  .state-label { font-family: var(--mono); font-size: 11px; color: var(--color-txt-secondary); margin-bottom: var(--space-xs); }
+
+  /* ÍCONES */
+  .icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: var(--space-sm); }
+  .icon-cell {
+    display: flex; align-items: center; justify-content: center;
+    height: 56px;
+    border-radius: var(--border-radius-md);
+  }
+
+  /* COPY TOAST */
+  .toast {
+    position: fixed;
+    bottom: var(--space-lg);
+    right: var(--space-lg);
+    background: var(--color-bg-brand-secondary);
+    color: white;
+    padding: var(--space-sm) var(--space-lg);
+    border-radius: var(--border-radius-md);
+    font-size: 14px;
+    font-weight: 600;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: all 0.2s;
+    z-index: 1000;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  @media (max-width: 768px) {
+    .ds-content { padding: var(--space-lg); }
+    .ds-header { padding: var(--space-xl) var(--space-lg); }
+    .ds-nav { padding: 0 var(--space-lg); }
+    .type-row { grid-template-columns: 1fr; }
+    .sample-row { grid-template-columns: 100px 1fr 80px; }
+    .states-grid { grid-template-columns: 1fr; }
+    .palette-cell .hex { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="ds-header">
+  <div class="ds-header-inner">
+    <div class="ds-badge">CNM Design System</div>
+    <h1>Chaves na <span>Mão</span></h1>
+    <p>Documentação dos fundamentos visuais — fiel ao design system original (Figma)</p>
+    <div class="ds-header-meta">
+      <div class="ds-meta-item">
+        <span class="ds-meta-label">Fonte principal</span>
+        <span class="ds-meta-value">Open Sans</span>
+      </div>
+      <div class="ds-meta-item">
+        <span class="ds-meta-label">Cor primária</span>
+        <span class="ds-meta-value">Scarlet 700 · #EB0027</span>
+      </div>
+      <div class="ds-meta-item">
+        <span class="ds-meta-label">Ícones</span>
+        <span class="ds-meta-value">Material Symbols Rounded</span>
+      </div>
+      <div class="ds-meta-item">
+        <span class="ds-meta-label">Referência</span>
+        <span class="ds-meta-value">uicolors.app/tailwind-colors</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- NAV -->
+<nav class="ds-nav">
+  <a href="#cores">Cores</a>
+  <a href="#tipografia">Tipografia</a>
+  <a href="#espacamento">Espaçamento</a>
+  <a href="#bordas">Bordas</a>
+  <a href="#opacidade">Opacidade</a>
+  <a href="#sombras">Sombras</a>
+  <a href="#estados">Estados</a>
+  <a href="#icones">Ícones</a>
+  <a href="#tokens">Tokens CSS</a>
+</nav>
+
+<div class="ds-content">
+
+  <!-- ==================== CORES ==================== -->
+  <section class="ds-section" id="cores">
+    <div class="ds-section-header">
+      <h2 class="ds-section-title">Cores</h2>
+      <p class="ds-section-desc">Cores primitivas (escalas 50–950) e tokens semânticos. Clique em qualquer cor para copiar o hex.</p>
+    </div>
+
+    <div class="ds-card" style="margin-bottom:var(--space-md)">
+      <div class="ds-card-header">Primitive colors — Brand</div>
+      <div class="ds-card-body" id="palettes-brand"></div>
+    </div>
+
+    <div class="ds-card" style="margin-bottom:var(--space-md)">
+      <div class="ds-card-header">Primitive colors — Secondary</div>
+      <div class="ds-card-body" id="palettes-secondary"></div>
+    </div>
+
+    <div class="ds-card" style="margin-bottom:var(--space-md)">
+      <div class="ds-card-header">Neutral &amp; Social</div>
+      <div class="ds-card-body">
+        <div class="color-grid">
+          <div class="color-swatch" onclick="copyColor('#FFFFFF')">
+            <div class="color-preview" style="background:#FFFFFF; border-bottom:1px solid var(--color-grey-100)"></div>
+            <div class="color-info"><div class="color-name">White</div><div class="color-hex">#FFFFFF</div></div>
+          </div>
+          <div class="color-swatch" onclick="copyColor('#000000')">
+            <div class="color-preview" style="background:#000000"></div>
+            <div class="color-info"><div class="color-name">Black</div><div class="color-hex">#000000</div></div>
+          </div>
+          <div class="color-swatch" onclick="copyColor('#3ABE4D')">
+            <div class="color-preview" style="background:#3ABE4D"></div>
+            <div class="color-info"><div class="color-name">WhatsApp</div><div class="color-hex">#3ABE4D</div></div>
+          </div>
+          <div class="color-swatch" onclick="copyColor('#1877F2')">
+            <div class="color-preview" style="background:#1877F2"></div>
+            <div class="color-info"><div class="color-name">Facebook</div><div class="color-hex">#1877F2</div></div>
+          </div>
+          <div class="color-swatch" onclick="copyColor('#000000')">
+            <div class="color-preview" style="background:#000000"></div>
+            <div class="color-info"><div class="color-name">Twitter/X</div><div class="color-hex">#000000</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ds-card">
+      <div class="ds-card-header">Tokens — Text · Icon · Border · Background</div>
+      <div class="ds-card-body">
+        <div class="color-section-label">Text</div>
+        <table class="tokens-table" id="tokens-text"></table>
+        <div class="color-section-label">Icon</div>
+        <table class="tokens-table" id="tokens-icon"></table>
+        <div class="color-section-label">Border</div>
+        <table class="tokens-table" id="tokens-border"></table>
+        <div class="color-section-label">Background</div>
+        <table class="tokens-table" id="tokens-bg"></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== TIPOGRAFIA ==================== -->
+  <section class="ds-section" id="tipografia">
+    <div class="ds-section-header">
+      <h2 class="ds-section-title">Tipografia</h2>
+      <p class="ds-section-desc">Fonte única: <strong>Open Sans</strong>. Escala nomeada: Display, Headline, Body e Label.</p>
+    </div>
+
+    <div class="ds-card">
+      <div class="ds-card-header">Escala tipográfica</div>
+      <div class="type-scale">
+        <div class="type-row">
+          <div class="type-meta"><span class="type-token">display</span><span class="type-specs">44px / 52px · 800</span></div>
+          <div class="type-preview" style="font-size:44px; font-weight:800; line-height:52px">Display</div>
+          <div><span class="type-badge">44px · 800</span></div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta"><span class="type-token">headline-large</span><span class="type-specs">32px / 40px · 700</span></div>
+          <div class="type-preview" style="font-size:32px; font-weight:700; line-height:40px">Headline large</div>
+          <div><span class="type-badge">32px · 700</span></div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta"><span class="type-token">headline-medium</span><span class="type-specs">24px / 32px · 700</span></div>
+          <div class="type-preview" style="font-size:24px; font-weight:700; line-height:32px">Headline medium</div>
+          <div><span class="type-badge">24px · 700</span></div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta"><span class="type-token">headline-small</span><span class="type-specs">20px / 28px · 700</span></div>
+          <div class="type-preview" style="font-size:20px; font-weight:700; line-height:28px">Headline small</div>
+          <div><span class="type-badge">20px · 700</span></div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta"><span class="type-token">body-large</span><span class="type-specs">16px / 24px · 400</span></div>
+          <div class="type-preview" style="font-size:16px; font-weight:400; line-height:24px">Body large — e <strong>Body large bold</strong></div>
+          <div><span class="type-badge">16px · 400/700</span></div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta"><span class="type-token">body-medium</span><span class="type-specs">14px / 20px · 400</span></div>
+          <div class="type-preview" style="font-size:14px; font-weight:400; line-height:20px">Body medium — e <strong>Body medium bold</strong></div>
+          <div><span class="type-badge">14px · 400/700</span></div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta"><span class="type-token">body-small</span><span class="type-specs">12px / 16px · 400</span></div>
+          <div class="type-preview" style="font-size:12px; font-weight:400; line-height:16px">Body small — e <strong>Body small bold</strong></div>
+          <div><span class="type-badge">12px · 400/700</span></div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta"><span class="type-token">label-extralarge</span><span class="type-specs">22px / 28px · 600</span></div>
+          <div class="type-preview" style="font-size:22px; font-weight:600; line-height:28px">Label extralarge</div>
+          <div><span class="type-badge">22px · 600</span></div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta"><span class="type-token">label-large</span><span class="type-specs">16px / 24px · 600</span></div>
+          <div class="type-preview" style="font-size:16px; font-weight:600; line-height:24px">Label large</div>
+          <div><span class="type-badge">16px · 600</span></div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta"><span class="type-token">label-medium</span><span class="type-specs">13px / 16px · 600</span></div>
+          <div class="type-preview" style="font-size:13px; font-weight:600; line-height:16px">Label medium</div>
+          <div><span class="type-badge">13px · 600</span></div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta"><span class="type-token">label-small</span><span class="type-specs">11px / 16px · 600</span></div>
+          <div class="type-preview" style="font-size:11px; font-weight:600; line-height:16px">Label small</div>
+          <div><span class="type-badge">11px · 600</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== ESPAÇAMENTO ==================== -->
+  <section class="ds-section" id="espacamento">
+    <div class="ds-section-header">
+      <h2 class="ds-section-title">Espaçamento</h2>
+      <p class="ds-section-desc">Escala de <code>--space-none</code> a <code>--space-7xl</code> (0–80px).</p>
+    </div>
+
+    <div class="ds-card">
+      <div class="sample-list" id="space-list">
+        <div class="sample-row sample-head"><div>Token</div><div>Sample</div><div>Output</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== BORDAS ==================== -->
+  <section class="ds-section" id="bordas">
+    <div class="ds-section-header">
+      <h2 class="ds-section-title">Bordas</h2>
+      <p class="ds-section-desc">Raios, espessuras e estilos de borda.</p>
+    </div>
+
+    <div class="ds-card" style="margin-bottom:var(--space-md)">
+      <div class="ds-card-header">Border radius</div>
+      <div class="ds-card-body">
+        <div class="radius-grid">
+          <div class="radius-card">
+            <div class="radius-preview" style="border-radius:0"></div>
+            <div class="radius-token">--border-radius-none</div>
+            <div class="radius-value">0px</div>
+          </div>
+          <div class="radius-card">
+            <div class="radius-preview" style="border-radius:4px"></div>
+            <div class="radius-token">--border-radius-sm</div>
+            <div class="radius-value">4px</div>
+          </div>
+          <div class="radius-card">
+            <div class="radius-preview" style="border-radius:8px"></div>
+            <div class="radius-token">--border-radius-md</div>
+            <div class="radius-value">8px</div>
+          </div>
+          <div class="radius-card">
+            <div class="radius-preview" style="border-radius:16px"></div>
+            <div class="radius-token">--border-radius-lg</div>
+            <div class="radius-value">16px</div>
+          </div>
+          <div class="radius-card">
+            <div class="radius-preview" style="border-radius:80px"></div>
+            <div class="radius-token">--border-radius-full</div>
+            <div class="radius-value">80px</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ds-card" style="margin-bottom:var(--space-md)">
+      <div class="ds-card-header">Border width</div>
+      <div class="ds-card-body">
+        <div class="radius-grid">
+          <div class="radius-card">
+            <div class="radius-preview" style="border:none"></div>
+            <div class="radius-token">--border-none</div>
+            <div class="radius-value">none</div>
+          </div>
+          <div class="radius-card">
+            <div class="radius-preview" style="border-width:1px; border-radius:8px"></div>
+            <div class="radius-token">--border-width-sm</div>
+            <div class="radius-value">1px</div>
+          </div>
+          <div class="radius-card">
+            <div class="radius-preview" style="border-width:2px; border-radius:8px"></div>
+            <div class="radius-token">--border-width-md</div>
+            <div class="radius-value">2px</div>
+          </div>
+          <div class="radius-card">
+            <div class="radius-preview" style="border-width:3px; border-radius:8px"></div>
+            <div class="radius-token">--border-width-lg</div>
+            <div class="radius-value">3px</div>
+          </div>
+          <div class="radius-card">
+            <div class="radius-preview" style="border-width:4px; border-radius:8px"></div>
+            <div class="radius-token">--border-width-xl</div>
+            <div class="radius-value">4px</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ds-card">
+      <div class="ds-card-header">Border style</div>
+      <div class="ds-card-body">
+        <div class="radius-grid">
+          <div class="radius-card">
+            <div class="radius-preview" style="border-style:solid; border-radius:8px"></div>
+            <div class="radius-token">solid</div>
+          </div>
+          <div class="radius-card">
+            <div class="radius-preview" style="border-style:dashed; border-radius:8px"></div>
+            <div class="radius-token">dashed</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== OPACIDADE ==================== -->
+  <section class="ds-section" id="opacidade">
+    <div class="ds-section-header">
+      <h2 class="ds-section-title">Opacidade</h2>
+      <p class="ds-section-desc">Escala de <code>--opacity-0</code> a <code>--opacity-100</code>.</p>
+    </div>
+
+    <div class="ds-card">
+      <div class="sample-list" id="opacity-list">
+        <div class="sample-row sample-head"><div>Token</div><div>Sample</div><div>Output</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== SOMBRAS ==================== -->
+  <section class="ds-section" id="sombras">
+    <div class="ds-section-header">
+      <h2 class="ds-section-title">Sombras</h2>
+      <p class="ds-section-desc">7 níveis de elevação, de <code>--shadow-none</code> a <code>--shadow-top</code>.</p>
+    </div>
+
+    <div class="ds-card">
+      <div class="ds-card-body">
+        <div class="shadow-grid">
+          <div class="shadow-card">
+            <div class="shadow-preview" style="box-shadow:none"></div>
+            <div class="shadow-token">--shadow-none</div>
+          </div>
+          <div class="shadow-card">
+            <div class="shadow-preview" style="box-shadow:var(--shadow-sm)"></div>
+            <div class="shadow-token">--shadow-sm</div>
+            <div style="font-size:12px;color:var(--color-txt-secondary);text-align:center">0 2px 4px 1px · 12%</div>
+          </div>
+          <div class="shadow-card">
+            <div class="shadow-preview" style="box-shadow:var(--shadow-md)"></div>
+            <div class="shadow-token">--shadow-md</div>
+            <div style="font-size:12px;color:var(--color-txt-secondary);text-align:center">0 3px 6px 1px · 18%</div>
+          </div>
+          <div class="shadow-card">
+            <div class="shadow-preview" style="box-shadow:var(--shadow-lg)"></div>
+            <div class="shadow-token">--shadow-lg</div>
+            <div style="font-size:12px;color:var(--color-txt-secondary);text-align:center">0 6px 12px 0 · 18%</div>
+          </div>
+          <div class="shadow-card">
+            <div class="shadow-preview" style="box-shadow:var(--shadow-xl)"></div>
+            <div class="shadow-token">--shadow-xl</div>
+            <div style="font-size:12px;color:var(--color-txt-secondary);text-align:center">0 9px 18px 0 · 18%</div>
+          </div>
+          <div class="shadow-card">
+            <div class="shadow-preview" style="box-shadow:var(--shadow-2xl)"></div>
+            <div class="shadow-token">--shadow-2xl</div>
+            <div style="font-size:12px;color:var(--color-txt-secondary);text-align:center">0 12px 36px 0 · 12%</div>
+          </div>
+          <div class="shadow-card">
+            <div class="shadow-preview" style="box-shadow:var(--shadow-top)"></div>
+            <div class="shadow-token">--shadow-top</div>
+            <div style="font-size:12px;color:var(--color-txt-secondary);text-align:center">0 -2px 4px 1px · 6%</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== ESTADOS ==================== -->
+  <section class="ds-section" id="estados">
+    <div class="ds-section-header">
+      <h2 class="ds-section-title">Estados</h2>
+      <p class="ds-section-desc">Estados de interação para ações primárias (Scarlet) e secundárias (Grey).</p>
+    </div>
+
+    <div class="ds-card">
+      <div class="ds-card-body">
+        <div class="states-grid">
+          <div>
+            <div class="state-label">Primary</div>
+            <div class="state-btn" style="background:#EB0027">Default</div>
+            <div class="state-btn" style="background:#900C22">Hover</div>
+            <div class="state-btn" style="background:#900C22">Focus</div>
+            <div class="state-btn" style="background:#FC062F">Active</div>
+            <div class="state-btn" style="background:var(--color-bg-disabled); color:var(--color-txt-placeholder)">Disabled</div>
+          </div>
+          <div>
+            <div class="state-label">Secondary</div>
+            <div class="state-btn" style="background:#323131">Default</div>
+            <div class="state-btn" style="background:#262626">Hover</div>
+            <div class="state-btn" style="background:#262626">Focus</div>
+            <div class="state-btn" style="background:var(--color-bg-disabled); color:var(--color-txt-placeholder); margin-top:var(--space-5xl)">Disabled</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== ÍCONES ==================== -->
+  <section class="ds-section" id="icones">
+    <div class="ds-section-header">
+      <h2 class="ds-section-title">Ícones</h2>
+      <p class="ds-section-desc">
+        <strong>Google Fonts / Material Symbols — Rounded</strong> · Fill 0, Weight 400, Grade 0, Optical Size 24 ·
+        <a href="https://fonts.google.com/icons?icon.style=Rounded&icon.size=24&icon.color=%23323131" target="_blank" style="color:var(--color-txt-info)">fonts.google.com/icons</a>
+      </p>
+    </div>
+
+    <div class="ds-card" style="margin-bottom:var(--space-md)">
+      <div class="ds-card-header">Outlined / Regular — amostra</div>
+      <div class="ds-card-body">
+        <div class="icon-grid" id="icon-grid"></div>
+      </div>
+    </div>
+
+    <div class="ds-card">
+      <div class="ds-card-header">Social media</div>
+      <div class="ds-card-body">
+        <p style="font-size:14px; color:var(--color-txt-secondary)">
+          Google · LinkedIn · Apple · TikTok · Instagram · YouTube · Pinterest · Facebook ·
+          badges "Baixar na App Store" e "Disponível no Google Play" (assets oficiais de cada marca, monocromáticos em <span class="token-val">#323131</span>).
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== TOKENS ==================== -->
+  <section class="ds-section" id="tokens">
+    <div class="ds-section-header">
+      <h2 class="ds-section-title">Tokens CSS Completos</h2>
+      <p class="ds-section-desc">Todas as custom properties do design system, prontas para copiar.</p>
+    </div>
+
+    <div class="ds-card">
+      <div style="padding:var(--space-md) var(--space-lg); background:#1E1E2E; overflow-x:auto;">
+        <pre id="tokens-pre" style="font-family:var(--mono); font-size:12px; color:#CDD6F4; line-height:1.8; white-space:pre-wrap;"></pre>
+      </div>
+      <div style="padding:var(--space-md) var(--space-lg); border-top:var(--border-width-sm) solid var(--color-brd-primary); display:flex; justify-content:flex-end;">
+        <button onclick="copyTokens()" style="background:var(--color-bg-brand-primary);color:white;border:none;border-radius:var(--border-radius-md);padding:var(--space-sm) var(--space-lg);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer">
+          Copiar todos os tokens
+        </button>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast">Copiado!</div>
+
+<script>
+  // ===== Dados das paletas primitivas (originais do Figma / uicolors.app) =====
+  const SHADES = [50,100,200,300,400,500,600,700,800,900,950];
+  const PALETTES = {
+    brand: {
+      Scarlet: ['#FFF0F2','#FFDDE3','#FFC1CB','#FF95A7','#FF5975','#FF264A','#FC062F','#EB0027','#AF0521','#900C22','#50000D'],
+      Grey:    ['#F6F5F5','#E7E6E6','#D1D0D0','#B1AFB0','#8A8686','#6F686B','#5E5C5D','#504E4F','#464444','#323131','#262626'],
+    },
+    secondary: {
+      Green:  ['#F0FDF4','#DCFCE7','#B9F8CF','#7BF1A8','#05DF72','#00C950','#00A63E','#008236','#016630','#0D542B','#032E15'],
+      Yellow: ['#FEFCE8','#FEF9C2','#FFF085','#FFDF20','#FDC700','#F0B100','#D08700','#A65F00','#894B00','#733E0A','#432004'],
+      Orange: ['#FFF7ED','#FFEDD4','#FFD6A7','#FFB86A','#FF8904','#FF6900','#F54900','#CA3500','#9F2D00','#7E2A0C','#441306'],
+      Blue:   ['#EFF6FF','#DBEAFE','#BEDBFF','#8EC5FF','#51A2FF','#2B7FFF','#155DFC','#1447E6','#193CB8','#1C398E','#162456'],
+      Violet: ['#F5F2FF','#EEE7FF','#DDD2FF','#C5AEFF','#A980FF','#914DFF','#872BFF','#7716EB','#6412C5','#5211A1','#32076E'],
+    }
+  };
+
+  function renderPalettes(groupId, group) {
+    const el = document.getElementById(groupId);
+    el.innerHTML = Object.entries(group).map(([name, colors]) => `
+      <div class="palette-label">${name}</div>
+      <div class="palette-row">
+        ${colors.map((hex, i) => `
+          <div class="palette-cell ${i < 5 ? 'on-light' : 'on-dark'}" style="background:${hex}" onclick="copyColor('${hex}')">
+            <span class="shade">${SHADES[i]}</span><span class="hex">${hex}</span>
+          </div>`).join('')}
+      </div>`).join('');
+  }
+  renderPalettes('palettes-brand', PALETTES.brand);
+  renderPalettes('palettes-secondary', PALETTES.secondary);
+
+  // ===== Tokens semânticos =====
+  const SEMANTIC = [
+    ['invert','#FFFFFF'], ['placeholder','#8A8686'], ['secondary','#5E5C5D'], ['primary','#323131'],
+    ['brand-primary','#EB0027'], ['success','#00A63E'], ['warning','#D08700'], ['error','#CA3500'],
+    ['info','#155DFC'], ['launches','#872BFF'],
+  ];
+  const BORDER_TOKENS = [
+    ['invert','#FFFFFF'], ['primary','#D1D0D0'], ['secondary','#5E5C5D'], ['brand-secondary','#323131'],
+    ['brand-primary','#EB0027'], ['success','#00A63E'], ['warning','#D08700'], ['error','#CA3500'],
+    ['info','#155DFC'], ['launches','#872BFF'],
+  ];
+  const BG_TOKENS = [
+    ['primary','#FFFFFF'], ['secondary','#F6F5F5'], ['tertiary','#D1D0D0'], ['disabled','#E7E6E6'],
+    ['brand-secondary','#323131'], ['brand-primary','#EB0027'], ['brand-primary-light','#FFF0F2'],
+    ['success','#00A63E'], ['success-light','#F0FDF4'], ['warning','#D08700'], ['warning-light','#FEFCE8'],
+    ['error','#CA3500'], ['error-light','#FFF7ED'], ['info','#155DFC'], ['info-light','#EFF6FF'],
+    ['launches','#872BFF'], ['launches-light','#F5F2FF'],
+    ['whatsapp','#3ABE4D'], ['facebook','#1877F2'], ['twitter','#000000'],
+  ];
+
+  function renderTokenTable(id, prefix, tokens) {
+    document.getElementById(id).innerHTML = `
+      <tr><th style="width:60px">Sample</th><th>CSS variable</th><th>Output</th></tr>
+      ${tokens.map(([name, hex]) => `
+        <tr onclick="copyColor('${hex}')" style="cursor:pointer">
+          <td><span class="token-preview-swatch" style="background:${hex}"></span></td>
+          <td><span class="token-name">--color-${prefix}-${name}</span></td>
+          <td><span class="token-val">${hex}</span></td>
+        </tr>`).join('')}`;
+  }
+  renderTokenTable('tokens-text', 'txt', SEMANTIC);
+  renderTokenTable('tokens-icon', 'ic', SEMANTIC);
+  renderTokenTable('tokens-border', 'brd', BORDER_TOKENS);
+  renderTokenTable('tokens-bg', 'bg', BG_TOKENS);
+
+  // ===== Espaçamento =====
+  const SPACES = [['none',0],['xs',4],['sm',8],['md',16],['lg',24],['xl',32],['2xl',40],['3xl',48],['4xl',56],['5xl',64],['6xl',72],['7xl',80]];
+  document.getElementById('space-list').insertAdjacentHTML('beforeend', SPACES.map(([n, px]) => `
+    <div class="sample-row">
+      <span class="sample-token">--space-${n}</span>
+      <div><div class="space-square" style="width:${px}px;height:${px}px"></div></div>
+      <span class="sample-value">${px}px</span>
+    </div>`).join(''));
+
+  // ===== Opacidade =====
+  document.getElementById('opacity-list').insertAdjacentHTML('beforeend',
+    Array.from({length: 11}, (_, i) => `
+    <div class="sample-row">
+      <span class="sample-token">--opacity-${i*10}</span>
+      <div><div class="opacity-square" style="opacity:${(i/10).toFixed(1)}"></div></div>
+      <span class="sample-value">${i === 10 ? '1' : (i/10).toFixed(1).replace('.0','')}</span>
+    </div>`).join(''));
+
+  // ===== Ícones (amostra Material Symbols Rounded) =====
+  const ICONS = ['home','search','favorite','person','notifications','mail','call','chat','location_on','map',
+    'photo_camera','image','videocam','share','settings','filter_alt','tune','visibility','visibility_off','delete',
+    'edit','add','close','check','arrow_back','arrow_forward','expand_more','more_horiz','thumb_up','thumb_down',
+    'star','schedule','lock','logout','upload','download','qr_code','sell','apartment','directions_car'];
+  document.getElementById('icon-grid').innerHTML = ICONS.map(i =>
+    `<div class="icon-cell" title="${i}"><span class="material-symbols-rounded">${i}</span></div>`).join('');
+
+  // ===== Bloco de tokens completo =====
+  function paletteVars(name, colors) {
+    return colors.map((hex, i) => `  --color-${name}-${SHADES[i]}: ${hex};`).join('\n');
+  }
+  const TOKENS_CSS = `:root {
+  /* === PRIMITIVAS === */
+${paletteVars('scarlet', PALETTES.brand.Scarlet)}
+${paletteVars('grey', PALETTES.brand.Grey)}
+${paletteVars('green', PALETTES.secondary.Green)}
+${paletteVars('yellow', PALETTES.secondary.Yellow)}
+${paletteVars('orange', PALETTES.secondary.Orange)}
+${paletteVars('blue', PALETTES.secondary.Blue)}
+${paletteVars('violet', PALETTES.secondary.Violet)}
+  --color-white: #FFFFFF;
+  --color-black: #000000;
+
+  /* === TEXTO === */
+${SEMANTIC.map(([n, h]) => `  --color-txt-${n}: ${h};`).join('\n')}
+
+  /* === ÍCONES === */
+${SEMANTIC.map(([n, h]) => `  --color-ic-${n}: ${h};`).join('\n')}
+
+  /* === BORDAS (COR) === */
+${BORDER_TOKENS.map(([n, h]) => `  --color-brd-${n}: ${h};`).join('\n')}
+
+  /* === FUNDOS === */
+${BG_TOKENS.map(([n, h]) => `  --color-bg-${n}: ${h};`).join('\n')}
+
+  /* === TIPOGRAFIA === */
+  --font-family-primary: 'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* === ESPAÇAMENTO === */
+${SPACES.map(([n, px]) => `  --space-${n}: ${px}px;`).join('\n')}
+
+  /* === BORDAS === */
+  --border-radius-none: 0px;
+  --border-radius-sm:   4px;
+  --border-radius-md:   8px;
+  --border-radius-lg:   16px;
+  --border-radius-full: 80px;
+  --border-none: none;
+  --border-width-sm: 1px;
+  --border-width-md: 2px;
+  --border-width-lg: 3px;
+  --border-width-xl: 4px;
+
+  /* === OPACIDADE === */
+${Array.from({length: 11}, (_, i) => `  --opacity-${i*10}: ${i === 10 ? '1' : (i/10).toFixed(1).replace('.0','')};`).join('\n')}
+
+  /* === SOMBRAS === */
+  --shadow-none: none;
+  --shadow-sm:  0 2px 4px 1px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.0009);
+  --shadow-md:  0 3px 6px 1px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.0009);
+  --shadow-lg:  0 6px 12px 0 rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.0009);
+  --shadow-xl:  0 9px 18px 0 rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.0009);
+  --shadow-2xl: 0 12px 36px 0 rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.0009);
+  --shadow-top: 0 -2px 4px 1px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.0009);
+}`;
+  document.getElementById('tokens-pre').textContent = TOKENS_CSS;
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2000);
+  }
+
+  function copyColor(hex) {
+    navigator.clipboard.writeText(hex);
+    showToast(hex + ' copiado!');
+  }
+
+  function copyTokens() {
+    navigator.clipboard.writeText(TOKENS_CSS);
+    showToast('Todos os tokens copiados!');
+  }
+
+  // Active nav on scroll
+  const sections = document.querySelectorAll('.ds-section');
+  const navLinks = document.querySelectorAll('.ds-nav a');
+  window.addEventListener('scroll', () => {
+    let current = '';
+    sections.forEach(s => {
+      if (window.scrollY >= s.offsetTop - 100) current = s.id;
+    });
+    navLinks.forEach(a => {
+      a.classList.toggle('active', a.getAttribute('href') === '#' + current);
+    });
+  });
+</script>
+</body>
+</html>

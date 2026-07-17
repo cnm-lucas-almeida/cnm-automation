@@ -47,7 +47,7 @@ async function getToken(): Promise<string> {
 
 // ── /Calcular cache (max 100 req/h por banco) ─────────────────────────────────
 
-const calcularCache: Record<string, { data: CalcularDia[]; timestamp: number; fromCache: boolean }> = {};
+const calcularCache: Record<string, { data: CalcularResponse; timestamp: number; fromCache: boolean }> = {};
 const CALCULAR_CACHE_TTL = 60 * 60 * 1000; // 1 hora
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -73,12 +73,20 @@ export interface Batida {
   Compensado: boolean;
   Refeicao: boolean;
   NBanco: boolean;
+  // Horário esperado da escala nesse dia (independe do horário batido) — usado para
+  // calcular extras/atrasos localmente sem depender do /Calcular.
+  MemoriaEntrada1?: string | null; MemoriaSaida1?: string | null;
+  MemoriaEntrada2?: string | null; MemoriaSaida2?: string | null;
+  MemoriaEntrada3?: string | null; MemoriaSaida3?: string | null;
+  MemoriaEntrada4?: string | null; MemoriaSaida4?: string | null;
+  MemoriaEntrada5?: string | null; MemoriaSaida5?: string | null;
   Funcionario?: { NumeroPis: string; NumeroFolha: string; NumeroIdentificador: string };
 }
 
-export interface CalcularDia {
-  Data: string;
-  [key: string]: unknown;
+// Resposta bruta do endpoint /Calcular: tabela em formato colunar (uma linha por dia).
+export interface CalcularResponse {
+  Colunas: string[];
+  Linhas: Array<{ Key: string; Value: Array<string | null> }>;
 }
 
 export interface CacheInfo {
@@ -121,7 +129,7 @@ export async function getCalcular(
   dataInicio: string,
   dataFim: string,
   forceRefresh = false
-): Promise<{ data: CalcularDia[]; fromCache: boolean; cachedAt?: number }> {
+): Promise<{ data: CalcularResponse; fromCache: boolean; cachedAt?: number }> {
   const key = `${cpf}|${dataInicio}|${dataFim}`;
   const now = Date.now();
 
@@ -134,11 +142,12 @@ export async function getCalcular(
   }
 
   const token = await getToken();
-  const res = await axios.get(`${PONTO_URL}/IntegracaoExterna/Calcular`, {
-    headers: pontoHeaders(token),
-    params: { dataInicio, dataFim, funcionarioCpf: cpf },
-    timeout: 20_000,
-  });
+  // Este endpoint só aceita POST com os campos capitalizados abaixo (não GET com dataInicio/dataFim).
+  const res = await axios.post(
+    `${PONTO_URL}/IntegracaoExterna/Calcular`,
+    { DataInicial: dataInicio, DataFinal: dataFim, FuncionarioCpf: cpf },
+    { headers: pontoHeaders(token), timeout: 20_000 }
+  );
 
   calcularCache[key] = { data: res.data, timestamp: now, fromCache: false };
   return { data: res.data, fromCache: false };
@@ -245,4 +254,119 @@ export function analisarIntervaloAlmoco(
     violacao,
     minutosFaltantes,
   };
+}
+
+// ── Parsing genérico do /Calcular ─────────────────────────────────────────────
+
+export interface LinhaCalculo {
+  data: string; // YYYY-MM-DD
+  valores: Record<string, string | null>; // nome da coluna → valor (ex.: "Ex75%": "01:19")
+}
+
+export function parseCalcularLinhas(resp: CalcularResponse): LinhaCalculo[] {
+  return resp.Linhas.map((linha) => {
+    const valores: Record<string, string | null> = {};
+    resp.Colunas.forEach((col, i) => {
+      valores[col] = linha.Value[i] ?? null;
+    });
+    return { data: linha.Key.split('T')[0], valores };
+  });
+}
+
+function hhmmParaMinutos(valor: string | null): number {
+  if (!valor) return 0;
+  const negativo = valor.startsWith('-');
+  const limpo = negativo ? valor.slice(1) : valor;
+  const [h, m] = limpo.split(':').map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return 0;
+  return (negativo ? -1 : 1) * (h * 60 + m);
+}
+
+export function minutosParaHHMM(minutos: number): string {
+  const negativo = minutos < 0;
+  const abs = Math.round(Math.abs(minutos));
+  const h = Math.floor(abs / 60);
+  const m = abs % 60;
+  return `${negativo ? '-' : ''}${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+// ── Banco de horas — Copa do Mundo (folga em 29/06) ───────────────────────────
+//
+// No dia 29/06 a empresa liberou os colaboradores durante o jogo do Brasil, mas
+// o mês de junho fechou como se o dia tivesse sido trabalhado integralmente (8h).
+// As horas não trabalhadas naquele dia viraram uma dívida da empresa com o
+// colaborador, a ser paga em folha em julho — descontada pelas horas extras e
+// voltando a crescer com eventuais atrasos, ambos contados a partir de 01/07
+// (o fechamento de junho não entra na conta).
+//
+// Calculado a partir do /Batidas (não do /Calcular, que tem limite de 100 req/h
+// por banco e travaria um relatório rodado para todos os colaboradores) —
+// comparando o horário batido com o horário esperado da escala naquele dia
+// (campos MemoriaEntrada/MemoriaSaida) e aplicando a tolerância diária de 10min
+// do Art. 58 §1º da CLT, do mesmo jeito que o /Calcular oficial já faz. Validado
+// batendo os dois métodos ponta a ponta para o mesmo colaborador e período.
+
+const COPA_DATA = '2026-06-29';
+const COPA_COMPENSACAO_INICIO = '2026-07-01';
+const TOLERANCIA_CLT_MIN = 10;
+
+export interface BancoHorasCopa {
+  devidoMin: number; // quanto a empresa deve pelo dia 29/06
+  extrasMin: number; // horas trabalhadas além da escala, acumuladas desde 01/07
+  atrasosMin: number; // horas abaixo da escala, acumuladas desde 01/07
+  compensadoMin: number; // extrasMin - atrasosMin
+  faltaPagarMin: number; // devidoMin - compensadoMin
+  diaCopaEncontrado: boolean;
+}
+
+function calcularCargaEsperadaMin(batida: Batida): number {
+  const pares: Array<[string | null | undefined, string | null | undefined]> = [
+    [batida.MemoriaEntrada1, batida.MemoriaSaida1],
+    [batida.MemoriaEntrada2, batida.MemoriaSaida2],
+    [batida.MemoriaEntrada3, batida.MemoriaSaida3],
+    [batida.MemoriaEntrada4, batida.MemoriaSaida4],
+    [batida.MemoriaEntrada5, batida.MemoriaSaida5],
+  ];
+
+  let totalMinutos = 0;
+  for (const [entrada, saida] of pares) {
+    if (entrada && saida) {
+      const diff = horasParaMinutos(saida) - horasParaMinutos(entrada);
+      if (diff > 0) totalMinutos += diff;
+    }
+  }
+  return totalMinutos;
+}
+
+export async function calcularBancoHorasCopa(cpf: string, dataFim: string): Promise<BancoHorasCopa> {
+  const batidas = await getBatidas(cpf, COPA_DATA, dataFim);
+
+  let devidoMin = 0;
+  let diaCopaEncontrado = false;
+  let extrasMin = 0;
+  let atrasosMin = 0;
+
+  for (const batida of batidas) {
+    const dia = batida.Data.split('T')[0];
+    const pulaDia = batida.Folga || batida.Neutro || batida.NBanco;
+    const trabalhadoMin = calcularHorasTrabalhadas(batida) * 60;
+    const cargaMin = calcularCargaEsperadaMin(batida);
+    const diffMin = trabalhadoMin - cargaMin;
+
+    if (dia === COPA_DATA) {
+      devidoMin = pulaDia ? 0 : Math.max(0, -diffMin);
+      diaCopaEncontrado = true;
+    } else if (dia >= COPA_COMPENSACAO_INICIO && !pulaDia && Math.abs(diffMin) > TOLERANCIA_CLT_MIN) {
+      if (diffMin > 0) extrasMin += diffMin;
+      else atrasosMin += -diffMin;
+    }
+  }
+
+  const compensadoMin = extrasMin - atrasosMin;
+  // Sem dívida da Copa (colaborador não saiu mais cedo em 29/06), não há o que
+  // "faltar pagar" — mesmo que a pessoa tenha atrasos de julho sem relação
+  // nenhuma com a Copa, isso é banco de horas normal, não vira dívida da Copa.
+  const faltaPagarMin = devidoMin > 0 ? devidoMin - compensadoMin : 0;
+
+  return { devidoMin, extrasMin, atrasosMin, compensadoMin, faltaPagarMin, diaCopaEncontrado };
 }

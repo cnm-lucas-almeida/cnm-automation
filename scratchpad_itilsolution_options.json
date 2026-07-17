@@ -1,0 +1,92 @@
+{
+  "1": {
+    "name": "Descrição",
+    "table": "glpi_itilsolutions",
+    "field": "content",
+    "datatype": "text",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "ITILSolution.content"
+  },
+  "2": {
+    "name": "ID",
+    "table": "glpi_itilsolutions",
+    "field": "id",
+    "datatype": "number",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "ITILSolution.id"
+  },
+  "3": {
+    "name": "Usuário",
+    "table": "glpi_users",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "equals",
+      "notequals",
+      "empty"
+    ],
+    "uid": "ITILSolution.User.name"
+  },
+  "4": {
+    "name": "Tipo de item",
+    "table": "glpi_itilsolutions",
+    "field": "itemtype",
+    "datatype": "specific",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "empty"
+    ],
+    "uid": "ITILSolution.itemtype"
+  },
+  "5": {
+    "name": "Tipo de solução",
+    "table": "glpi_solutiontypes",
+    "field": "name",
+    "datatype": "dropdown",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "equals",
+      "empty"
+    ],
+    "uid": "ITILSolution.SolutionType.name"
+  },
+  "119": {
+    "name": "Número de documentos",
+    "table": "glpi_documents_items",
+    "field": "id",
+    "datatype": "count",
+    "nosearch": false,
+    "nodisplay": false,
+    "available_searchtypes": [
+      "contains",
+      "notcontains",
+      "empty"
+    ],
+    "uid": "ITILSolution.Document_Item.id"
+  },
+  "common": {
+    "name": "Características"
+  },
+  "document": {
+    "name": "Documentos"
+  }
+}

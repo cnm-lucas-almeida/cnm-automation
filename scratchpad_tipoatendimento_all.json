@@ -1,0 +1,56 @@
+[
+  {
+    "id": 1,
+    "items_id": "Suporte Técnico | Retirada de maquína de ex funcionário  ",
+    "itemtype": "Ticket",
+    "plugin_fields_containers_id": "Tipo de Atendimento",
+    "entities_id": "Entidade de raiz",
+    "plugin_fields_tipodeatendimentofielddropdowns_id": "Configuração/Ajuste",
+    "desenvolvimentofield": 0,
+    "links": [
+      {
+        "rel": "Ticket",
+        "href": "http://glpi.internal.com/api.php/v1/Ticket/615"
+      },
+      {
+        "rel": "PluginFieldsContainer",
+        "href": "http://glpi.internal.com/api.php/v1/PluginFieldsContainer/1"
+      },
+      {
+        "rel": "Entity",
+        "href": "http://glpi.internal.com/api.php/v1/Entity/0"
+      },
+      {
+        "rel": "PluginFieldsTipodeatendimentofielddropdown",
+        "href": "http://glpi.internal.com/api.php/v1/PluginFieldsTipodeatendimentofielddropdown/2"
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "items_id": "Área logada do cliente | Falha no cadastro de conta – erro na validação",
+    "itemtype": "Ticket",
+    "plugin_fields_containers_id": "Tipo de Atendimento",
+    "entities_id": "Entidade de raiz",
+    "plugin_fields_tipodeatendimentofielddropdowns_id": "Configuração/Ajuste",
+    "desenvolvimentofield": 0,
+    "links": [
+      {
+        "rel": "Ticket",
+        "href": "http://glpi.internal.com/api.php/v1/Ticket/614"
+      },
+      {
+        "rel": "PluginFieldsContainer",
+        "href": "http://glpi.internal.com/api.php/v1/PluginFieldsContainer/1"
+      },
+      {
+        "rel": "Entity",
+        "href": "http://glpi.internal.com/api.php/v1/Entity/0"
+      },
+      {
+        "rel": "PluginFieldsTipodeatendimentofieldDropdown",
+        "href": "http://glpi.internal.com/api.php/v1/PluginFieldsTipodeatendimentofieldDropdown/2"
+      }
+    ]
+  }
+]

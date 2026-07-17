@@ -1,0 +1,396 @@
+<!--
+  TEMPLATE — auditoria de qualidade de atendimento por técnico (CNM Design System).
+  Copie este arquivo para o scratchpad da sessão como auditoria-<slug-do-nome>.html e preencha
+  os pontos marcados com <!-- PREENCHER: ... --> antes de publicar com o Artifact tool.
+  Não edite os tokens de cor/tipografia/espaçamento abaixo — eles vêm do design system oficial
+  da Chaves na Mão, salvo em .claude/design-system/chavesnamao-design-system.html, e devem
+  ficar idênticos entre relatórios.
+-->
+<title>Auditoria de Chamados — <!-- PREENCHER: Nome do Técnico --></title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+
+  :root {
+    /* ===== PRIMITIVAS (CNM Design System) ===== */
+    --color-scarlet-50:  #FFF0F2;
+    --color-scarlet-100: #FFDDE3;
+    --color-scarlet-200: #FFC1CB;
+    --color-scarlet-700: #EB0027;
+    --color-scarlet-800: #AF0521;
+    --color-scarlet-900: #900C22;
+
+    --color-grey-50:  #F6F5F5;
+    --color-grey-100: #E7E6E6;
+    --color-grey-200: #D1D0D0;
+    --color-grey-300: #B1AFB0;
+    --color-grey-400: #8A8686;
+    --color-grey-600: #5E5C5D;
+    --color-grey-900: #323131;
+    --color-grey-950: #262626;
+
+    --color-green-200:  #B9F8CF;
+    --color-green-50:   #F0FDF4;
+    --color-green-700:  #008236;
+    --color-blue-200:   #BEDBFF;
+    --color-blue-50:    #EFF6FF;
+    --color-blue-700:   #1447E6;
+    --color-yellow-200: #FFF085;
+    --color-yellow-50:  #FEFCE8;
+    --color-yellow-800: #894B00;
+    --color-orange-200: #FFD6A7;
+    --color-orange-50:  #FFF7ED;
+    --color-orange-700: #9F2D00;
+
+    /* ===== TOKENS — TEXTO ===== */
+    --color-txt-invert:        #FFFFFF;
+    --color-txt-placeholder:   #8A8686;
+    --color-txt-secondary:     #5E5C5D;
+    --color-txt-primary:       #323131;
+    --color-txt-brand-primary: #EB0027;
+    --color-txt-success:       #00A63E;
+    --color-txt-warning:       #D08700;
+    --color-txt-error:         #CA3500;
+    --color-txt-info:          #155DFC;
+
+    /* ===== TOKENS — FUNDOS ===== */
+    --color-bg-primary:             #FFFFFF;
+    --color-bg-secondary:           #F6F5F5;
+    --color-bg-tertiary:            #D1D0D0;
+    --color-bg-brand-primary:       #EB0027;
+    --color-bg-brand-primary-light: #FFF0F2;
+    --color-bg-brand-secondary:     #323131;
+
+    /* ===== TOKENS — BORDAS ===== */
+    --color-brd-primary:       #D1D0D0;
+    --color-brd-brand-primary: #EB0027;
+
+    /* ===== ESPAÇAMENTO ===== */
+    --space-xs: 4px; --space-sm: 8px; --space-md: 16px; --space-lg: 24px;
+    --space-xl: 32px; --space-2xl: 40px; --space-3xl: 48px; --space-4xl: 56px; --space-5xl: 64px;
+
+    /* ===== BORDAS / SOMBRAS ===== */
+    --border-radius-sm: 4px; --border-radius-md: 8px; --border-radius-lg: 16px; --border-radius-full: 80px;
+    --border-width-sm: 1px; --border-width-md: 2px;
+    --shadow-sm: 0 2px 4px 1px rgba(0,0,0,0.10), 0 0 0 1px rgba(0,0,0,0.0009);
+    --shadow-md: 0 3px 6px 1px rgba(0,0,0,0.14), 0 0 0 1px rgba(0,0,0,0.0009);
+
+    /* ===== TIPOGRAFIA ===== */
+    --font: 'Open Sans', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Consolas, monospace;
+
+    /* ===== CATEGORIAS (taxonomia fixa — não renomear/recolorir entre auditorias) ===== */
+    --cat-t-fg: var(--color-txt-success);   --cat-t-bg: var(--color-green-50);   --cat-t-brd: var(--color-green-200);
+    --cat-o-fg: var(--color-txt-info);      --cat-o-bg: var(--color-blue-50);    --cat-o-brd: var(--color-blue-200);
+    --cat-d-fg: var(--color-txt-secondary); --cat-d-bg: var(--color-bg-secondary); --cat-d-brd: var(--color-brd-primary);
+    --cat-x-fg: var(--color-txt-warning);   --cat-x-bg: var(--color-yellow-50);  --cat-x-brd: var(--color-yellow-200);
+    --cat-s-fg: var(--color-txt-error);     --cat-s-bg: var(--color-orange-50);  --cat-s-brd: var(--color-orange-200);
+  }
+
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--font);
+    background: var(--color-bg-secondary);
+    color: var(--color-txt-primary);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .ds-header { background: var(--color-bg-brand-secondary); color: white; padding: var(--space-3xl) var(--space-5xl); }
+  .ds-badge {
+    display: inline-block; background: var(--color-bg-brand-primary); color: white;
+    font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
+    padding: var(--space-xs) var(--space-sm); border-radius: var(--border-radius-md); margin-bottom: var(--space-md);
+  }
+  .ds-header h1 { font-size: 40px; font-weight: 800; line-height: 1.15; margin: 0 0 var(--space-sm); text-wrap: balance; }
+  .ds-header h1 span { color: var(--color-scarlet-200); }
+  .ds-header p { color: rgba(255,255,255,0.62); font-size: 16px; font-weight: 400; margin: 0; max-width: 64ch; }
+  .ds-header-meta { display: flex; flex-wrap: wrap; gap: var(--space-xl); margin-top: var(--space-xl); }
+  .ds-meta-item { display: flex; flex-direction: column; }
+  .ds-meta-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: rgba(255,255,255,0.42); }
+  .ds-meta-value { font-size: 14px; font-weight: 600; color: white; margin-top: 2px; font-family: var(--mono); }
+
+  .ds-nav {
+    background: var(--color-bg-primary); border-bottom: var(--border-width-sm) solid var(--color-brd-primary);
+    padding: 0 var(--space-5xl); position: sticky; top: 0; z-index: 100; display: flex; gap: 0; overflow-x: auto;
+  }
+  .ds-nav a {
+    display: block; padding: var(--space-md) var(--space-lg); font-size: 14px; font-weight: 600;
+    color: var(--color-txt-secondary); text-decoration: none; border-bottom: var(--border-width-md) solid transparent; white-space: nowrap;
+  }
+  .ds-nav a:hover { color: var(--color-txt-brand-primary); }
+
+  .ds-content { max-width: 1100px; margin: 0 auto; padding: var(--space-5xl); }
+  .ds-section { margin-bottom: var(--space-4xl); scroll-margin-top: 64px; }
+  .ds-section-header { margin-bottom: var(--space-lg); }
+  .ds-section-title {
+    font-size: 24px; font-weight: 800; color: var(--color-txt-primary);
+    display: flex; align-items: center; gap: var(--space-sm); text-wrap: balance;
+  }
+  .ds-section-title::before {
+    content: ''; display: block; width: 4px; height: 26px;
+    background: var(--color-bg-brand-primary); border-radius: var(--border-radius-md); flex-shrink: 0;
+  }
+  .ds-section-desc { color: var(--color-txt-secondary); font-size: 14px; margin-top: var(--space-sm); padding-left: var(--space-md); max-width: 74ch; }
+
+  .ds-card { background: var(--color-bg-primary); border-radius: var(--border-radius-md); border: var(--border-width-sm) solid var(--color-brd-primary); overflow: hidden; }
+  .ds-card-header {
+    padding: var(--space-md) var(--space-lg); border-bottom: var(--border-width-sm) solid var(--color-brd-primary);
+    font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--color-txt-secondary); background: var(--color-bg-secondary); display: flex; align-items: center; gap: var(--space-sm);
+  }
+  .ds-card-body { padding: var(--space-lg); }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--space-sm); }
+  .stat-card {
+    background: var(--color-bg-primary); border: var(--border-width-sm) solid var(--color-brd-primary);
+    border-left: 4px solid var(--c-fg); border-radius: var(--border-radius-md); padding: var(--space-md) var(--space-md) var(--space-sm);
+  }
+  .stat-card .n { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 28px; font-weight: 700; line-height: 1; color: var(--c-fg); }
+  .stat-card .pct { font-family: var(--mono); font-size: 12px; color: var(--color-txt-placeholder); margin-left: 4px; }
+  .stat-card .lbl { font-size: 12px; color: var(--color-txt-secondary); margin-top: var(--space-xs); line-height: 1.3; font-weight: 600; }
+
+  .stackbar { display: flex; width: 100%; height: 32px; border-radius: var(--border-radius-md); overflow: hidden; margin-top: var(--space-lg); border: var(--border-width-sm) solid var(--color-brd-primary); }
+  .stackbar .seg { display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 11px; font-weight: 700; color: white; white-space: nowrap; overflow: hidden; }
+  .stack-legend { display: flex; flex-wrap: wrap; gap: var(--space-lg); margin-top: var(--space-md); font-size: 13px; color: var(--color-txt-secondary); }
+  .stack-legend .dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; position: relative; top: 1px; }
+
+  .qa-card { display: flex; flex-direction: column; gap: var(--space-lg); }
+  .qa-item { padding: var(--space-lg); border: var(--border-width-sm) solid var(--color-brd-primary); border-radius: var(--border-radius-md); background: var(--color-bg-primary); }
+  .qa-item .q { font-size: 15px; font-weight: 700; color: var(--color-txt-primary); margin-bottom: var(--space-sm); }
+  .qa-item .a { font-size: 14px; color: var(--color-txt-secondary); }
+  .qa-item .a .hl { color: var(--color-txt-primary); font-weight: 700; }
+  .qa-item .a .hl-x { color: var(--color-txt-warning); font-weight: 700; }
+  .qa-item .a .hl-t { color: var(--color-txt-success); font-weight: 700; }
+
+  .methodology { font-size: 13px; color: var(--color-txt-secondary); margin-top: var(--space-sm); padding-left: var(--space-md); max-width: 82ch; }
+  .methodology code { font-family: var(--mono); background: var(--color-bg-secondary); border: var(--border-width-sm) solid var(--color-brd-primary); padding: 1px 5px; border-radius: var(--border-radius-sm); font-size: 0.85em; color: var(--color-txt-primary); }
+
+  .group { margin-top: var(--space-md); }
+  .group-head { display: flex; align-items: baseline; gap: var(--space-sm); padding: var(--space-sm) var(--space-lg); background: var(--g-bg); }
+  .group-head .badge { font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: 0.4px; color: var(--g-fg); }
+  .group-head .title { font-weight: 700; font-size: 14px; color: var(--color-txt-primary); }
+  .group-head .count { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--g-fg); font-weight: 700; }
+  .group-desc { font-size: 13px; color: var(--color-txt-secondary); padding: var(--space-sm) var(--space-lg); background: var(--color-bg-primary); border-bottom: var(--border-width-sm) solid var(--color-brd-primary); }
+
+  .tablewrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; background: var(--color-bg-primary); font-size: 13px; }
+  thead th { text-align: left; font-size: 11px; letter-spacing: 0.6px; text-transform: uppercase; color: var(--color-txt-placeholder); font-weight: 700; padding: var(--space-sm) var(--space-lg); border-bottom: var(--border-width-sm) solid var(--color-brd-primary); white-space: nowrap; }
+  tbody td { padding: var(--space-sm) var(--space-lg); border-bottom: var(--border-width-sm) solid var(--color-grey-100); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  td.id { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--color-txt-placeholder); white-space: nowrap; }
+  td.titulo { color: var(--color-txt-primary); font-weight: 600; max-width: 220px; }
+  td.nota { color: var(--color-txt-secondary); }
+  td.autor { white-space: nowrap; }
+  td.autor .who { background: var(--g-bg); color: var(--g-fg); border: var(--border-width-sm) solid var(--g-brd); padding: 2px 9px; border-radius: var(--border-radius-full); font-weight: 700; font-size: 12px; }
+
+  .conclusion { background: var(--color-bg-brand-primary-light); border: var(--border-width-sm) solid var(--color-scarlet-200); border-left: 4px solid var(--color-bg-brand-primary); border-radius: var(--border-radius-md); padding: var(--space-lg) var(--space-xl); box-shadow: var(--shadow-sm); }
+  .conclusion h3 { margin: 0 0 var(--space-md); font-size: 16px; font-weight: 800; color: var(--color-scarlet-900); }
+  .conclusion ul { margin: 0; padding-left: 20px; }
+  .conclusion li { margin-bottom: var(--space-sm); font-size: 14px; color: var(--color-txt-primary); }
+  .conclusion li:last-child { margin-bottom: 0; }
+  .conclusion li strong { color: var(--color-scarlet-900); }
+
+  footer { margin-top: var(--space-4xl); padding: var(--space-lg) 0; border-top: var(--border-width-sm) solid var(--color-brd-primary); font-size: 12px; color: var(--color-txt-placeholder); text-align: center; }
+
+  @media (max-width: 860px) {
+    .ds-header { padding: var(--space-xl) var(--space-lg); }
+    .ds-nav { padding: 0 var(--space-lg); }
+    .ds-content { padding: var(--space-lg); }
+    .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+
+<div class="ds-header">
+  <div class="ds-badge">Auditoria &middot; Suporte técnico</div>
+  <!-- PREENCHER: título com o nome real do técnico -->
+  <h1>Chamados solucionados por <span>NOME DO TÉCNICO</span></h1>
+  <p>Leitura integral dos acompanhamentos, tarefas e soluções de todos os chamados encerrados sob a técnica dele(a), para entender o que de fato acontece por trás do volume de chamados fechados.</p>
+  <div class="ds-header-meta">
+    <!-- PREENCHER: valores reais -->
+    <div class="ds-meta-item"><span class="ds-meta-label">Chamados analisados</span><span class="ds-meta-value">N</span></div>
+    <div class="ds-meta-item"><span class="ds-meta-label">Squad</span><span class="ds-meta-value">—</span></div>
+    <div class="ds-meta-item"><span class="ds-meta-label">Período</span><span class="ds-meta-value">—</span></div>
+    <div class="ds-meta-item"><span class="ds-meta-label">Fonte</span><span class="ds-meta-value">GLPI API</span></div>
+  </div>
+</div>
+
+<nav class="ds-nav">
+  <a href="#resumo">Panorama</a>
+  <a href="#perguntas">Perguntas</a>
+  <!-- PREENCHER: remova este link se não houver perguntas extras nesta rodada -->
+  <a href="#perguntas-extra">Perguntas específicas</a>
+  <a href="#detalhamento">Detalhamento</a>
+  <a href="#conclusao">Conclusão</a>
+</nav>
+
+<div class="ds-content">
+
+  <section class="ds-section" id="resumo">
+    <div class="ds-section-header">
+      <h2 class="ds-section-title">Panorama geral</h2>
+      <p class="ds-section-desc">Cada chamado foi classificado pelo que realmente aconteceu dentro dele — não pelo que o campo "técnico responsável" do GLPI diz.</p>
+    </div>
+    <div class="ds-card">
+      <div class="ds-card-body">
+        <div class="stat-grid" id="statGrid"></div>
+        <div class="stackbar" id="stackBar"></div>
+        <div class="stack-legend" id="stackLegend"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="ds-section" id="perguntas">
+    <div class="ds-section-header">
+      <h2 class="ds-section-title">Leitura da taxonomia fixa</h2>
+    </div>
+    <div class="qa-card">
+      <div class="qa-item">
+        <div class="q">Quanto foi só dúvida/orientação, sem ação técnica?</div>
+        <!-- PREENCHER: números reais desta pessoa -->
+        <div class="a">…</div>
+      </div>
+      <div class="qa-item">
+        <div class="q">Em quantos chamados a correção real foi de outra pessoa?</div>
+        <div class="a">…</div>
+      </div>
+      <div class="qa-item">
+        <div class="q">Quantos foram correção técnica de fato (mão na massa)?</div>
+        <div class="a">…</div>
+      </div>
+    </div>
+  </section>
+
+  <!--
+    PREENCHER: seção opcional — inclua só se o usuário pediu perguntas específicas
+    para este técnico. Cada pergunta vira um .qa-item igual aos de cima. Se não
+    houver perguntas extras nesta rodada, apague esta section inteira e o link
+    correspondente na nav acima.
+  -->
+  <section class="ds-section" id="perguntas-extra">
+    <div class="ds-section-header">
+      <h2 class="ds-section-title">Perguntas específicas sobre <!-- PREENCHER -->NOME</h2>
+      <p class="ds-section-desc">Recorte pedido especificamente para esta pessoa — não faz parte da taxonomia fixa.</p>
+    </div>
+    <div class="qa-card">
+      <div class="qa-item">
+        <div class="q"><!-- PREENCHER: pergunta extra 1 --></div>
+        <div class="a"><!-- PREENCHER: resposta com números/exemplos --></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="ds-section" id="detalhamento">
+    <div class="ds-section-header">
+      <h2 class="ds-section-title">Detalhamento — chamado por chamado</h2>
+      <p class="methodology">Classificação baseada na leitura de descrição, acompanhamentos (públicos e privados) e solução de cada chamado via API GLPI (<code>/Ticket/{id}/ITILFollowup</code>, <code>/TicketTask</code>, <code>/ITILSolution</code>). Chamados com solução assinada por outro usuário, ou onde o acompanhamento mostra outra pessoa executando o diagnóstico/correção, foram classificados como "outro técnico resolveu" independente de quem aparece como técnico responsável no GLPI.</p>
+    </div>
+    <div class="ds-card">
+      <div id="groups"></div>
+    </div>
+  </section>
+
+  <section class="ds-section" id="conclusao">
+    <div class="ds-section-header">
+      <h2 class="ds-section-title"><!-- PREENCHER: título contextual, ex. "Leitura para a decisão sobre [nome]" --></h2>
+    </div>
+    <div class="conclusion">
+      <!-- PREENCHER: escreva uma conclusão nova baseada nos achados reais desta pessoa. Não reaproveite a conclusão de outra auditoria. -->
+      <ul>
+        <li><strong>…</strong> …</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- PREENCHER: data real de geração -->
+  <footer>Relatório gerado a partir da API GLPI em <!-- DATA --> &middot; uso interno &middot; estilizado com o CNM Design System.</footer>
+</div>
+
+<script>
+/*
+  PREENCHER:
+  - CATS: pode manter como está (é a taxonomia fixa). Só troque se o skill for
+    evoluído para uma taxonomia diferente — não troque por técnico.
+  - TICKETS: substitua pelo array real vindo da leitura dos chamados (passo 3 do SKILL.md).
+    Campos: id (number), cat ("t"|"o"|"d"|"x"|"s"), titulo (string curto), nota (string curta,
+    o que de fato aconteceu), autor (opcional — só quando cat === "x" ou quando cat === "t"
+    e a execução foi de outra pessoa a pedido do técnico auditado).
+*/
+const CATS = {
+  t: {label:"Correção técnica", short:"MÃO NA MASSA", desc:"SQL, deploy, script ou ajuste de sistema feito ou especificado por ele(a).", fg:"var(--cat-t-fg)", bg:"var(--cat-t-bg)", border:"var(--cat-t-brd)"},
+  o: {label:"Ação operacional", short:"OPERACIONAL", desc:"Corrigiu algo usando o próprio sistema/admin, sem código ou SQL — trabalho manual real, mas não técnico.", fg:"var(--cat-o-fg)", bg:"var(--cat-o-bg)", border:"var(--cat-o-brd)"},
+  d: {label:"Dúvida / orientação", short:"DÚVIDA", desc:"Só explicou por que o sistema funciona assim; nenhuma ação de correção foi necessária ou realizada.", fg:"var(--cat-d-fg)", bg:"var(--cat-d-bg)", border:"var(--cat-d-brd)"},
+  x: {label:"Outro técnico resolveu", short:"CRÉDITO DE TERCEIRO", desc:"A correção real foi de outra pessoa; ele(a) relatou, aprovou ou fechou o chamado.", fg:"var(--cat-x-fg)", bg:"var(--cat-x-bg)", border:"var(--cat-x-brd)"},
+  s: {label:"Sem resolução real", short:"SEM RESOLUÇÃO", desc:"Fechado por falta de retorno do cliente, dado obrigatório ausente, ou duplicidade.", fg:"var(--cat-s-fg)", bg:"var(--cat-s-bg)", border:"var(--cat-s-brd)"},
+};
+
+const TICKETS = [
+  // PREENCHER — exemplo de formato:
+  // {id:40, cat:"d", titulo:"Assunto curto", nota:"O que de fato aconteceu, em 1 linha.", autor:"Nome (se aplicável)"},
+];
+
+const ORDER = ["t","o","d","x","s"];
+const total = TICKETS.length;
+const counts = {}; ORDER.forEach(k=>counts[k]=0);
+TICKETS.forEach(t=>counts[t.cat]++);
+
+const statGrid = document.getElementById("statGrid");
+ORDER.forEach(k=>{
+  const c = CATS[k], n = counts[k], pct = total ? Math.round(n/total*100) : 0;
+  const card = document.createElement("div");
+  card.className = "stat-card";
+  card.style.setProperty("--c-fg", c.fg);
+  card.innerHTML = `<span class="n">${n}</span><span class="pct">/${total} · ${pct}%</span><div class="lbl">${c.label}</div>`;
+  statGrid.appendChild(card);
+});
+
+const stackBar = document.getElementById("stackBar");
+ORDER.forEach(k=>{
+  const c = CATS[k], n = counts[k], pct = total ? n/total*100 : 0;
+  const seg = document.createElement("div");
+  seg.className = "seg";
+  seg.style.width = pct + "%";
+  seg.style.background = c.fg;
+  seg.title = `${c.label}: ${n} (${Math.round(pct)}%)`;
+  if(pct > 6) seg.textContent = Math.round(pct) + "%";
+  stackBar.appendChild(seg);
+});
+const stackLegend = document.getElementById("stackLegend");
+ORDER.forEach(k=>{
+  const c = CATS[k];
+  const el = document.createElement("span");
+  el.innerHTML = `<span class="dot" style="background:${c.fg}"></span>${c.label} (${counts[k]})`;
+  stackLegend.appendChild(el);
+});
+
+const groups = document.getElementById("groups");
+ORDER.forEach((k, idx)=>{
+  const c = CATS[k];
+  const rows = TICKETS.filter(t=>t.cat===k);
+  const section = document.createElement("div");
+  section.className = "group";
+  if (idx > 0) section.style.borderTop = "1px solid var(--color-brd-primary)";
+  section.innerHTML = `
+    <div class="group-head" style="--g-bg:${c.bg};--g-fg:${c.fg}">
+      <span class="badge">${c.short}</span>
+      <span class="title">${c.label}</span>
+      <span class="count">${rows.length} chamados</span>
+    </div>
+    <div class="group-desc">${c.desc}</div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Chamado</th><th>Assunto</th><th>O que aconteceu</th>${(k==="x"||k==="t")?"<th>Execução</th>":""}</tr></thead>
+        <tbody>
+          ${rows.map(t=>`
+            <tr>
+              <td class="id">#${t.id}</td>
+              <td class="titulo">${t.titulo}</td>
+              <td class="nota">${t.nota}</td>
+              ${(k==="x"||k==="t")?`<td class="autor" style="--g-bg:${c.bg};--g-brd:${c.border};--g-fg:${c.fg}">${t.autor?`<span class="who">${t.autor}</span>`:"Ele(a) mesmo(a)"}</td>`:""}
+            </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+  groups.appendChild(section);
+});
+</script>
