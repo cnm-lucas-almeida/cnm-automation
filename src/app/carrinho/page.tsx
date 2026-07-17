@@ -180,6 +180,7 @@ export default function CarrinhoPage() {
   const [apresentacao, setApresentacao] = useState(false);
   const [slideAtual, setSlideAtual] = useState(0);
   const [slideEpoch, setSlideEpoch] = useState(0);
+  const [slidesPausados, setSlidesPausados] = useState(false);
   const [embutido, setEmbutido] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -229,21 +230,25 @@ export default function CarrinhoPage() {
   // acabou de virar o ativo, senão o ciclo de slides continua rodando escondido em segundo plano
   // e pode já estar quase voltando pro slide 1 assim que o relatório reaparece.
   useEffect(() => {
-    if (!apresentacao) return;
+    if (!apresentacao || slidesPausados) return;
     const id = setInterval(() => {
       setSlideAtual((s) => (s + 1) % TOTAL_SLIDES);
     }, 10 * 1000);
     return () => clearInterval(id);
-  }, [apresentacao, slideEpoch]);
+  }, [apresentacao, slideEpoch, slidesPausados]);
 
-  // Escuta o aviso de ativação enviado pela tela /apresentacao (postMessage) quando este relatório
-  // é embutido em iframe e volta a ser o relatório em exibição na rotação.
+  // Escuta os avisos enviados pela tela /apresentacao (postMessage) quando este relatório é
+  // embutido em iframe: "ativar" reinicia o ciclo de slides ao virar o relatório em exibição, e
+  // "pausar" congela/retoma a troca automática junto com a pausa da apresentação.
   useEffect(() => {
     function onMessage(e: MessageEvent) {
       if (e.origin !== window.location.origin) return;
-      if (e.data?.type !== 'apresentacao:ativar') return;
-      setSlideAtual(0);
-      setSlideEpoch((v) => v + 1);
+      if (e.data?.type === 'apresentacao:ativar') {
+        setSlideAtual(0);
+        setSlideEpoch((v) => v + 1);
+      } else if (e.data?.type === 'apresentacao:pausar') {
+        setSlidesPausados(Boolean(e.data.pausado));
+      }
     }
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);

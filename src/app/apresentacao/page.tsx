@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Play, TrendingUp, ShoppingCart, X } from 'lucide-react';
+import { Play, Pause, TrendingUp, ShoppingCart, X } from 'lucide-react';
 
 type Relatorio = { path: string; label: string; descricao: string; icon: typeof TrendingUp };
 
@@ -23,16 +23,42 @@ const INTERVALO_MS = SLIDES_POR_RELATORIO * DURACAO_SLIDE_MS;
 export default function ApresentacaoPage() {
   const [apresentando, setApresentando] = useState(false);
   const [indice, setIndice] = useState(0);
+  const [pausado, setPausado] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRefs = useRef<Record<string, HTMLIFrameElement | null>>({});
 
-  // Rotação automática entre relatórios: só roda enquanto a apresentação está ativa.
-  useEffect(() => {
-    if (!apresentando) return;
-    const id = setInterval(() => {
+  // Controle imperativo do relógio de troca de relatório, em vez de um setInterval simples, pra
+  // dar pra pausar e retomar exatamente de onde parou (sem reiniciar os 30s do zero ao retomar).
+  const restanteRef = useRef(INTERVALO_MS);
+  const inicioTickRef = useRef(0);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function limparTimer() {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  }
+
+  function armarTimer(ms: number) {
+    limparTimer();
+    inicioTickRef.current = Date.now();
+    timeoutRef.current = setTimeout(() => {
       setIndice((i) => (i + 1) % RELATORIOS.length);
-    }, INTERVALO_MS);
-    return () => clearInterval(id);
+      restanteRef.current = INTERVALO_MS;
+      armarTimer(INTERVALO_MS);
+    }, ms);
+  }
+
+  // Rotação automática entre relatórios: só roda enquanto a apresentação está ativa e não pausada.
+  useEffect(() => {
+    if (!apresentando) {
+      limparTimer();
+      return;
+    }
+    restanteRef.current = INTERVALO_MS;
+    armarTimer(INTERVALO_MS);
+    return () => limparTimer();
   }, [apresentando]);
 
   // Avisa o relatório que acabou de virar o ativo pra ele reiniciar seu ciclo de slides do zero.
@@ -44,6 +70,26 @@ export default function ApresentacaoPage() {
     const iframe = iframeRefs.current[atual.path];
     iframe?.contentWindow?.postMessage({ type: 'apresentacao:ativar' }, window.location.origin);
   }, [indice, apresentando]);
+
+  // Propaga o estado de pausa pro relatório em exibição, pra congelar também a troca de slides
+  // internos dele (KPIs → squads → ranking) enquanto a apresentação estiver pausada.
+  useEffect(() => {
+    if (!apresentando) return;
+    const atual = RELATORIOS[indice];
+    const iframe = iframeRefs.current[atual.path];
+    iframe?.contentWindow?.postMessage({ type: 'apresentacao:pausar', pausado }, window.location.origin);
+  }, [pausado, indice, apresentando]);
+
+  function alternarPausa() {
+    if (pausado) {
+      setPausado(false);
+      armarTimer(restanteRef.current);
+    } else {
+      restanteRef.current = Math.max(0, restanteRef.current - (Date.now() - inicioTickRef.current));
+      limparTimer();
+      setPausado(true);
+    }
+  }
 
   // Se o usuário sair do fullscreen pelo Esc (sem passar pelo botão "Sair"), encerra a apresentação também.
   useEffect(() => {
@@ -62,12 +108,14 @@ export default function ApresentacaoPage() {
 
   function iniciar(indiceInicial: number) {
     setIndice(indiceInicial);
+    setPausado(false);
     setApresentando(true);
     containerRef.current?.requestFullscreen?.().catch(() => {});
   }
 
   function sair() {
     setApresentando(false);
+    setPausado(false);
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   }
 
@@ -122,7 +170,7 @@ export default function ApresentacaoPage() {
                       <span
                         key={`${r.path}-${indice}`}
                         className="absolute inset-y-0 left-0 bg-primary rounded-full animate-[apresentacaoProgresso_linear_forwards]"
-                        style={{ animationDuration: `${INTERVALO_MS}ms` }}
+                        style={{ animationDuration: `${INTERVALO_MS}ms`, animationPlayState: pausado ? 'paused' : 'running' }}
                       />
                     )}
                     {i < indice && <span className="absolute inset-0 bg-primary rounded-full" />}
@@ -130,12 +178,20 @@ export default function ApresentacaoPage() {
                 ))}
               </div>
             </div>
-            <button
-              onClick={sair}
-              className="flex items-center gap-2 px-3 py-1.5 border border-border rounded-lg text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"
-            >
-              <X size={13} /> Sair da apresentação
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={alternarPausa}
+                className="flex items-center gap-2 px-3 py-1.5 border border-border rounded-lg text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"
+              >
+                {pausado ? <><Play size={13} /> Retomar</> : <><Pause size={13} /> Pausar</>}
+              </button>
+              <button
+                onClick={sair}
+                className="flex items-center gap-2 px-3 py-1.5 border border-border rounded-lg text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"
+              >
+                <X size={13} /> Sair da apresentação
+              </button>
+            </div>
           </div>
           <div className="flex-1 min-h-0 relative">
             {RELATORIOS.map((r, i) => (
