@@ -354,9 +354,21 @@ function DevMeterList({ data }: { data: AtendimentoBreakdown[] }) {
 
 // Rótulo com contagem + % direto na fatia — sem isso, quem só olha a apresentação (sem
 // mouse pra passar o tooltip) não tem como saber os números exatos, só as cores da legenda.
-function pieSliceLabel({ value, percent }: { value?: number; percent?: number }) {
-  if (!value || !percent) return '';
-  return `${value} (${Math.round(percent * 100)}%)`;
+// Precisa devolver um elemento SVG (não uma string) — o `label` do Pie só desenha texto
+// quando a função retorna algo desenhável, senão a fatia fica sem rótulo nenhum.
+function pieSliceLabel(props: any) {
+  const { cx, cy, midAngle, outerRadius, value, percent } = props;
+  if (!value || !percent) return null;
+  const RADIAN = Math.PI / 180;
+  const radius = outerRadius + 16;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+  return (
+    <text x={x} y={y} textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central"
+      style={{ fontSize: 12, fontWeight: 600, fill: '#323131' }}>
+      {`${value} (${Math.round(percent * 100)}%)`}
+    </text>
+  );
 }
 
 function TipoAtendimentoPie({ data }: { data: Array<{ tipo: string; count: number }> }) {
@@ -630,12 +642,40 @@ export default function GlpiDashboard() {
   type SlideApresentacao =
     | { kind: 'geral' }
     | { kind: 'tendencia' }
-    | { kind: 'grupo'; grupo: string; abertos: number; resolvidos: number; devSimAbertos: number; devNaoAbertos: number };
+    | { kind: 'grupo'; grupo: string; abertos: number; resolvidos: number; devSimAbertos: number; devNaoAbertos: number }
+    | { kind: 'ranking'; grupo: string; techs: Array<{ nome: string; resolvidos: number }> };
+
+  // Ranking de técnicos por resolvidos no mês corrente, um por equipe com movimento (mesma
+  // lista de `grupoSlides`) — reaproveita ticketsResolvidos já carregados em porTecnico, sem
+  // precisar de outra chamada à API.
+  const rankingPorGrupo = useMemo(() => {
+    if (!dados) return new Map<string, Array<{ nome: string; resolvidos: number }>>();
+    const map = new Map<string, Array<{ nome: string; resolvidos: number }>>();
+    for (const g of grupoSlides) {
+      const techs = dados.porTecnico
+        .filter((t) => t.grupo === g.grupo)
+        .map((t) => ({
+          nome: t.nome,
+          resolvidos: t.ticketsResolvidos.filter((r) => r.dataResolucao.startsWith(mesMesAtual)).length,
+        }))
+        .filter((t) => t.resolvidos > 0)
+        .sort((a, b) => b.resolvidos - a.resolvidos)
+        .slice(0, 8);
+      if (techs.length > 0) map.set(g.grupo, techs);
+    }
+    return map;
+  }, [dados, grupoSlides, mesMesAtual]);
 
   const slidesApresentacao = useMemo<SlideApresentacao[]>(() => {
     if (!dados) return [];
-    return [{ kind: 'geral' }, { kind: 'tendencia' }, ...grupoSlides.map((g) => ({ kind: 'grupo' as const, ...g }))];
-  }, [dados, grupoSlides]);
+    const grupoERanking = grupoSlides.flatMap((g) => {
+      const slides: SlideApresentacao[] = [{ kind: 'grupo' as const, ...g }];
+      const techs = rankingPorGrupo.get(g.grupo);
+      if (techs) slides.push({ kind: 'ranking', grupo: g.grupo, techs });
+      return slides;
+    });
+    return [{ kind: 'geral' }, { kind: 'tendencia' }, ...grupoERanking];
+  }, [dados, grupoSlides, rankingPorGrupo]);
 
   const slideAtivo = slidesApresentacao[slideAtual] ?? null;
 
@@ -816,6 +856,26 @@ export default function GlpiDashboard() {
                     <DesenvolvimentoPie data={{ sim: slideAtivo.devSimAbertos, nao: slideAtivo.devNaoAbertos }} height={340} />
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {slideAtivo?.kind === 'ranking' && (
+            <div className="flex-1 min-h-0 flex flex-col gap-6">
+              <h2 className="text-2xl font-bold text-center shrink-0 flex items-center justify-center gap-2">
+                <Users size={24} className="text-primary" /> {slideAtivo.grupo} — Ranking de resolvidos ({fmtMes(mesMesAtual)})
+              </h2>
+              <div className="flex-1 min-h-0 flex flex-col justify-center gap-4 max-w-3xl mx-auto w-full">
+                {slideAtivo.techs.map((t) => (
+                  <div key={t.nome} className="grid items-center gap-4" style={{ gridTemplateColumns: '220px 1fr 56px' }}>
+                    <span className="text-base font-medium truncate" title={t.nome}>{t.nome}</span>
+                    <div className="bg-muted rounded-full h-4 overflow-hidden">
+                      <div className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${Math.round((t.resolvidos / slideAtivo.techs[0].resolvidos) * 100)}%`, backgroundColor: '#00A63E' }} />
+                    </div>
+                    <span className="text-base font-bold text-right tabular-nums">{t.resolvidos}</span>
+                  </div>
+                ))}
               </div>
             </div>
           )}
