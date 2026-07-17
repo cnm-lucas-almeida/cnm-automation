@@ -2,53 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { isSubmenu, type NavGroup } from "@/lib/nav-menu";
 
-type NavLink = { label: string; href: string };
-type NavSubmenu = { label: string; items: NavLink[] };
-type NavGroup = { label: string; items: (NavLink | NavSubmenu)[] };
-
-const isSubmenu = (item: NavLink | NavSubmenu): item is NavSubmenu =>
-  "items" in item;
-
-const menus: NavGroup[] = [
-  {
-    label: "Automações",
-    items: [
-      {
-        label: "RH",
-        items: [
-          { label: "Intervalo Almoço", href: "/secullum/ponto-d1" },
-          { label: "Banco de Horas - Copa", href: "/secullum/banco-horas-copa" },
-        ],
-      },
-    ],
-  },
-  {
-    label: "Relatórios",
-    items: [
-      { label: "GLPI", href: "/glpi" },
-      { label: "Vendas", href: "/vendas" },
-      { label: "Assinaturas PF", href: "/assinaturas" },
-      { label: "Pagamentos", href: "/pagamentos" },
-      { label: "Verificação NFS-e", href: "/nfse" },
-      { label: "Inadimplência", href: "/inadimplencia" },
-      { label: "Inside Sales", href: "/inside-sales" },
-    ],
-  },
-  {
-    label: "Configurações",
-    items: [
-      {
-        label: "Comercial",
-        items: [
-          { label: "Metas", href: "/configuracoes/comercial/metas" },
-        ],
-      },
-    ],
-  },
-];
-
-export default function NavMenu() {
+export default function NavMenu({ menus }: { menus: NavGroup[] }) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [openSubmenu, setOpenSubmenu] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);

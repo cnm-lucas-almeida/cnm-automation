@@ -2,11 +2,20 @@ import { getDbConnection } from '@/lib/db';
 
 const MOTIVO_REATIVADO = 16;
 
+export type Segmento = 'imoveis' | 'veiculos' | 'outro';
+
+function segmentoFromTipoPessoa2(tipoPessoa2: string | null): Segmento {
+  if (tipoPessoa2 === 'IMOB' || tipoPessoa2 === 'CORRETOR') return 'imoveis';
+  if (tipoPessoa2 === 'REVENDA_V' || tipoPessoa2 === 'REVENDA_VF') return 'veiculos';
+  return 'outro';
+}
+
 export type VendaContrato = {
   idContrato: number;
   idCliente: number;
   nomeFantasia: string;
   tipoPessoa: string | null;
+  segmento: Segmento;
   dataContrato: string;
   dataInicioVeiculacao: string | null;
   valor: number;
@@ -50,7 +59,7 @@ export type RankingSquad = {
 
 export type VendasData = {
   generatedAt: string;
-  periodo: { dataInicial: string; dataFinal: string };
+  periodo: { dataInicial: string; dataFinal: string; segmento: Segmento | 'todos' };
   kpis: {
     totalVendas: number;
     valorTotal: number;
@@ -143,12 +152,20 @@ function mesKey(d: string | Date): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
-export async function getVendasData(dataInicial: string, dataFinal: string): Promise<VendasData> {
+export async function getVendasData(
+  dataInicial: string,
+  dataFinal: string,
+  segmento: Segmento | 'todos' = 'todos'
+): Promise<VendasData> {
   const connection = await getDbConnection();
   try {
     const [rows] = await connection.query(QUERY, [dataFinal, dataInicial, dataFinal]);
 
-    const vendas: VendaContrato[] = (rows as any[]).map((r) => {
+    const rowsFiltradas = segmento === 'todos'
+      ? (rows as any[])
+      : (rows as any[]).filter((r) => segmentoFromTipoPessoa2(r.tipo_pessoa2) === segmento);
+
+    const vendas: VendaContrato[] = rowsFiltradas.map((r) => {
       const cancelado = Boolean(r.cancelado);
       const congeladaBase = Boolean(r.congelado);
       const pago = r.pago === null ? null : Boolean(r.pago);
@@ -164,6 +181,7 @@ export async function getVendasData(dataInicial: string, dataFinal: string): Pro
         idCliente: r.id_cliente,
         nomeFantasia: r.nome_fantasia,
         tipoPessoa: r.tipo_pessoa2,
+        segmento: segmentoFromTipoPessoa2(r.tipo_pessoa2),
         dataContrato: r.data_contrato,
         dataInicioVeiculacao: r.data_inicio_veiculacao,
         valor: toNum(r.valor),
@@ -260,7 +278,7 @@ export async function getVendasData(dataInicial: string, dataFinal: string): Pro
 
     const data: VendasData = {
       generatedAt: new Date().toISOString(),
-      periodo: { dataInicial, dataFinal },
+      periodo: { dataInicial, dataFinal, segmento },
       kpis: {
         totalVendas,
         valorTotal,

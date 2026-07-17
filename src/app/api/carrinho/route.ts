@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getVendasData, type Segmento } from '@/lib/vendas';
-
-const SEGMENTOS_VALIDOS: (Segmento | 'todos')[] = ['todos', 'imoveis', 'veiculos', 'outro'];
+import { getCarrinhoData } from '@/lib/carrinho';
 
 function primeiroDiaDoMes(): string {
   const d = new Date();
@@ -16,12 +14,10 @@ export async function GET(request: NextRequest) {
   try {
     const dataInicial = request.nextUrl.searchParams.get('dataInicial') || primeiroDiaDoMes();
     const dataFinal = request.nextUrl.searchParams.get('dataFinal') || hoje();
-    const segmentoParam = request.nextUrl.searchParams.get('segmento');
-    const segmento = SEGMENTOS_VALIDOS.includes(segmentoParam as any) ? (segmentoParam as Segmento | 'todos') : 'todos';
-    const data = await getVendasData(dataInicial, dataFinal, segmento);
+    const data = await getCarrinhoData(dataInicial, dataFinal);
     return NextResponse.json(data);
   } catch (error: any) {
-    console.error('[vendas]', error);
+    console.error('[carrinho]', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

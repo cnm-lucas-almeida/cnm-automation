@@ -9,8 +9,11 @@ import {
   TrendingDown,
   PhoneCall,
   Sliders,
+  ShoppingCart,
+  Presentation,
   type LucideIcon,
 } from "lucide-react";
+import { canAccess } from "@/lib/admin";
 
 type CardItem = {
   key: string;
@@ -66,6 +69,13 @@ const groups: CardGroup[] = [
         icon: BarChart3,
       },
       {
+        key: "carrinho",
+        name: "Abandono de Carrinho",
+        description: "Recuperação de carrinhos abandonados e desempenho das cadências de contato.",
+        href: "/carrinho",
+        icon: ShoppingCart,
+      },
+      {
         key: "assinaturas",
         name: "Assinaturas PF",
         description: "Painel de assinaturas de pessoa física.",
@@ -99,6 +109,19 @@ const groups: CardGroup[] = [
         description: "Desempenho e indicadores da equipe de Inside Sales.",
         href: "/inside-sales",
         icon: PhoneCall,
+      },
+    ],
+  },
+  {
+    key: "apresentacao",
+    label: "Apresentação",
+    items: [
+      {
+        key: "apresentacao",
+        name: "Modo Apresentação",
+        description: "Tela em tela cheia que alterna automaticamente entre os relatórios com modo demonstração.",
+        href: "/apresentacao",
+        icon: Presentation,
       },
     ],
   },
@@ -137,6 +160,10 @@ function Card({ item }: { item: CardItem }) {
 }
 
 export default function Home() {
+  const visibleGroups = groups
+    .map((group) => ({ ...group, items: group.items.filter((item) => canAccess(item.href)) }))
+    .filter((group) => group.items.length > 0);
+
   return (
     <div className="min-h-full bg-muted p-10">
       <div className="mx-auto max-w-6xl">
@@ -144,7 +171,7 @@ export default function Home() {
         <p className="mt-2 mb-10 text-muted-foreground">Selecione o projeto que deseja acessar.</p>
 
         <div className="flex flex-col gap-10">
-          {groups.map((group) => (
+          {visibleGroups.map((group) => (
             <section key={group.key}>
               <h2 className="mb-4 text-lg font-bold text-foreground">{group.label}</h2>
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">

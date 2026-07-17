@@ -4,6 +4,8 @@ import "./globals.css";
 import Image from "next/image";
 import Link from "next/link";
 import NavMenu from "@/components/NavMenu";
+import { menus, filterMenusForAccess } from "@/lib/nav-menu";
+import { canAccess } from "@/lib/admin";
 
 const openSans = Open_Sans({
   variable: "--font-geist-sans",
@@ -21,12 +23,13 @@ export const metadata: Metadata = {
 };
 
 function Navbar() {
+  const visibleMenus = filterMenusForAccess(menus, canAccess);
   return (
     <nav className="bg-card border-b border-border px-6 py-3 flex items-center gap-8 shadow-sm">
       <Link href="/" className="flex items-center">
         <Image src="/logo.png" alt="Chaves na Mão" width={224} height={120} priority className="h-12 w-auto" />
       </Link>
-      <NavMenu />
+      <NavMenu menus={visibleMenus} />
     </nav>
   );
 }
