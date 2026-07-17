@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Open_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import Image from "next/image";
 import Link from "next/link";
 import NavMenu from "@/components/NavMenu";
+import HideInApresentacao from "@/components/HideInApresentacao";
 import { menus, filterMenusForAccess } from "@/lib/nav-menu";
 import { canAccess } from "@/lib/admin";
 
@@ -45,7 +47,11 @@ export default function RootLayout({
       className={`${openSans.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <Navbar />
+        <Suspense fallback={<Navbar />}>
+          <HideInApresentacao>
+            <Navbar />
+          </HideInApresentacao>
+        </Suspense>
         <main className="flex-1">{children}</main>
       </body>
     </html>

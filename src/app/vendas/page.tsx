@@ -88,7 +88,7 @@ function KpiCard({
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <p className={`font-semibold text-muted-foreground uppercase tracking-wider ${big ? 'text-sm' : 'text-[11px]'}`}>{title}</p>
-          <p className={`font-bold mt-1 tabular-nums ${big ? 'text-5xl' : 'text-2xl'}`} style={{ color }}>{value}</p>
+          <p className={`font-bold mt-1 tabular-nums truncate ${big ? 'text-4xl' : 'text-2xl'}`} style={{ color }} title={String(value)}>{value}</p>
           {sub && <p className={`text-muted-foreground mt-1 ${big ? 'text-base' : 'text-xs'}`}>{sub}</p>}
         </div>
         <Icon size={big ? 32 : 20} style={{ color }} className="opacity-60 flex-shrink-0 mt-1" />
@@ -229,7 +229,16 @@ export default function VendasPage() {
 
   const [apresentacao, setApresentacao] = useState(false);
   const [slideAtual, setSlideAtual] = useState(0);
+  const [slideEpoch, setSlideEpoch] = useState(0);
+  const [embutido, setEmbutido] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Quando embutido no iframe da tela /apresentacao, quem controla a saída da apresentação é o
+  // botão "Sair da apresentação" da barra do orquestrador — mostrar um segundo botão aqui dentro
+  // só duplicaria a ação e confundiria o usuário.
+  useEffect(() => {
+    setEmbutido(window.self !== window.top);
+  }, []);
 
   const fetchDados = useCallback(async (di: string, df: string, seg: SegmentoFiltro) => {
     setError(null);
@@ -268,13 +277,29 @@ export default function VendasPage() {
   }, [apresentacao, dataInicial, dataFinal, segmento, fetchDados]);
 
   // Troca automática de slide (KPIs/evolução → squads → ranking por segmento) a cada 10s.
+  // Reinicia a contagem (slideEpoch) sempre que a tela /apresentacao avisa que este relatório
+  // acabou de virar o ativo, senão o ciclo de slides continua rodando escondido em segundo plano
+  // e pode já estar quase voltando pro slide 1 assim que o relatório reaparece.
   useEffect(() => {
     if (!apresentacao) return;
     const id = setInterval(() => {
       setSlideAtual((s) => (s + 1) % TOTAL_SLIDES);
     }, 10 * 1000);
     return () => clearInterval(id);
-  }, [apresentacao]);
+  }, [apresentacao, slideEpoch]);
+
+  // Escuta o aviso de ativação enviado pela tela /apresentacao (postMessage) quando este relatório
+  // é embutido em iframe e volta a ser o relatório em exibição na rotação.
+  useEffect(() => {
+    function onMessage(e: MessageEvent) {
+      if (e.origin !== window.location.origin) return;
+      if (e.data?.type !== 'apresentacao:ativar') return;
+      setSlideAtual(0);
+      setSlideEpoch((v) => v + 1);
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -282,13 +307,18 @@ export default function VendasPage() {
     };
   }, []);
 
-  // Auto-inicia o modo apresentação quando aberto via ?apresentacao=1 (usado pela tela /apresentacao)
+  // Auto-inicia o modo apresentação quando aberto via ?apresentacao=1 (usado pela tela /apresentacao).
+  // Quando embutido num iframe (window.self !== window.top), quem controla o fullscreen é a página
+  // pai (/apresentacao) — pedir fullscreen aqui dentro também causaria um fullscreen aninhado que
+  // faz o navegador cancelar o fullscreen do pai a cada troca de relatório.
   useEffect(() => {
     if (loading) return;
     if (!apresentacao && new URLSearchParams(window.location.search).get('apresentacao') === '1') {
       setApresentacao(true);
       setSlideAtual(0);
-      containerRef.current?.requestFullscreen?.().catch(() => {});
+      if (window.self === window.top) {
+        containerRef.current?.requestFullscreen?.().catch(() => {});
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
@@ -436,10 +466,12 @@ export default function VendasPage() {
           </p>
         </div>
         {apresentacao ? (
-          <button onClick={toggleApresentacao}
-            className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
-            <Minimize2 size={14} /> Sair da apresentação
-          </button>
+          !embutido && (
+            <button onClick={toggleApresentacao}
+              className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
+              <Minimize2 size={14} /> Sair da apresentação
+            </button>
+          )
         ) : (
           <div className="flex flex-wrap items-center gap-2">
             <Select
@@ -580,7 +612,7 @@ export default function VendasPage() {
             </h2>
             <span className={`text-muted-foreground ${apresentacao ? 'text-sm' : 'text-xs'}`}>{dados.rankingSquads.length} squad(s)</span>
           </div>
-          <div className={`overflow-x-auto ${apresentacao ? 'flex-1 min-h-0 overflow-y-auto flex flex-col justify-center' : ''}`}>
+          <div className={`overflow-x-auto ${apresentacao ? 'flex-1 min-h-0 overflow-y-auto' : ''}`}>
             <table className="w-full text-sm">
               <thead>
                 <tr className={`text-left text-muted-foreground uppercase tracking-wider border-b border-border ${apresentacao ? 'text-sm' : 'text-[11px]'}`}>
