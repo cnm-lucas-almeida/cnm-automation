@@ -374,6 +374,19 @@ export default function VendasPage() {
     return (['imoveis', 'veiculos', 'outro'] as Segmento[]).filter((seg) => serieSegmentada.some((d) => d[seg] > 0));
   }, [serieSegmentada]);
 
+  // Barra "zero" extra no topo da pilha só pra ancorar o LabelList do total — como ela não tem
+  // altura, não afeta o desenho, mas dá um ponto no topo da pilha pra exibir o total do período.
+  // O valor não pode ser exatamente 0: no Recharts 3, uma série empilhada com valor 0 em uma
+  // linha vira um ponto nulo e a barra (e seu LabelList) some por completo naquele ponto — daí o
+  // epsilon, que é visualmente 0 mas mantém a série "viva" para o Recharts desenhar o rótulo.
+  const serieSegmentadaComTotal = useMemo(() => {
+    return serieSegmentada.map((d) => ({
+      ...d,
+      total: segmentosPresentes.reduce((s, seg) => s + (d[seg] ?? 0), 0),
+      zero: 0.0001,
+    }));
+  }, [serieSegmentada, segmentosPresentes]);
+
   const rankingPorSegmento = useMemo(() => {
     if (!dados) return { imoveis: [], veiculos: [] } as Record<'imoveis' | 'veiculos', { idVendedor: number; nome: string; vendas: number }[]>;
     const build = (seg: 'imoveis' | 'veiculos') => {
@@ -569,7 +582,7 @@ export default function VendasPage() {
             <div className={apresentacao ? 'flex-1 min-h-0' : ''}>
               <ResponsiveContainer width="100%" height={apresentacao ? '100%' : 260}>
                 {apresentacao ? (
-                  <BarChart data={serieSegmentada} margin={{ top: 20, right: 8, left: -10, bottom: 0 }}>
+                  <BarChart data={serieSegmentadaComTotal} margin={{ top: 20, right: 8, left: -10, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#F6F5F5" />
                     <XAxis
                       dataKey="periodo"
@@ -583,6 +596,9 @@ export default function VendasPage() {
                     {segmentosPresentes.map((seg) => (
                       <Bar key={seg} dataKey={seg} name={seg} stackId="vendas" fill={SEG_COLORS[seg]} radius={[2, 2, 0, 0]} />
                     ))}
+                    <Bar dataKey="zero" stackId="vendas" fill="transparent" isAnimationActive={false}>
+                      <LabelList dataKey="total" position="top" style={{ fontSize: 13, fontWeight: 600, fill: '#323131' }} />
+                    </Bar>
                   </BarChart>
                 ) : (
                   <BarChart data={serie} margin={{ top: 20, right: 8, left: -10, bottom: 0 }}>

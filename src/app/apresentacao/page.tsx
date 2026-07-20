@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Play, Pause, TrendingUp, ShoppingCart, Ticket, X } from 'lucide-react';
+import { Play, Pause, TrendingUp, ShoppingCart, Ticket, CreditCard, Landmark, X } from 'lucide-react';
 
 type Relatorio = { path: string; label: string; descricao: string; icon: typeof TrendingUp };
 
@@ -9,6 +9,8 @@ const RELATORIOS: Relatorio[] = [
   { path: '/vendas', label: 'Relatório de Vendas', descricao: 'KPIs, evolução de vendas e ranking de vendedores.', icon: TrendingUp },
   { path: '/carrinho', label: 'Abandono de Carrinho', descricao: 'Funil de recuperação e conversão por segmento.', icon: ShoppingCart },
   { path: '/glpi', label: 'GLPI', descricao: 'Visão geral do mês, tendência mensal e desempenho por equipe.', icon: Ticket },
+  { path: '/assinaturas', label: 'Assinaturas PF', descricao: 'Evolução de assinaturas, padrão por horário/dia e divisão de planos.', icon: CreditCard },
+  { path: '/pagamentos', label: 'Relatório de Pagamentos', descricao: 'Um slide por tipo de pagamento: Geral, PF, PJ e Aditivo.', icon: Landmark },
 ];
 
 // Cada relatório embutido tem seus próprios slides internos trocando a cada 10s (ver TOTAL_SLIDES

@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import axios from 'axios';
 import {
   Loader2, RefreshCw, AlertCircle, TrendingUp, Wallet, CalendarDays, CalendarRange,
   Download, X, Search, ChevronUp, ChevronDown, ChevronsUpDown, Home, Car, ShieldAlert, ExternalLink, Clock,
+  Maximize2, Minimize2,
 } from 'lucide-react';
 import {
   BarChart, Bar, AreaChart, Area, PieChart, Pie, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList, Cell,
@@ -20,6 +21,7 @@ type Preset = 'hoje' | 'este_mes' | 'mes_passado' | 'este_ano' | 'personalizado'
 type HoraModo = 'media' | 'dia';
 
 const PAGE_SIZE = 20;
+const TOTAL_SLIDES = 3;
 
 const STATUS_LABEL: Record<string, string> = {
   ACTIVE: 'Ativo',
@@ -144,19 +146,19 @@ function presetParaDatas(preset: Preset): { dataInicial: string; dataFinal: stri
 }
 
 function KpiCard({
-  title, value, sub, icon: Icon, color,
+  title, value, sub, icon: Icon, color, big,
 }: {
-  title: string; value: string | number; sub?: string; icon: any; color: string;
+  title: string; value: string | number; sub?: string; icon: any; color: string; big?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-border p-5">
+    <div className={`rounded-lg border border-border ${big ? 'p-8' : 'p-5'}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{title}</p>
-          <p className="text-2xl font-bold mt-1 tabular-nums" style={{ color }}>{value}</p>
-          {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
+          <p className={`font-semibold text-muted-foreground uppercase tracking-wider ${big ? 'text-sm' : 'text-[11px]'}`}>{title}</p>
+          <p className={`font-bold mt-1 tabular-nums ${big ? 'text-4xl' : 'text-2xl'}`} style={{ color }}>{value}</p>
+          {sub && <p className={`text-muted-foreground mt-1 ${big ? 'text-base' : 'text-xs'}`}>{sub}</p>}
         </div>
-        <Icon size={20} style={{ color }} className="opacity-60 flex-shrink-0 mt-1" />
+        <Icon size={big ? 32 : 20} style={{ color }} className="opacity-60 flex-shrink-0 mt-1" />
       </div>
     </div>
   );
@@ -231,16 +233,18 @@ function PlanoTooltip({ active, payload, total }: any) {
   );
 }
 
-function BreakdownList({ title, items }: { title: string; items: { chave: string; qtd: number; valor: number }[] }) {
+function BreakdownList({
+  title, items, big,
+}: { title: string; items: { chave: string; qtd: number; valor: number }[]; big?: boolean }) {
   const total = items.reduce((s, i) => s + i.qtd, 0) || 1;
   return (
-    <div className="rounded-lg border border-border p-5">
-      <h2 className="text-sm font-semibold mb-4">{title}</h2>
-      <div className="space-y-3">
+    <div className={`rounded-lg border border-border ${big ? 'p-8' : 'p-5'}`}>
+      <h2 className={`font-semibold mb-4 ${big ? 'text-lg' : 'text-sm'}`}>{title}</h2>
+      <div className={big ? 'space-y-5' : 'space-y-3'}>
         {items.length === 0 && <p className="text-xs text-muted-foreground">Sem dados no período.</p>}
         {items.map((item) => (
           <div key={item.chave}>
-            <div className="flex items-center justify-between text-xs mb-1">
+            <div className={`flex items-center justify-between mb-1 ${big ? 'text-sm' : 'text-xs'}`}>
               <span className="font-medium">{STATUS_LABEL[item.chave] ?? item.chave}</span>
               <span className="text-muted-foreground tabular-nums">{item.qtd} · {fmtMoeda(item.valor)}</span>
             </div>
@@ -320,6 +324,17 @@ export default function AssinaturasPage() {
   const [diaSelecionadoHora, setDiaSelecionadoHora] = useState<string | null>(null);
   const [diasSemanaSelecionados, setDiasSemanaSelecionados] = useState<Set<number>>(new Set());
 
+  const [apresentacao, setApresentacao] = useState(false);
+  const [slideAtual, setSlideAtual] = useState(0);
+  const [slideEpoch, setSlideEpoch] = useState(0);
+  const [slidesPausados, setSlidesPausados] = useState(false);
+  const [embutido, setEmbutido] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setEmbutido(window.self !== window.top);
+  }, []);
+
   const fetchDados = useCallback(async (di: string, df: string, seg: string, status: string) => {
     setError(null);
     try {
@@ -341,6 +356,79 @@ export default function AssinaturasPage() {
     fetchDados(dataInicial, dataFinal, segmento, adStatus);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataInicial, dataFinal, segmento, adStatus]);
+
+  // Modo apresentação: acompanha o estado de fullscreen (ex.: usuário aperta Esc) e mantém os dados atualizados sozinho.
+  useEffect(() => {
+    function onFullscreenChange() {
+      if (!document.fullscreenElement) setApresentacao(false);
+    }
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+
+  useEffect(() => {
+    if (!apresentacao) return;
+    const id = setInterval(() => {
+      fetchDados(dataInicial, dataFinal, segmento, adStatus);
+    }, 2 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [apresentacao, dataInicial, dataFinal, segmento, adStatus, fetchDados]);
+
+  // Troca automática de slide a cada 10s. Reinicia a contagem (slideEpoch) sempre que a tela
+  // /apresentacao avisa que este relatório acabou de virar o ativo.
+  useEffect(() => {
+    if (!apresentacao || slidesPausados) return;
+    const id = setInterval(() => {
+      setSlideAtual((s) => (s + 1) % TOTAL_SLIDES);
+    }, 10 * 1000);
+    return () => clearInterval(id);
+  }, [apresentacao, slideEpoch, slidesPausados]);
+
+  // Escuta os avisos enviados pela tela /apresentacao (postMessage) quando este relatório é
+  // embutido em iframe.
+  useEffect(() => {
+    function onMessage(e: MessageEvent) {
+      if (e.origin !== window.location.origin) return;
+      if (e.data?.type === 'apresentacao:ativar') {
+        setSlideAtual(0);
+        setSlideEpoch((v) => v + 1);
+      } else if (e.data?.type === 'apresentacao:pausar') {
+        setSlidesPausados(Boolean(e.data.pausado));
+      }
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    };
+  }, []);
+
+  // Auto-inicia o modo apresentação quando aberto via ?apresentacao=1 (usado pela tela /apresentacao).
+  useEffect(() => {
+    if (loading) return;
+    if (!apresentacao && new URLSearchParams(window.location.search).get('apresentacao') === '1') {
+      setApresentacao(true);
+      setSlideAtual(0);
+      if (window.self === window.top) {
+        containerRef.current?.requestFullscreen?.().catch(() => {});
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+
+  function toggleApresentacao() {
+    if (apresentacao) {
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      setApresentacao(false);
+    } else {
+      containerRef.current?.requestFullscreen?.().catch(() => {});
+      setApresentacao(true);
+      setSlideAtual(0);
+    }
+  }
 
   function aplicarPreset(p: Preset) {
     setPreset(p);
@@ -520,361 +608,403 @@ export default function AssinaturasPage() {
   if (!dados) return null;
 
   return (
-    <div className={`max-w-[2200px] mx-auto p-6 space-y-5 transition-opacity duration-150 ${reloading ? 'opacity-50 pointer-events-none' : ''}`}>
+    <div ref={containerRef}
+      className={`mx-auto transition-opacity duration-150 ${reloading ? 'opacity-50 pointer-events-none' : ''} ${apresentacao ? 'max-w-none bg-background p-10 h-screen flex flex-col gap-5 overflow-hidden' : 'max-w-[2200px] p-6 space-y-5'}`}>
 
       {/* Header */}
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
+      <div className={`flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 ${apresentacao ? 'shrink-0' : ''}`}>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Assinaturas PF</h1>
-          <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2">
+          <h1 className={apresentacao ? 'text-4xl font-bold tracking-tight' : 'text-2xl font-semibold tracking-tight'}>Assinaturas PF</h1>
+          <p className={`text-muted-foreground mt-0.5 flex items-center gap-2 ${apresentacao ? 'text-base' : 'text-sm'}`}>
             {updatedAt && <span>Atualizado às {updatedAt}</span>}
             {reloading && <Loader2 size={12} className="animate-spin text-primary" />}
             <span>· {fmtData(dataInicial)} a {fmtData(dataFinal)}</span>
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Select
-            value={segmento}
-            onChange={(v) => setSegmento(v as '' | Segmento)}
-            className="min-w-[140px]"
-            options={[
-              { value: '', label: 'Todos segmentos' },
-              { value: 'REALTY', label: 'Imóvel' },
-              { value: 'VEHICLE', label: 'Veículo' },
-            ]}
-          />
-          <Select
-            value={adStatus}
-            onChange={setAdStatus}
-            className="min-w-[170px]"
-            options={[
-              { value: '', label: 'Todos os status' },
-              ...Object.entries(STATUS_LABEL).map(([value, label]) => ({ value, label })),
-            ]}
-          />
-          <Select
-            value={preset}
-            onChange={(v) => aplicarPreset(v as Preset)}
-            className="min-w-[150px]"
-            options={[
-              { value: 'hoje', label: 'Hoje' },
-              { value: 'este_mes', label: 'Este mês' },
-              { value: 'mes_passado', label: 'Mês passado' },
-              { value: 'este_ano', label: 'Este ano' },
-              { value: 'personalizado', label: 'Personalizado' },
-            ]}
-          />
-          {preset === 'personalizado' && (
-            <>
-              <DatePicker value={dataInicial} onChange={setDataInicial} placeholder="Data inicial" maxDate={dataFinal} />
-              <span className="text-muted-foreground text-xs">até</span>
-              <DatePicker value={dataFinal} onChange={setDataFinal} placeholder="Data final" minDate={dataInicial} />
-            </>
-          )}
-          <button onClick={exportarCsv}
-            className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
-            <Download size={14} /> Exportar CSV
-          </button>
-          <button onClick={() => { setReloading(true); fetchDados(dataInicial, dataFinal, segmento, adStatus); }}
-            className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
-            <RefreshCw size={14} /> Atualizar
-          </button>
-        </div>
-      </div>
-
-      {/* KPI Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard title="Assinaturas hoje" value={dados.hoje.qtd.toLocaleString('pt-BR')}
-          sub={fmtMoeda(dados.hoje.valor)}
-          icon={CalendarDays} color="#323131" />
-        <KpiCard title="Assinaturas este mês" value={dados.esteMes.qtd.toLocaleString('pt-BR')}
-          sub={fmtMoeda(dados.esteMes.valor)}
-          icon={CalendarRange} color="#323131" />
-        <KpiCard title="Total no período" value={dados.kpis.totalAssinaturas.toLocaleString('pt-BR')}
-          sub={`${fmtMoeda(dados.kpis.valorTotal)} · ${dados.kpis.imoveis} imóveis / ${dados.kpis.veiculos} veículos`}
-          icon={Wallet} color="#1E7A34" />
-        <KpiCard title="Ticket médio" value={fmtMoeda(dados.kpis.ticketMedio)}
-          sub={dados.kpis.comVerificacaoAntifraude > 0 ? `${dados.kpis.comVerificacaoAntifraude} com verificação antifraude` : 'sem verificações antifraude'}
-          icon={dados.kpis.comVerificacaoAntifraude > 0 ? ShieldAlert : TrendingUp} color={dados.kpis.comVerificacaoAntifraude > 0 ? '#CA8A04' : '#1E7A34'} />
-      </div>
-
-      {/* Evolução */}
-      <div className="rounded-lg border border-border p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold flex items-center gap-2">
-            <TrendingUp size={16} className="text-primary" /> Evolução de assinaturas
-          </h2>
-          <div className="flex items-center gap-1 rounded-lg border border-border p-0.5">
-            <button onClick={() => setGranularidade('dia')}
-              className={`px-3 py-1 rounded text-xs font-medium transition-colors ${granularidade === 'dia' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}>
-              Por dia
+        {apresentacao ? (
+          !embutido && (
+            <button onClick={toggleApresentacao}
+              className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
+              <Minimize2 size={14} /> Sair da apresentação
             </button>
-            <button onClick={() => setGranularidade('mes')}
-              className={`px-3 py-1 rounded text-xs font-medium transition-colors ${granularidade === 'mes' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}>
-              Por mês
+          )
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={segmento}
+              onChange={(v) => setSegmento(v as '' | Segmento)}
+              className="min-w-[140px]"
+              options={[
+                { value: '', label: 'Todos segmentos' },
+                { value: 'REALTY', label: 'Imóvel' },
+                { value: 'VEHICLE', label: 'Veículo' },
+              ]}
+            />
+            <Select
+              value={adStatus}
+              onChange={setAdStatus}
+              className="min-w-[170px]"
+              options={[
+                { value: '', label: 'Todos os status' },
+                ...Object.entries(STATUS_LABEL).map(([value, label]) => ({ value, label })),
+              ]}
+            />
+            <Select
+              value={preset}
+              onChange={(v) => aplicarPreset(v as Preset)}
+              className="min-w-[150px]"
+              options={[
+                { value: 'hoje', label: 'Hoje' },
+                { value: 'este_mes', label: 'Este mês' },
+                { value: 'mes_passado', label: 'Mês passado' },
+                { value: 'este_ano', label: 'Este ano' },
+                { value: 'personalizado', label: 'Personalizado' },
+              ]}
+            />
+            {preset === 'personalizado' && (
+              <>
+                <DatePicker value={dataInicial} onChange={setDataInicial} placeholder="Data inicial" maxDate={dataFinal} />
+                <span className="text-muted-foreground text-xs">até</span>
+                <DatePicker value={dataFinal} onChange={setDataFinal} placeholder="Data final" minDate={dataInicial} />
+              </>
+            )}
+            <button onClick={exportarCsv}
+              className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
+              <Download size={14} /> Exportar CSV
+            </button>
+            <button onClick={() => { setReloading(true); fetchDados(dataInicial, dataFinal, segmento, adStatus); }}
+              className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
+              <RefreshCw size={14} /> Atualizar
+            </button>
+            <button onClick={toggleApresentacao}
+              className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
+              <Maximize2 size={14} /> Modo apresentação
             </button>
           </div>
-        </div>
-        <ResponsiveContainer width="100%" height={260}>
-          <BarChart data={serie} margin={{ top: 20, right: 8, left: -10, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#F6F5F5" />
-            <XAxis
-              dataKey="periodo"
-              tickFormatter={granularidade === 'dia' ? fmtDiaLabel : fmtMesLabel}
-              tick={{ fontSize: 10 }}
-              interval={granularidade === 'dia' ? Math.max(0, Math.floor(serie.length / 20)) : 0}
-            />
-            <YAxis tick={{ fontSize: 11 }} />
-            <Tooltip content={<CustomTooltip granularidade={granularidade} />} />
-            <Bar
-              dataKey="qtd" name="Assinaturas" fill="#CA3500" radius={[2, 2, 0, 0]}
-              cursor={granularidade === 'dia' ? 'pointer' : undefined}
-              onClick={(entry: any) => {
-                if (granularidade !== 'dia') return;
-                const periodo = entry?.payload?.periodo ?? entry?.periodo;
-                if (periodo) { setHoraModo('dia'); setDiaSelecionadoHora(periodo); }
-              }}
-            >
-              {serie.length <= 45 && (
-                <LabelList dataKey="qtd" position="top" style={{ fontSize: 10, fill: '#6F686B' }} />
-              )}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-        {granularidade === 'dia' && (
-          <p className="text-[11px] text-muted-foreground mt-2">Clique numa barra para ver a evolução por horário daquele dia.</p>
         )}
       </div>
 
-      {/* Evolução por horário + Padrão por dia da semana */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-        <div className="rounded-lg border border-border p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <h2 className="text-sm font-semibold flex items-center gap-2">
-              <Clock size={16} className="text-primary" /> Evolução por horário
-            </h2>
-            <div className="flex flex-wrap items-center gap-2">
-              {horaModo === 'dia' && dados.seriePorDia.length > 0 && (
-                <Select
-                  value={diaEfetivoHora ?? ''}
-                  onChange={setDiaSelecionadoHora}
-                  className="min-w-[160px]"
-                  options={dados.seriePorDia.map((s) => ({ value: s.periodo, label: fmtDiaLabel(s.periodo) })).reverse()}
-                />
-              )}
-              <div className="flex items-center gap-1 rounded-lg border border-border p-1">
-                <button onClick={() => setHoraModo('media')}
-                  className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${horaModo === 'media' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}>
-                  Média do período
+      {/* Indicador de slides (modo apresentação) */}
+      {apresentacao && (
+        <div className="flex items-center justify-center gap-2 shrink-0">
+          {Array.from({ length: TOTAL_SLIDES }).map((_, i) => (
+            <span key={i} className={`h-2 rounded-full transition-all duration-300 ${slideAtual === i ? 'w-10 bg-primary' : 'w-2 bg-border'}`} />
+          ))}
+        </div>
+      )}
+
+      {/* Slide 1: KPIs + Evolução de assinaturas */}
+      {(!apresentacao || slideAtual === 0) && (
+        <>
+          <div className={`grid grid-cols-2 lg:grid-cols-4 ${apresentacao ? 'gap-6 shrink-0' : 'gap-3'}`}>
+            <KpiCard big={apresentacao} title="Assinaturas hoje" value={dados.hoje.qtd.toLocaleString('pt-BR')}
+              sub={fmtMoeda(dados.hoje.valor)}
+              icon={CalendarDays} color="#323131" />
+            <KpiCard big={apresentacao} title="Assinaturas este mês" value={dados.esteMes.qtd.toLocaleString('pt-BR')}
+              sub={fmtMoeda(dados.esteMes.valor)}
+              icon={CalendarRange} color="#323131" />
+            <KpiCard big={apresentacao} title="Total no período" value={dados.kpis.totalAssinaturas.toLocaleString('pt-BR')}
+              sub={`${fmtMoeda(dados.kpis.valorTotal)} · ${dados.kpis.imoveis} imóveis / ${dados.kpis.veiculos} veículos`}
+              icon={Wallet} color="#1E7A34" />
+            <KpiCard big={apresentacao} title="Ticket médio" value={fmtMoeda(dados.kpis.ticketMedio)}
+              sub={dados.kpis.comVerificacaoAntifraude > 0 ? `${dados.kpis.comVerificacaoAntifraude} com verificação antifraude` : 'sem verificações antifraude'}
+              icon={dados.kpis.comVerificacaoAntifraude > 0 ? ShieldAlert : TrendingUp} color={dados.kpis.comVerificacaoAntifraude > 0 ? '#CA8A04' : '#1E7A34'} />
+          </div>
+
+          <div className={`rounded-lg border border-border ${apresentacao ? 'p-8 flex-1 min-h-0 flex flex-col' : 'p-5'}`}>
+            <div className={`flex items-center justify-between mb-4 ${apresentacao ? 'shrink-0' : ''}`}>
+              <h2 className={`font-semibold flex items-center gap-2 ${apresentacao ? 'text-lg' : 'text-sm'}`}>
+                <TrendingUp size={apresentacao ? 20 : 16} className="text-primary" /> Evolução de assinaturas
+              </h2>
+              <div className="flex items-center gap-1 rounded-lg border border-border p-0.5">
+                <button onClick={() => setGranularidade('dia')}
+                  className={`rounded font-medium transition-colors ${apresentacao ? 'px-4 py-1.5 text-sm' : 'px-3 py-1 text-xs'} ${granularidade === 'dia' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}>
+                  Por dia
                 </button>
-                <button onClick={() => setHoraModo('dia')}
-                  className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${horaModo === 'dia' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}>
-                  Dia específico
+                <button onClick={() => setGranularidade('mes')}
+                  className={`rounded font-medium transition-colors ${apresentacao ? 'px-4 py-1.5 text-sm' : 'px-3 py-1 text-xs'} ${granularidade === 'mes' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}>
+                  Por mês
                 </button>
               </div>
             </div>
-          </div>
-          <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={serieHora} margin={{ top: 20, right: 8, left: -10, bottom: 0 }}>
-              <defs>
-                <linearGradient id="horaGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#323131" stopOpacity={0.35} />
-                  <stop offset="95%" stopColor="#323131" stopOpacity={0.02} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#F6F5F5" />
-              <XAxis dataKey="hora" tickFormatter={fmtHoraLabel} tick={{ fontSize: 10 }} interval={1} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip content={<HoraTooltip media={horaModo === 'media'} />} />
-              <Area type="monotone" dataKey="qtd" name="Assinaturas" stroke="#323131" strokeWidth={2}
-                fill="url(#horaGradient)" dot={{ r: 2, fill: '#323131' }} activeDot={{ r: 4 }} />
-            </AreaChart>
-          </ResponsiveContainer>
-          <p className="text-[11px] text-muted-foreground mt-2">
-            {horaModo === 'media'
-              ? `Média de assinaturas por hora, considerando os ${diasNoPeriodo} dia(s) do período selecionado.`
-              : diaEfetivoHora ? `Assinaturas hora a hora em ${fmtDiaLabel(diaEfetivoHora)}.` : 'Selecione um dia.'}
-          </p>
-        </div>
-
-        <div className="rounded-lg border border-border p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <h2 className="text-sm font-semibold flex items-center gap-2">
-              <CalendarRange size={16} className="text-primary" /> Padrão por dia da semana
-            </h2>
-            {diasSemanaSelecionados.size > 0 && (
-              <button onClick={() => setDiasSemanaSelecionados(new Set())}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors">
-                Limpar seleção
-              </button>
+            <div className={apresentacao ? 'flex-1 min-h-0' : ''}>
+              <ResponsiveContainer width="100%" height={apresentacao ? '100%' : 260}>
+                <BarChart data={serie} margin={{ top: 20, right: 8, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#F6F5F5" />
+                  <XAxis
+                    dataKey="periodo"
+                    tickFormatter={granularidade === 'dia' ? fmtDiaLabel : fmtMesLabel}
+                    tick={{ fontSize: apresentacao ? 13 : 10 }}
+                    interval={granularidade === 'dia' ? Math.max(0, Math.floor(serie.length / 20)) : 0}
+                  />
+                  <YAxis tick={{ fontSize: apresentacao ? 13 : 11 }} />
+                  <Tooltip content={<CustomTooltip granularidade={granularidade} />} />
+                  <Bar
+                    dataKey="qtd" name="Assinaturas" fill="#CA3500" radius={[2, 2, 0, 0]}
+                    cursor={granularidade === 'dia' ? 'pointer' : undefined}
+                    onClick={(entry: any) => {
+                      if (granularidade !== 'dia') return;
+                      const periodo = entry?.payload?.periodo ?? entry?.periodo;
+                      if (periodo) { setHoraModo('dia'); setDiaSelecionadoHora(periodo); }
+                    }}
+                  >
+                    {serie.length <= 45 && (
+                      <LabelList dataKey="qtd" position="top" style={{ fontSize: apresentacao ? 13 : 10, fill: '#6F686B' }} />
+                    )}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            {!apresentacao && granularidade === 'dia' && (
+              <p className="text-[11px] text-muted-foreground mt-2">Clique numa barra para ver a evolução por horário daquele dia.</p>
             )}
           </div>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={serieSemana} margin={{ top: 20, right: 8, left: -10, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#F6F5F5" />
-              <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip content={<SemanaTooltip />} />
-              <Bar dataKey="media" name="Média" radius={[2, 2, 0, 0]} cursor="pointer"
-                onClick={(entry: any) => { const idx = entry?.payload?.idx; if (idx !== undefined) toggleDiaSemana(idx); }}>
-                {serieSemana.map((b) => (
-                  <Cell key={b.idx} fill={
-                    diasSemanaSelecionados.size === 0 ? '#E49A7F'
-                      : diasSemanaSelecionados.has(b.idx) ? '#CA3500' : '#E4E1E1'
-                  } />
-                ))}
-                <LabelList dataKey="media" position="top" formatter={(v: any) => Number(v).toFixed(1)} style={{ fontSize: 10, fill: '#6F686B' }} />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-          <p className="text-[11px] text-muted-foreground mt-2">
-            {resumoSemanaSelecionada
-              ? `${resumoSemanaSelecionada.labels}: média combinada de ${resumoSemanaSelecionada.media.toFixed(1)} assinatura(s)/dia · ${fmtMoeda(resumoSemanaSelecionada.valor)}.`
-              : 'Clique num dia da semana para comparar (ex: selecione Seg, Ter e Qua).'}
-          </p>
-        </div>
-      </div>
+        </>
+      )}
 
-      {/* Breakdowns */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        <BreakdownList title="Por status do anúncio" items={dados.porStatusAnuncio} />
-        <BreakdownList title="Por forma de pagamento" items={dados.porFormaPagamento} />
-
-        <div className="rounded-lg border border-border p-5">
-          <h2 className="text-sm font-semibold mb-4">Divisão de planos vendidos</h2>
-          {dados.rankingPlanos.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Sem dados no período.</p>
-          ) : (
-            <div className="flex items-center gap-3">
-              <ResponsiveContainer width={130} height={130} className="flex-shrink-0">
-                <PieChart>
-                  <Pie
-                    data={dados.rankingPlanos} dataKey="qtd" nameKey="planName" cx="50%" cy="50%"
-                    innerRadius={38} outerRadius={62} paddingAngle={2}
-                  >
-                    {dados.rankingPlanos.map((p) => (
-                      <Cell key={p.planName} fill={planoColorMap.get(p.planName)} stroke="var(--card)" strokeWidth={2} />
-                    ))}
-                  </Pie>
-                  <Tooltip content={<PlanoTooltip total={totalPlanos} />} />
-                </PieChart>
+      {/* Slide 2: Evolução por horário + Padrão por dia da semana */}
+      {(!apresentacao || slideAtual === 1) && (
+        <div className={`grid grid-cols-1 xl:grid-cols-2 ${apresentacao ? 'gap-6 flex-1 min-h-0' : 'gap-3'}`}>
+          <div className={`rounded-lg border border-border flex flex-col ${apresentacao ? 'p-8' : 'p-5'}`}>
+            <div className={`flex flex-wrap items-center justify-between gap-3 mb-4 ${apresentacao ? 'shrink-0' : ''}`}>
+              <h2 className={`font-semibold flex items-center gap-2 ${apresentacao ? 'text-lg' : 'text-sm'}`}>
+                <Clock size={apresentacao ? 20 : 16} className="text-primary" /> Evolução por horário
+              </h2>
+              <div className="flex flex-wrap items-center gap-2">
+                {horaModo === 'dia' && dados.seriePorDia.length > 0 && (
+                  <Select
+                    value={diaEfetivoHora ?? ''}
+                    onChange={setDiaSelecionadoHora}
+                    className="min-w-[160px]"
+                    options={dados.seriePorDia.map((s) => ({ value: s.periodo, label: fmtDiaLabel(s.periodo) })).reverse()}
+                  />
+                )}
+                <div className="flex items-center gap-1 rounded-lg border border-border p-1">
+                  <button onClick={() => setHoraModo('media')}
+                    className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${horaModo === 'media' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}>
+                    Média do período
+                  </button>
+                  <button onClick={() => setHoraModo('dia')}
+                    className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${horaModo === 'dia' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}>
+                    Dia específico
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className={apresentacao ? 'flex-1 min-h-0' : ''}>
+              <ResponsiveContainer width="100%" height={apresentacao ? '100%' : 220}>
+                <AreaChart data={serieHora} margin={{ top: 20, right: 8, left: -10, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="horaGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#323131" stopOpacity={0.35} />
+                      <stop offset="95%" stopColor="#323131" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#F6F5F5" />
+                  <XAxis dataKey="hora" tickFormatter={fmtHoraLabel} tick={{ fontSize: apresentacao ? 13 : 10 }} interval={1} />
+                  <YAxis tick={{ fontSize: apresentacao ? 13 : 11 }} />
+                  <Tooltip content={<HoraTooltip media={horaModo === 'media'} />} />
+                  <Area type="monotone" dataKey="qtd" name="Assinaturas" stroke="#323131" strokeWidth={2}
+                    fill="url(#horaGradient)" dot={{ r: 2, fill: '#323131' }} activeDot={{ r: 4 }} />
+                </AreaChart>
               </ResponsiveContainer>
-              <div className="flex-1 min-w-0 space-y-2">
-                {dados.rankingPlanos.map((p) => (
-                  <div key={p.planName} className="flex items-center justify-between gap-2 text-xs">
-                    <span className="flex items-center gap-2 min-w-0">
-                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: planoColorMap.get(p.planName) }} />
-                      <span className="truncate font-medium">{p.planName}</span>
-                    </span>
-                    <span className="text-muted-foreground tabular-nums flex-shrink-0">
-                      {p.qtd} · {totalPlanos > 0 ? ((p.qtd / totalPlanos) * 100).toFixed(0) : 0}%
-                    </span>
-                  </div>
-                ))}
+            </div>
+            {!apresentacao && (
+              <p className="text-[11px] text-muted-foreground mt-2">
+                {horaModo === 'media'
+                  ? `Média de assinaturas por hora, considerando os ${diasNoPeriodo} dia(s) do período selecionado.`
+                  : diaEfetivoHora ? `Assinaturas hora a hora em ${fmtDiaLabel(diaEfetivoHora)}.` : 'Selecione um dia.'}
+              </p>
+            )}
+          </div>
+
+          <div className={`rounded-lg border border-border flex flex-col ${apresentacao ? 'p-8' : 'p-5'}`}>
+            <div className={`flex flex-wrap items-center justify-between gap-3 mb-4 ${apresentacao ? 'shrink-0' : ''}`}>
+              <h2 className={`font-semibold flex items-center gap-2 ${apresentacao ? 'text-lg' : 'text-sm'}`}>
+                <CalendarRange size={apresentacao ? 20 : 16} className="text-primary" /> Padrão por dia da semana
+              </h2>
+              {!apresentacao && diasSemanaSelecionados.size > 0 && (
+                <button onClick={() => setDiasSemanaSelecionados(new Set())}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+                  Limpar seleção
+                </button>
+              )}
+            </div>
+            <div className={apresentacao ? 'flex-1 min-h-0' : ''}>
+              <ResponsiveContainer width="100%" height={apresentacao ? '100%' : 220}>
+                <BarChart data={serieSemana} margin={{ top: 20, right: 8, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#F6F5F5" />
+                  <XAxis dataKey="label" tick={{ fontSize: apresentacao ? 13 : 11 }} />
+                  <YAxis tick={{ fontSize: apresentacao ? 13 : 11 }} />
+                  <Tooltip content={<SemanaTooltip />} />
+                  <Bar dataKey="media" name="Média" radius={[2, 2, 0, 0]} cursor="pointer"
+                    onClick={(entry: any) => { const idx = entry?.payload?.idx; if (idx !== undefined) toggleDiaSemana(idx); }}>
+                    {serieSemana.map((b) => (
+                      <Cell key={b.idx} fill={
+                        diasSemanaSelecionados.size === 0 ? '#E49A7F'
+                          : diasSemanaSelecionados.has(b.idx) ? '#CA3500' : '#E4E1E1'
+                      } />
+                    ))}
+                    <LabelList dataKey="media" position="top" formatter={(v: any) => Number(v).toFixed(1)} style={{ fontSize: apresentacao ? 13 : 10, fill: '#6F686B' }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            {!apresentacao && (
+              <p className="text-[11px] text-muted-foreground mt-2">
+                {resumoSemanaSelecionada
+                  ? `${resumoSemanaSelecionada.labels}: média combinada de ${resumoSemanaSelecionada.media.toFixed(1)} assinatura(s)/dia · ${fmtMoeda(resumoSemanaSelecionada.valor)}.`
+                  : 'Clique num dia da semana para comparar (ex: selecione Seg, Ter e Qua).'}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Slide 3: Breakdowns */}
+      {(!apresentacao || slideAtual === 2) && (
+        <div className={`grid grid-cols-1 lg:grid-cols-3 ${apresentacao ? 'gap-6 flex-1 min-h-0' : 'gap-3'}`}>
+          <BreakdownList title="Por status do anúncio" items={dados.porStatusAnuncio} big={apresentacao} />
+          <BreakdownList title="Por forma de pagamento" items={dados.porFormaPagamento} big={apresentacao} />
+
+          <div className={`rounded-lg border border-border ${apresentacao ? 'p-8' : 'p-5'}`}>
+            <h2 className={`font-semibold mb-4 ${apresentacao ? 'text-lg' : 'text-sm'}`}>Divisão de planos vendidos</h2>
+            {dados.rankingPlanos.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Sem dados no período.</p>
+            ) : (
+              <div className="flex items-center gap-3">
+                <ResponsiveContainer width={apresentacao ? 170 : 130} height={apresentacao ? 170 : 130} className="flex-shrink-0">
+                  <PieChart>
+                    <Pie
+                      data={dados.rankingPlanos} dataKey="qtd" nameKey="planName" cx="50%" cy="50%"
+                      innerRadius={apresentacao ? 50 : 38} outerRadius={apresentacao ? 82 : 62} paddingAngle={2}
+                    >
+                      {dados.rankingPlanos.map((p) => (
+                        <Cell key={p.planName} fill={planoColorMap.get(p.planName)} stroke="var(--card)" strokeWidth={2} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<PlanoTooltip total={totalPlanos} />} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="flex-1 min-w-0 space-y-2">
+                  {dados.rankingPlanos.map((p) => (
+                    <div key={p.planName} className={`flex items-center justify-between gap-2 ${apresentacao ? 'text-sm' : 'text-xs'}`}>
+                      <span className="flex items-center gap-2 min-w-0">
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: planoColorMap.get(p.planName) }} />
+                        <span className="truncate font-medium">{p.planName}</span>
+                      </span>
+                      <span className="text-muted-foreground tabular-nums flex-shrink-0">
+                        {p.qtd} · {totalPlanos > 0 ? ((p.qtd / totalPlanos) * 100).toFixed(0) : 0}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Tabela (apenas no modo normal) */}
+      {!apresentacao && (
+        <div className="rounded-lg border border-border">
+          <div className="px-5 py-4 border-b border-border flex flex-wrap items-center gap-3">
+            <h2 className="text-sm font-semibold flex items-center gap-2 mr-auto">
+              {segmento === 'VEHICLE' ? <Car size={15} className="text-primary" /> : <Home size={15} className="text-primary" />} Assinaturas
+            </h2>
+            <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+              <input type="checkbox" checked={somenteVerificacao} onChange={(e) => { setSomenteVerificacao(e.target.checked); setPage(1); }} />
+              Somente com verificação antifraude
+            </label>
+            <div className="relative flex-1 min-w-[220px] max-w-xs">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={busca}
+                onChange={(e) => { setBusca(e.target.value); setPage(1); }}
+                placeholder="Buscar por nome, e-mail, CPF ou ID do anúncio…"
+                className="w-full pl-8 pr-3 py-2 text-sm border border-border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+            <span className="text-xs text-muted-foreground">{assinaturasFiltradas.length} assinatura(s)</span>
+          </div>
+
+          {assinaturasFiltradas.length === 0 ? (
+            <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">Nenhuma assinatura encontrada para este filtro.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[11px] text-muted-foreground uppercase tracking-wider border-b border-border">
+                    <SortTh col="createdAt" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-5">Data</SortTh>
+                    <SortTh col="clienteNome" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4">Cliente</SortTh>
+                    <th className="px-4 py-3 font-semibold">Cidade/UF</th>
+                    <th className="px-4 py-3 font-semibold">Plano</th>
+                    <SortTh col="planPrice" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right">Valor</SortTh>
+                    <th className="px-4 py-3 font-semibold">Pagamento</th>
+                    <SortTh col="adStatus" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-center">Status</SortTh>
+                    <th className="px-4 py-3 font-semibold text-center">Anúncio</th>
+                    <th className="px-5 py-3 font-semibold text-center">Antifraude</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {assinaturasPaginadas.map((a) => (
+                    <tr key={a.subscriptionId} className="hover:bg-muted/50 transition-colors">
+                      <td className="px-5 py-3 text-xs text-muted-foreground tabular-nums whitespace-nowrap">{fmtDataHora(a.createdAt)}</td>
+                      <td className="px-4 py-3">
+                        <div className="font-medium flex items-center gap-1.5">
+                          {a.segment === 'VEHICLE' ? <Car size={12} className="text-muted-foreground flex-shrink-0" /> : <Home size={12} className="text-muted-foreground flex-shrink-0" />}
+                          {a.clienteNome}
+                          {a.clienteCongelado && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-warning-bg text-warning">Congelado</span>}
+                          {a.clienteDeletado && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Excluído</span>}
+                        </div>
+                        <div className="text-xs text-muted-foreground">{a.clienteEmail}{a.clienteCpfCnpj ? ` · ${a.clienteCpfCnpj}` : ''}</div>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{a.clienteCidade ? `${a.clienteCidade}/${a.clienteUf ?? ''}` : '—'}</td>
+                      <td className="px-4 py-3 text-xs whitespace-nowrap">{a.planName}</td>
+                      <td className="px-4 py-3 text-right tabular-nums font-semibold text-xs whitespace-nowrap">{fmtMoeda(a.planPrice)}</td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{a.paymentMethod ?? '—'}</td>
+                      <td className="px-4 py-3 text-center whitespace-nowrap">
+                        <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded ${STATUS_BADGE[a.adStatus] ?? 'bg-muted text-muted-foreground'}`}>
+                          {STATUS_LABEL[a.adStatus] ?? a.adStatus}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <a href={a.adUrl} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                          #{a.adId} <ExternalLink size={11} />
+                        </a>
+                      </td>
+                      <td className="px-5 py-3 text-center">
+                        {a.verificacaoAntifraude.sinalizada ? (
+                          <button onClick={() => setModalVerificacao(a)}
+                            title={a.verificacaoAntifraude.motivos.join(' | ')}
+                            className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-warning-bg text-warning hover:opacity-80 transition-opacity">
+                            <ShieldAlert size={11} /> Ver
+                          </button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {totalPages > 1 && (
+            <div className="px-5 py-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
+              <span>Página {page} de {totalPages}</span>
+              <div className="flex gap-2">
+                <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="px-3 py-1.5 border border-border rounded-lg disabled:opacity-40 hover:bg-muted transition-colors">Anterior</button>
+                <button disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  className="px-3 py-1.5 border border-border rounded-lg disabled:opacity-40 hover:bg-muted transition-colors">Próxima</button>
               </div>
             </div>
           )}
         </div>
-      </div>
-
-      {/* Tabela */}
-      <div className="rounded-lg border border-border">
-        <div className="px-5 py-4 border-b border-border flex flex-wrap items-center gap-3">
-          <h2 className="text-sm font-semibold flex items-center gap-2 mr-auto">
-            {segmento === 'VEHICLE' ? <Car size={15} className="text-primary" /> : <Home size={15} className="text-primary" />} Assinaturas
-          </h2>
-          <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
-            <input type="checkbox" checked={somenteVerificacao} onChange={(e) => { setSomenteVerificacao(e.target.checked); setPage(1); }} />
-            Somente com verificação antifraude
-          </label>
-          <div className="relative flex-1 min-w-[220px] max-w-xs">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={busca}
-              onChange={(e) => { setBusca(e.target.value); setPage(1); }}
-              placeholder="Buscar por nome, e-mail, CPF ou ID do anúncio…"
-              className="w-full pl-8 pr-3 py-2 text-sm border border-border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-          <span className="text-xs text-muted-foreground">{assinaturasFiltradas.length} assinatura(s)</span>
-        </div>
-
-        {assinaturasFiltradas.length === 0 ? (
-          <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">Nenhuma assinatura encontrada para este filtro.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-[11px] text-muted-foreground uppercase tracking-wider border-b border-border">
-                  <SortTh col="createdAt" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-5">Data</SortTh>
-                  <SortTh col="clienteNome" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4">Cliente</SortTh>
-                  <th className="px-4 py-3 font-semibold">Cidade/UF</th>
-                  <th className="px-4 py-3 font-semibold">Plano</th>
-                  <SortTh col="planPrice" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right">Valor</SortTh>
-                  <th className="px-4 py-3 font-semibold">Pagamento</th>
-                  <SortTh col="adStatus" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-center">Status</SortTh>
-                  <th className="px-4 py-3 font-semibold text-center">Anúncio</th>
-                  <th className="px-5 py-3 font-semibold text-center">Antifraude</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {assinaturasPaginadas.map((a) => (
-                  <tr key={a.subscriptionId} className="hover:bg-muted/50 transition-colors">
-                    <td className="px-5 py-3 text-xs text-muted-foreground tabular-nums whitespace-nowrap">{fmtDataHora(a.createdAt)}</td>
-                    <td className="px-4 py-3">
-                      <div className="font-medium flex items-center gap-1.5">
-                        {a.segment === 'VEHICLE' ? <Car size={12} className="text-muted-foreground flex-shrink-0" /> : <Home size={12} className="text-muted-foreground flex-shrink-0" />}
-                        {a.clienteNome}
-                        {a.clienteCongelado && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-warning-bg text-warning">Congelado</span>}
-                        {a.clienteDeletado && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Excluído</span>}
-                      </div>
-                      <div className="text-xs text-muted-foreground">{a.clienteEmail}{a.clienteCpfCnpj ? ` · ${a.clienteCpfCnpj}` : ''}</div>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{a.clienteCidade ? `${a.clienteCidade}/${a.clienteUf ?? ''}` : '—'}</td>
-                    <td className="px-4 py-3 text-xs whitespace-nowrap">{a.planName}</td>
-                    <td className="px-4 py-3 text-right tabular-nums font-semibold text-xs whitespace-nowrap">{fmtMoeda(a.planPrice)}</td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{a.paymentMethod ?? '—'}</td>
-                    <td className="px-4 py-3 text-center whitespace-nowrap">
-                      <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded ${STATUS_BADGE[a.adStatus] ?? 'bg-muted text-muted-foreground'}`}>
-                        {STATUS_LABEL[a.adStatus] ?? a.adStatus}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <a href={a.adUrl} target="_blank" rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
-                        #{a.adId} <ExternalLink size={11} />
-                      </a>
-                    </td>
-                    <td className="px-5 py-3 text-center">
-                      {a.verificacaoAntifraude.sinalizada ? (
-                        <button onClick={() => setModalVerificacao(a)}
-                          title={a.verificacaoAntifraude.motivos.join(' | ')}
-                          className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-warning-bg text-warning hover:opacity-80 transition-opacity">
-                          <ShieldAlert size={11} /> Ver
-                        </button>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {totalPages > 1 && (
-          <div className="px-5 py-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
-            <span>Página {page} de {totalPages}</span>
-            <div className="flex gap-2">
-              <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="px-3 py-1.5 border border-border rounded-lg disabled:opacity-40 hover:bg-muted transition-colors">Anterior</button>
-              <button disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                className="px-3 py-1.5 border border-border rounded-lg disabled:opacity-40 hover:bg-muted transition-colors">Próxima</button>
-            </div>
-          </div>
-        )}
-      </div>
+      )}
 
       {modalVerificacao && (
         <VerificacaoModal assinatura={modalVerificacao} onClose={() => setModalVerificacao(null)} />
