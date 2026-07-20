@@ -1,24 +1,23 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Play, Pause, TrendingUp, ShoppingCart, Ticket, CreditCard, Landmark, X } from 'lucide-react';
+import { Play, Pause, TrendingUp, ShoppingCart, CreditCard, Landmark, X } from 'lucide-react';
 
 type Relatorio = { path: string; label: string; descricao: string; icon: typeof TrendingUp };
 
 const RELATORIOS: Relatorio[] = [
   { path: '/vendas', label: 'Relatório de Vendas', descricao: 'KPIs, evolução de vendas e ranking de vendedores.', icon: TrendingUp },
   { path: '/carrinho', label: 'Abandono de Carrinho', descricao: 'Funil de recuperação e conversão por segmento.', icon: ShoppingCart },
-  { path: '/glpi', label: 'GLPI', descricao: 'Visão geral do mês, tendência mensal e desempenho por equipe.', icon: Ticket },
   { path: '/assinaturas', label: 'Assinaturas PF', descricao: 'Evolução de assinaturas, padrão por horário/dia e divisão de planos.', icon: CreditCard },
   { path: '/pagamentos', label: 'Relatório de Pagamentos', descricao: 'Um slide por tipo de pagamento: Geral, PF, PJ e Aditivo.', icon: Landmark },
 ];
 
 // Cada relatório embutido tem seus próprios slides internos trocando a cada 10s (ver TOTAL_SLIDES
 // em src/app/vendas/page.tsx e src/app/carrinho/page.tsx — sempre 3), começando a contar assim que
-// os dados terminam de carregar dentro do iframe. O GLPI (src/app/glpi/page.tsx) é diferente: sua
-// quantidade de slides varia mês a mês (um slide por equipe com movimento no mês), então ele avisa
-// o número real via postMessage (`apresentacao:totalSlides`) assim que os dados carregam — até essa
-// mensagem chegar, usamos DEFAULT_SLIDES_POR_RELATORIO como estimativa.
+// os dados terminam de carregar dentro do iframe. Um relatório cuja quantidade de slides varie (ex.:
+// um slide por equipe/categoria) pode avisar o número real via postMessage
+// (`apresentacao:totalSlides`) assim que os dados carregam — até essa mensagem chegar, usamos
+// DEFAULT_SLIDES_POR_RELATORIO como estimativa.
 //
 // A troca de relatório aqui precisa acontecer no máximo depois desse ciclo interno completo: se
 // demorasse mais (ex.: com uma folga extra), o ciclo de slides já teria dado a volta e voltado pro
