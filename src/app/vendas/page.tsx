@@ -5,7 +5,7 @@ import axios from 'axios';
 import {
   Loader2, RefreshCw, AlertCircle, Users, TrendingUp, Wallet, Snowflake, XCircle,
   Download, X, Search, ChevronUp, ChevronDown, ChevronsUpDown, ShoppingCart,
-  Maximize2, Minimize2,
+  Maximize2, Minimize2, LayoutGrid, Home, Car,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList,
@@ -13,6 +13,13 @@ import {
 import type { VendasData, VendaContrato, RankingVendedor, Segmento } from '@/lib/vendas';
 import { Select } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
+import { SegmentTabs } from '@/components/ui/SegmentTabs';
+
+const SEGMENTO_TABS = [
+  { value: 'todos' as const, label: 'Geral', icon: LayoutGrid },
+  { value: 'imoveis' as const, label: 'Imóveis', icon: Home },
+  { value: 'veiculos' as const, label: 'Veículos', icon: Car },
+];
 
 type Granularidade = 'dia' | 'mes';
 type SortCol = 'nome' | 'vendas' | 'valorTotal' | 'ativas' | 'ticketMedio';
@@ -300,6 +307,10 @@ export default function VendasPage() {
         setSlideEpoch((v) => v + 1);
       } else if (e.data?.type === 'apresentacao:pausar') {
         setSlidesPausados(Boolean(e.data.pausado));
+      } else if (e.data?.type === 'apresentacao:slide') {
+        const passo = e.data.direcao === 'anterior' ? -1 : 1;
+        setSlideAtual((s) => (s + passo + TOTAL_SLIDES) % TOTAL_SLIDES);
+        setSlideEpoch((v) => v + 1);
       }
     }
     window.addEventListener('message', onMessage);
@@ -492,6 +503,7 @@ export default function VendasPage() {
           )
         ) : (
           <div className="flex flex-wrap items-center gap-2">
+            <SegmentTabs value={segmento} onChange={setSegmento} options={SEGMENTO_TABS} />
             <Select
               value={preset}
               onChange={(v) => aplicarPreset(v as Preset)}
@@ -510,16 +522,6 @@ export default function VendasPage() {
                 <DatePicker value={dataFinal} onChange={setDataFinal} placeholder="Data final" minDate={dataInicial} />
               </>
             )}
-            <Select
-              value={segmento}
-              onChange={(v) => setSegmento(v as SegmentoFiltro)}
-              className="min-w-[150px]"
-              options={[
-                { value: 'todos', label: 'Todos os segmentos' },
-                { value: 'imoveis', label: 'Imóveis' },
-                { value: 'veiculos', label: 'Veículos' },
-              ]}
-            />
             <button onClick={exportarCsv}
               className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
               <Download size={14} /> Exportar CSV

@@ -73,12 +73,18 @@ export type PagamentosData = {
  *
  * tb_financeiro_contrato_aditivo também é usada pra registrar ações administrativas que NÃO são
  * aditivo comercial (congelar/descongelar conta de usados, ajuste anual de IGPM, troca de dados
- * cadastrais/titularidade/CPF-CNPJ, mudança de data de vencimento) — mais da metade dos registros
- * da tabela são só congelamento/descongelamento. Sem filtrar isso, quase todo contrato que já foi
- * congelado/descongelado uma vez passaria a contar como "aditivo" pra sempre. Por isso o filtro de
+ * cadastrais/titularidade/CPF-CNPJ) — mais da metade dos registros da tabela são só
+ * congelamento/descongelamento. Sem filtrar isso, quase todo contrato que já foi congelado/
+ * descongelado uma vez passaria a contar como "aditivo" pra sempre. Por isso o filtro de
  * motivo_aditivo abaixo restringe ADITIVO a mudança comercial de plano/valor (upgrade, downgrade,
  * reativação, monetização etc.) — IGPM foi tratado como PJ normal, não como aditivo, por decisão
  * de negócio (reajuste contratual obrigatório, não é uma venda adicional).
+ *
+ * Mudança de data de vencimento/cadastro pura (sem mudança de valor) é filtrada exigindo
+ * antigo_valor_mensalidade <> novo_valor_mensalidade, não por texto — testamos excluir por texto
+ * ("data de vencimento") e isso derrubava upgrades comerciais genuínos que só citam a data de
+ * vencimento como cláusula secundária (ex.: "upgrade de 40 para 150 anúncios... e alteração de
+ * vencimento do dia 05 para o 10"). Exigir valor realmente diferente resolve sem esse falso negativo.
  */
 const QUERY = `
   SELECT
@@ -106,11 +112,12 @@ const QUERY = `
     WHERE fca2.id_contrato = fm.id_contrato
       AND fca2.deleted = 0
       AND fca2.data_contrato_aditivo <= fm.data_cadastro
+      AND fca2.antigo_valor_mensalidade IS NOT NULL
+      AND fca2.novo_valor_mensalidade IS NOT NULL
+      AND fca2.antigo_valor_mensalidade <> fca2.novo_valor_mensalidade
       AND COALESCE(fca2.motivo_aditivo, '') NOT LIKE '%congelamento%'
       AND COALESCE(fca2.motivo_aditivo, '') NOT LIKE '%igpm%'
       AND COALESCE(fca2.motivo_aditivo, '') NOT LIKE '%igmp%'
-      AND COALESCE(fca2.motivo_aditivo, '') NOT LIKE '%data de vencimento%'
-      AND COALESCE(fca2.motivo_aditivo, '') NOT LIKE '%mudança da data%'
       AND COALESCE(fca2.motivo_aditivo, '') NOT LIKE '%alteração de dados%'
       AND COALESCE(fca2.motivo_aditivo, '') NOT LIKE '%dados cadastrais%'
       AND COALESCE(fca2.motivo_aditivo, '') NOT LIKE '%titularidade%'

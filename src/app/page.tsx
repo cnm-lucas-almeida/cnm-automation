@@ -11,6 +11,8 @@ import {
   Sliders,
   ShoppingCart,
   Presentation,
+  Globe,
+  ArrowUpDown,
   type LucideIcon,
 } from "lucide-react";
 import { canAccess } from "@/lib/admin";
@@ -90,6 +92,13 @@ const groups: CardGroup[] = [
         icon: Receipt,
       },
       {
+        key: "aditivos",
+        name: "Movimentações de Aditivo",
+        description: "Upgrades e downgrades de plano: impacto em receita e estoque de anúncios.",
+        href: "/aditivos",
+        icon: ArrowUpDown,
+      },
+      {
         key: "nfse",
         name: "Verificação NFS-e",
         description: "Verificação de notas fiscais de serviço emitidas.",
@@ -135,6 +144,13 @@ const groups: CardGroup[] = [
         description: "Cadastro e ajuste das metas comerciais utilizadas nos relatórios.",
         href: "/configuracoes/comercial/metas",
         icon: Sliders,
+      },
+      {
+        key: "rotas-publicas",
+        name: "Rotas Públicas",
+        description: "Escolha quais páginas ficam acessíveis sem login de admin.",
+        href: "/configuracoes/rotas-publicas",
+        icon: Globe,
       },
     ],
   },

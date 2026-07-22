@@ -5,7 +5,7 @@ import axios from 'axios';
 import {
   Loader2, RefreshCw, AlertCircle, TrendingUp, Wallet, CalendarDays, CalendarRange,
   Download, X, Search, ChevronUp, ChevronDown, ChevronsUpDown, Home, Car, ShieldAlert, ExternalLink, Clock,
-  Maximize2, Minimize2,
+  Maximize2, Minimize2, LayoutGrid,
 } from 'lucide-react';
 import {
   BarChart, Bar, AreaChart, Area, PieChart, Pie, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList, Cell,
@@ -13,6 +13,13 @@ import {
 import type { AssinaturasData, AssinaturaPF, Segmento } from '@/lib/assinaturas';
 import { Select } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
+import { SegmentTabs } from '@/components/ui/SegmentTabs';
+
+const SEGMENTO_TABS = [
+  { value: '' as const, label: 'Geral', icon: LayoutGrid },
+  { value: 'REALTY' as const, label: 'Imóveis', icon: Home },
+  { value: 'VEHICLE' as const, label: 'Veículos', icon: Car },
+];
 
 type Granularidade = 'dia' | 'mes';
 type SortCol = 'createdAt' | 'clienteNome' | 'planPrice' | 'adStatus';
@@ -394,6 +401,10 @@ export default function AssinaturasPage() {
         setSlideEpoch((v) => v + 1);
       } else if (e.data?.type === 'apresentacao:pausar') {
         setSlidesPausados(Boolean(e.data.pausado));
+      } else if (e.data?.type === 'apresentacao:slide') {
+        const passo = e.data.direcao === 'anterior' ? -1 : 1;
+        setSlideAtual((s) => (s + passo + TOTAL_SLIDES) % TOTAL_SLIDES);
+        setSlideEpoch((v) => v + 1);
       }
     }
     window.addEventListener('message', onMessage);
@@ -630,16 +641,7 @@ export default function AssinaturasPage() {
           )
         ) : (
           <div className="flex flex-wrap items-center gap-2">
-            <Select
-              value={segmento}
-              onChange={(v) => setSegmento(v as '' | Segmento)}
-              className="min-w-[140px]"
-              options={[
-                { value: '', label: 'Todos segmentos' },
-                { value: 'REALTY', label: 'Imóvel' },
-                { value: 'VEHICLE', label: 'Veículo' },
-              ]}
-            />
+            <SegmentTabs value={segmento} onChange={(v) => setSegmento(v as '' | Segmento)} options={SEGMENTO_TABS} />
             <Select
               value={adStatus}
               onChange={setAdStatus}

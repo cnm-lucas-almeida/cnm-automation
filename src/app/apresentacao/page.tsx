@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Play, Pause, TrendingUp, ShoppingCart, CreditCard, Landmark, X } from 'lucide-react';
+import { Play, Pause, TrendingUp, ShoppingCart, CreditCard, Landmark, X, ChevronLeft, ChevronRight, SkipBack, SkipForward } from 'lucide-react';
 
 type Relatorio = { path: string; label: string; descricao: string; icon: typeof TrendingUp };
 
@@ -39,6 +39,11 @@ export default function ApresentacaoPage() {
   const slidesPorRelatorioRef = useRef(slidesPorRelatorio);
   useEffect(() => { slidesPorRelatorioRef.current = slidesPorRelatorio; }, [slidesPorRelatorio]);
 
+  // Ref (além do state) porque o efeito de rearme do timer só deve reagir a mudanças de
+  // relatório/apresentação, não à pausa em si — quem arma o timer ao retomar é `alternarPausa`.
+  const pausadoRef = useRef(pausado);
+  useEffect(() => { pausadoRef.current = pausado; }, [pausado]);
+
   function intervaloDe(path: string) {
     return (slidesPorRelatorioRef.current[path] ?? DEFAULT_SLIDES_POR_RELATORIO) * DURACAO_SLIDE_MS;
   }
@@ -64,10 +69,12 @@ export default function ApresentacaoPage() {
     }, ms);
   }
 
-  // Rotação automática entre relatórios: só roda enquanto a apresentação está ativa e não
-  // pausada. Reagir também a `indice` (em vez de só `apresentando`) é o que permite que cada
-  // relatório tenha sua própria duração de ciclo — ao trocar de relatório, rearma o timer com o
-  // intervalo daquele relatório específico.
+  // Rotação automática entre relatórios: só roda enquanto a apresentação está ativa. Reagir
+  // também a `indice` (em vez de só `apresentando`) é o que permite que cada relatório tenha sua
+  // própria duração de ciclo — ao trocar de relatório (automaticamente ou via Voltar/Avançar),
+  // sempre reseta `restanteRef` para a duração cheia do relatório atual, já que ainda não se
+  // passou nenhum tempo nele. Se estiver pausado, só isso é feito — sem armar o timer — pra
+  // respeitar a pausa; `alternarPausa` é quem arma o timer ao retomar.
   useEffect(() => {
     if (!apresentando) {
       limparTimer();
@@ -75,6 +82,10 @@ export default function ApresentacaoPage() {
     }
     const atual = RELATORIOS[indice];
     restanteRef.current = intervaloDe(atual.path);
+    if (pausadoRef.current) {
+      limparTimer();
+      return;
+    }
     armarTimer(restanteRef.current);
     return () => limparTimer();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -114,6 +125,23 @@ export default function ApresentacaoPage() {
     const iframe = iframeRefs.current[atual.path];
     iframe?.contentWindow?.postMessage({ type: 'apresentacao:pausar', pausado }, window.location.origin);
   }, [pausado, indice, apresentando]);
+
+  function voltar() {
+    setIndice((i) => (i - 1 + RELATORIOS.length) % RELATORIOS.length);
+  }
+
+  function avancar() {
+    setIndice((i) => (i + 1) % RELATORIOS.length);
+  }
+
+  // Navegação dentro dos slides internos do relatório atual (ex.: KPIs → squads → ranking),
+  // delegada pro próprio relatório embutido via postMessage — o orquestrador não conhece o
+  // slide interno em que ele está, só manda a direção.
+  function navegarSlide(direcao: 'anterior' | 'proximo') {
+    const atual = RELATORIOS[indice];
+    const iframe = iframeRefs.current[atual.path];
+    iframe?.contentWindow?.postMessage({ type: 'apresentacao:slide', direcao }, window.location.origin);
+  }
 
   function alternarPausa() {
     if (pausado) {
@@ -214,6 +242,36 @@ export default function ApresentacaoPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 pr-2 border-r border-border">
+                <button
+                  onClick={() => navegarSlide('anterior')}
+                  title="Slide anterior (dentro do relatório atual)"
+                  className="p-1.5 border border-border rounded-lg text-muted-foreground hover:bg-muted transition-colors"
+                >
+                  <ChevronLeft size={15} />
+                </button>
+                <button
+                  onClick={() => navegarSlide('proximo')}
+                  title="Próximo slide (dentro do relatório atual)"
+                  className="p-1.5 border border-border rounded-lg text-muted-foreground hover:bg-muted transition-colors"
+                >
+                  <ChevronRight size={15} />
+                </button>
+              </div>
+              <button
+                onClick={voltar}
+                title="Relatório anterior"
+                className="flex items-center gap-2 px-3 py-1.5 border border-border rounded-lg text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"
+              >
+                <SkipBack size={13} /> Relatório anterior
+              </button>
+              <button
+                onClick={avancar}
+                title="Próximo relatório"
+                className="flex items-center gap-2 px-3 py-1.5 border border-border rounded-lg text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"
+              >
+                Próximo relatório <SkipForward size={13} />
+              </button>
               <button
                 onClick={alternarPausa}
                 className="flex items-center gap-2 px-3 py-1.5 border border-border rounded-lg text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"

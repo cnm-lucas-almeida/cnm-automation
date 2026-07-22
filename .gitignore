@@ -46,3 +46,5 @@ scripts/omie/erro_retorno.html
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+.claude/

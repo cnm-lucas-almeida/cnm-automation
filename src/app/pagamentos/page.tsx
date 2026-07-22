@@ -262,6 +262,10 @@ export default function PagamentosPage() {
         setSlideEpoch((v) => v + 1);
       } else if (e.data?.type === 'apresentacao:pausar') {
         setSlidesPausados(Boolean(e.data.pausado));
+      } else if (e.data?.type === 'apresentacao:slide') {
+        const passo = e.data.direcao === 'anterior' ? -1 : 1;
+        setSlideAtual((s) => (s + passo + TOTAL_SLIDES) % TOTAL_SLIDES);
+        setSlideEpoch((v) => v + 1);
       }
     }
     window.addEventListener('message', onMessage);

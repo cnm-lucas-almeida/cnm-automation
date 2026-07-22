@@ -319,6 +319,29 @@ export interface BancoHorasCopa {
   diaCopaEncontrado: boolean;
 }
 
+// Em dias com status administrativo (atestado médico, abono, declaração, férias
+// individual etc.), o Secullum retorna um marcador textual nos campos Entrada/Saida
+// em vez de HH:mm ou null (ex.: "AT. MÉD", "ABONO", "DECL.", "FE. IND", "GERAR" ou
+// até string vazia). Sem esse check, o parse de horário vira NaN, o dia conta como
+// 0min trabalhado contra a carga esperada inteira (Memoria*) e o colaborador aparece
+// devendo/atrasado num dia em que na verdade estava, por exemplo, de atestado médico.
+const HORARIO_REGEX = /^\d{1,2}:\d{2}$/;
+
+function horarioValido(valor: string | null | undefined): boolean {
+  return valor == null || HORARIO_REGEX.test(valor);
+}
+
+function diaComStatusEspecial(batida: Batida): boolean {
+  const campos: Array<string | null | undefined> = [
+    batida.Entrada1, batida.Saida1,
+    batida.Entrada2, batida.Saida2,
+    batida.Entrada3, batida.Saida3,
+    batida.Entrada4, batida.Saida4,
+    batida.Entrada5, batida.Saida5,
+  ];
+  return campos.some((v) => v != null && !horarioValido(v));
+}
+
 function calcularCargaEsperadaMin(batida: Batida): number {
   const pares: Array<[string | null | undefined, string | null | undefined]> = [
     [batida.MemoriaEntrada1, batida.MemoriaSaida1],
@@ -348,7 +371,7 @@ export async function calcularBancoHorasCopa(cpf: string, dataFim: string): Prom
 
   for (const batida of batidas) {
     const dia = batida.Data.split('T')[0];
-    const pulaDia = batida.Folga || batida.Neutro || batida.NBanco;
+    const pulaDia = batida.Folga || batida.Neutro || batida.NBanco || diaComStatusEspecial(batida);
     const trabalhadoMin = calcularHorasTrabalhadas(batida) * 60;
     const cargaMin = calcularCargaEsperadaMin(batida);
     const diffMin = trabalhadoMin - cargaMin;

@@ -2,11 +2,18 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
-import { Loader2, RefreshCw, AlertCircle, Target, Plus, Pencil, Trash2, X } from 'lucide-react';
+import { Loader2, RefreshCw, AlertCircle, Target, Plus, Pencil, Trash2, X, LayoutGrid, Home, Car } from 'lucide-react';
 import type { MetaSquad, SquadAdmin, Segmento } from '@/lib/metas';
 import { Select } from '@/components/ui/Select';
+import { SegmentTabs } from '@/components/ui/SegmentTabs';
 
 type Aba = 'todos' | Segmento;
+
+const SEGMENTO_TABS = [
+  { value: 'todos' as const, label: 'Geral', icon: LayoutGrid },
+  { value: 'imoveis' as const, label: 'Imóveis', icon: Home },
+  { value: 'veiculos' as const, label: 'Veículos', icon: Car },
+];
 
 function fmtMoeda(v: number): string {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -253,6 +260,7 @@ export default function MetasPage() {
           <p className="text-sm text-muted-foreground mt-0.5">Configurações · Comercial · Metas</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <SegmentTabs value={aba} onChange={setAba} options={SEGMENTO_TABS} />
           <button onClick={() => { setReloading(true); carregar(); }}
             className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
             <RefreshCw size={14} /> Atualizar
@@ -262,22 +270,6 @@ export default function MetasPage() {
             <Plus size={14} /> Nova meta
           </button>
         </div>
-      </div>
-
-      {/* Abas de segmento */}
-      <div className="flex items-center gap-1 rounded-lg border border-border p-0.5 w-fit">
-        <button onClick={() => setAba('todos')}
-          className={`px-3 py-1 rounded text-xs font-medium transition-colors ${aba === 'todos' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}>
-          Todos
-        </button>
-        <button onClick={() => setAba('imoveis')}
-          className={`px-3 py-1 rounded text-xs font-medium transition-colors ${aba === 'imoveis' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}>
-          Imóveis
-        </button>
-        <button onClick={() => setAba('veiculos')}
-          className={`px-3 py-1 rounded text-xs font-medium transition-colors ${aba === 'veiculos' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}>
-          Veículos
-        </button>
       </div>
 
       {/* Tabela */}

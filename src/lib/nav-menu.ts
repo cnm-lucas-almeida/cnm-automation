@@ -26,6 +26,7 @@ export const menus: NavGroup[] = [
       { label: "Abandono de Carrinho", href: "/carrinho" },
       { label: "Assinaturas PF", href: "/assinaturas" },
       { label: "Pagamentos", href: "/pagamentos" },
+      { label: "Movimentações de Aditivo", href: "/aditivos" },
       { label: "Verificação NFS-e", href: "/nfse" },
       { label: "Inadimplência", href: "/inadimplencia" },
       { label: "Inside Sales", href: "/inside-sales" },
@@ -46,9 +47,33 @@ export const menus: NavGroup[] = [
           { label: "Metas", href: "/configuracoes/comercial/metas" },
         ],
       },
+      {
+        label: "Acesso",
+        items: [
+          { label: "Rotas Públicas", href: "/configuracoes/rotas-publicas" },
+        ],
+      },
     ],
   },
 ];
+
+// Achata os grupos/submenus numa lista simples de { grupo, label, href },
+// usada pela tela de configuração de rotas públicas para listar as páginas existentes.
+export function flattenNavLinks(source: NavGroup[]): { grupo: string; label: string; href: string }[] {
+  const result: { grupo: string; label: string; href: string }[] = [];
+  for (const group of source) {
+    for (const item of group.items) {
+      if (isSubmenu(item)) {
+        for (const link of item.items) {
+          result.push({ grupo: `${group.label} · ${item.label}`, label: link.label, href: link.href });
+        }
+      } else {
+        result.push({ grupo: group.label, label: item.label, href: item.href });
+      }
+    }
+  }
+  return result;
+}
 
 // Remove links/submenus/grupos que o usuário não pode acessar, com base em canAccess(href).
 export function filterMenusForAccess(

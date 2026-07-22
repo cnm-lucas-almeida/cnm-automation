@@ -5,10 +5,18 @@ import { createPortal } from 'react-dom';
 import axios from 'axios';
 import {
   Loader2, RefreshCw, AlertCircle, Users, Search, ChevronUp, ChevronDown, ChevronsUpDown, Info,
+  LayoutGrid, Home, Car,
 } from 'lucide-react';
 import type { InsideSalesData, InsideSalesRow, Segmento } from '@/lib/inside-sales';
 import { Select } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
+import { SegmentTabs } from '@/components/ui/SegmentTabs';
+
+const SEGMENTO_TABS = [
+  { value: 'todos' as const, label: 'Geral', icon: LayoutGrid },
+  { value: 'imoveis' as const, label: 'Imóveis', icon: Home },
+  { value: 'veiculos' as const, label: 'Veículos', icon: Car },
+];
 
 type SortCol =
   | 'nome' | 'qtdPvAtiva' | 'bases' | 'baseMeta' | 'metaQtdPvAtiva'
@@ -278,6 +286,11 @@ export default function InsideSalesPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <SegmentTabs
+            value={aba}
+            onChange={(v) => { setAba(v); setSupervisorFiltro('todos'); }}
+            options={SEGMENTO_TABS}
+          />
           <Select
             value={preset}
             onChange={(v) => aplicarPreset(v as Preset)}
@@ -300,22 +313,6 @@ export default function InsideSalesPage() {
             <RefreshCw size={14} /> Atualizar
           </button>
         </div>
-      </div>
-
-      {/* Abas de segmento */}
-      <div className="flex items-center gap-1 rounded-lg border border-border p-0.5 w-fit">
-        <button onClick={() => { setAba('todos'); setSupervisorFiltro('todos'); }}
-          className={`px-3 py-1 rounded text-xs font-medium transition-colors ${aba === 'todos' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}>
-          Todos
-        </button>
-        <button onClick={() => { setAba('imoveis'); setSupervisorFiltro('todos'); }}
-          className={`px-3 py-1 rounded text-xs font-medium transition-colors ${aba === 'imoveis' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}>
-          Imóveis
-        </button>
-        <button onClick={() => { setAba('veiculos'); setSupervisorFiltro('todos'); }}
-          className={`px-3 py-1 rounded text-xs font-medium transition-colors ${aba === 'veiculos' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}>
-          Veículos
-        </button>
       </div>
 
       {/* Tabela */}
