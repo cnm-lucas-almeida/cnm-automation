@@ -47,6 +47,7 @@ export const menus: NavGroup[] = [
           { label: "Metas", href: "/configuracoes/comercial/metas" },
         ],
       },
+      { label: "Automações", href: "/configuracoes/automacoes" },
       {
         label: "Acesso",
         items: [
