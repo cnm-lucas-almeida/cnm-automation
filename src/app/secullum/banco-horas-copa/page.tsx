@@ -1,11 +1,20 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Users, Clock, CheckCircle2, CalendarX2, AlertCircle, Search, Copy, Check, RefreshCw, Info } from 'lucide-react';
+import { Users, Clock, CheckCircle2, CalendarX2, AlertCircle, Search, Copy, Check, RefreshCw, Info, X, ListTree } from 'lucide-react';
 import { loadSessionState, saveSessionState } from '@/lib/sessionCache';
 import { DatePicker } from '@/components/ui/DatePicker';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
+
+interface DiaDetalheCopa {
+  data: string;
+  trabalhadoMin: number;
+  cargaMin: number;
+  diffMin: number;
+  tipo: 'extra' | 'atraso' | 'neutro' | 'justificado';
+  motivo: string | null;
+}
 
 interface BancoHorasCopa {
   devidoMin: number;
@@ -14,6 +23,7 @@ interface BancoHorasCopa {
   compensadoMin: number;
   faltaPagarMin: number;
   diaCopaEncontrado: boolean;
+  diasDetalhe: DiaDetalheCopa[];
 }
 
 interface ResultadoColaborador {
@@ -194,6 +204,91 @@ function BotaoCopiar({ texto }: { texto: string }) {
   );
 }
 
+// ── Modal de detalhes diários ─────────────────────────────────────────────────
+
+const TIPO_LABEL: Record<DiaDetalheCopa['tipo'], string> = {
+  extra: 'Extra',
+  atraso: 'Atraso',
+  neutro: 'Neutro',
+  justificado: 'Justificado',
+};
+
+const TIPO_CLASSE: Record<DiaDetalheCopa['tipo'], string> = {
+  extra: 'bg-success-bg text-success',
+  atraso: 'bg-destructive/10 text-destructive',
+  neutro: 'bg-muted text-muted-foreground',
+  justificado: 'bg-info-bg text-info',
+};
+
+function ModalDetalhe({ colaborador, onClose }: { colaborador: ResultadoColaborador; onClose: () => void }) {
+  const banco = colaborador.banco!;
+  const dias = [...banco.diasDetalhe].sort((a, b) => a.data.localeCompare(b.data));
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-card border border-border rounded-lg shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-5 py-4 border-b border-border flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold">{colaborador.nome}</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Extras: +{formatarMin(banco.extrasMin)} · Atrasos: -{formatarMin(banco.atrasosMin)} · Compensado: {banco.compensadoMin >= 0 ? '+' : ''}{formatarMin(banco.compensadoMin)}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground flex-shrink-0">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto flex-1">
+          {dias.length === 0 ? (
+            <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
+              Nenhuma batida encontrada desde 01/07.
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-card">
+                <tr className="text-left text-[11px] text-muted-foreground uppercase tracking-wider border-b border-border">
+                  <th className="px-5 py-2 font-semibold">Data</th>
+                  <th className="px-3 py-2 font-semibold text-center">Trabalhado</th>
+                  <th className="px-3 py-2 font-semibold text-center">Esperado</th>
+                  <th className="px-3 py-2 font-semibold text-center">Diferença</th>
+                  <th className="px-5 py-2 font-semibold text-center">Tipo</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {dias.map((d) => (
+                  <tr key={d.data} className={d.tipo === 'neutro' || d.tipo === 'justificado' ? 'text-muted-foreground' : ''}>
+                    <td className="px-5 py-2">{formatarData(d.data)}</td>
+                    <td className="px-3 py-2 text-center tabular-nums">{formatarMin(d.trabalhadoMin)}</td>
+                    <td className="px-3 py-2 text-center tabular-nums">{formatarMin(d.cargaMin)}</td>
+                    <td className="px-3 py-2 text-center tabular-nums">
+                      {d.tipo === 'justificado' ? '—' : `${d.diffMin >= 0 ? '+' : ''}${formatarMin(d.diffMin)}`}
+                    </td>
+                    <td className="px-5 py-2 text-center">
+                      <span
+                        title={d.tipo === 'justificado' && d.motivo ? d.motivo : undefined}
+                        className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded ${TIPO_CLASSE[d.tipo]} ${d.tipo === 'justificado' && d.motivo ? 'cursor-help' : ''}`}
+                      >
+                        {d.tipo === 'justificado' && d.motivo ? d.motivo : TIPO_LABEL[d.tipo]}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function BancoHorasCopaPage() {
@@ -212,6 +307,7 @@ export default function BancoHorasCopaPage() {
   const [limiteMinutos, setLimiteMinutos] = useState('');
   const [pagina, setPagina] = useState(1);
   const [retentando, setRetentando] = useState<string | null>(null);
+  const [detalheAberto, setDetalheAberto] = useState<ResultadoColaborador | null>(null);
 
   useEffect(() => {
     const cache = loadSessionState<CacheState>(CACHE_KEY);
@@ -364,7 +460,7 @@ export default function BancoHorasCopaPage() {
   const iniciado = resumo !== null;
 
   return (
-    <div className="max-w-[1800px] mx-auto p-6 space-y-5">
+    <div className="space-y-5">
 
       {!iniciado ? (
         <div className="min-h-[65vh] flex flex-col items-center justify-center text-center gap-5">
@@ -608,7 +704,16 @@ export default function BancoHorasCopaPage() {
                               Tentar novamente
                             </button>
                           ) : r.banco ? (
-                            <BotaoCopiar texto={montarMensagem(r.nome, dataFim, r.banco)} />
+                            <div className="flex flex-col items-center gap-1">
+                              <button
+                                onClick={() => setDetalheAberto(r)}
+                                className="inline-flex items-center gap-1 text-xs text-info hover:underline font-medium"
+                              >
+                                <ListTree size={12} />
+                                Detalhes
+                              </button>
+                              <BotaoCopiar texto={montarMensagem(r.nome, dataFim, r.banco)} />
+                            </div>
                           ) : (
                             '—'
                           )}
@@ -647,6 +752,10 @@ export default function BancoHorasCopaPage() {
           </>
           )}
         </>
+      )}
+
+      {detalheAberto && detalheAberto.banco && (
+        <ModalDetalhe colaborador={detalheAberto} onClose={() => setDetalheAberto(null)} />
       )}
     </div>
   );

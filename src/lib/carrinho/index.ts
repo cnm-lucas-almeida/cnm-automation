@@ -30,6 +30,7 @@ export type CarrinhoUnico = {
   segmento: string;
   anuncio: string | null;
   valorAnuncio: number | null;
+  valorAnuncioSuspeito: boolean;
   valorPlano: number | null;
   statusPedido: string | null;
   totalToques: number;
@@ -39,11 +40,25 @@ export type CarrinhoUnico = {
   abriuEm: string | null;
   ordemPaga: boolean;
   pagoEm: string | null;
+  // Pagou E tinha clicado no link de recuperação antes — crédito real da automação de carrinho.
+  pagouViaCarrinho: boolean;
+  // Pagou sem nunca ter clicado no link — o cliente veio por conta própria, não é mérito do disparo.
+  pagouSemCarrinho: boolean;
   virouAnunciante: boolean;
 };
 
+// Qual toque "fechou a venda": entre os toques enviados a um pedido pago, credita a conversão só
+// no último toque disparado antes do pagamento (evita contar a mesma conversão em todo toque do
+// pedido quando agruparmos por número de toque).
+export type ToqueConversao = { toque: number; conversoes: number };
+
+// Cadastro do anúncio (tb_imovel.valor_imovel) às vezes vem com zeros a mais digitados pelo
+// anunciante (ex.: apto de 1 quarto com R$ 530.000.000,00) — sinalizamos em vez de esconder,
+// pois não dá pra distinguir com certeza um erro de digitação de um imóvel de luxo/rural real.
+const LIMITE_VALOR_ANUNCIO_SUSPEITO = 50_000_000;
+
 export type FunilEtapa = { etapa: string; valor: number };
-export type SeriePeriodoCarrinho = { periodo: string; toques: number; retornos: number; pagamentos: number };
+export type SeriePeriodoCarrinho = { periodo: string; toques: number; retornos: number; pagamentos: number; pagamentosMesmoDia: number };
 // Saúde de envio do WhatsApp (Sleekflow) por toque — indicador operacional, não mede conversão do cliente.
 export type SaudeToque = { toque: number; total: number; entregues: number; lidos: number };
 // Retorno/pagamento por quantidade de toques recebidos (cadência) — mede se insistir mais toques compensa.
@@ -62,6 +77,14 @@ export type CarrinhoData = {
     taxaPagamento: number;
     valorRecuperado: number;
     ticketMedioRecuperado: number;
+    // Conversão via carrinho: pagou E tinha clicado no link do disparo — crédito real da automação.
+    pagaramViaCarrinho: number;
+    taxaConversaoViaCarrinho: number;
+    valorRecuperadoViaCarrinho: number;
+    // Conversão sem carrinho: pagou sem nunca ter clicado — teria vindo de qualquer forma.
+    pagaramSemCarrinho: number;
+    taxaConversaoSemCarrinho: number;
+    valorRecuperadoSemCarrinho: number;
     virouAnunciante: number;
     taxaAnunciante: number;
   };
@@ -71,6 +94,7 @@ export type CarrinhoData = {
   saudeEnvio: SaudeToque[];
   porCadencia: CadenciaResumo[];
   porSegmento: SegmentoResumo[];
+  porToque: ToqueConversao[];
   toques: CarrinhoToque[];
   carrinhos: CarrinhoUnico[];
 };
@@ -181,6 +205,7 @@ export async function getCarrinhoData(dataInicial: string, dataFinal: string): P
           segmento: t.segmento,
           anuncio: t.anuncio,
           valorAnuncio: t.valorAnuncio,
+          valorAnuncioSuspeito: t.valorAnuncio !== null && t.valorAnuncio > LIMITE_VALOR_ANUNCIO_SUSPEITO,
           valorPlano: t.valorPlano,
           statusPedido: t.statusPedido,
           totalToques: 1,
@@ -190,6 +215,8 @@ export async function getCarrinhoData(dataInicial: string, dataFinal: string): P
           abriuEm: t.abriuEm,
           ordemPaga: t.ordemPaga,
           pagoEm: t.pagoEm,
+          pagouViaCarrinho: t.ordemPaga && t.abriuAnuncio,
+          pagouSemCarrinho: t.ordemPaga && !t.abriuAnuncio,
           virouAnunciante: t.virouAnunciante,
         });
       } else {
@@ -205,6 +232,33 @@ export async function getCarrinhoData(dataInicial: string, dataFinal: string): P
     const pagaramCarrinhos = carrinhos.filter((c) => c.ordemPaga).length;
     const anuncianteCarrinhos = carrinhos.filter((c) => c.virouAnunciante).length;
     const valorRecuperado = carrinhos.filter((c) => c.ordemPaga).reduce((s, c) => s + (c.valorPlano ?? 0), 0);
+    const pagaramViaCarrinho = carrinhos.filter((c) => c.pagouViaCarrinho).length;
+    const pagaramSemCarrinho = carrinhos.filter((c) => c.pagouSemCarrinho).length;
+    const valorRecuperadoViaCarrinho = carrinhos.filter((c) => c.pagouViaCarrinho).reduce((s, c) => s + (c.valorPlano ?? 0), 0);
+    const valorRecuperadoSemCarrinho = carrinhos.filter((c) => c.pagouSemCarrinho).reduce((s, c) => s + (c.valorPlano ?? 0), 0);
+
+    // Qual toque converteu: entre os toques do pedido, credita só o último disparado antes do
+    // pagamento (mesmo critério da query original: sent_at <= pago_em, desempate por touch_number).
+    const touchesPorPedido = new Map<string, CarrinhoToque[]>();
+    for (const t of toques) {
+      const arr = touchesPorPedido.get(t.orderId);
+      if (arr) arr.push(t); else touchesPorPedido.set(t.orderId, [t]);
+    }
+    const porToqueMap = new Map<number, number>();
+    for (const c of carrinhos) {
+      if (!c.ordemPaga || !c.pagoEm) continue;
+      let creditado: CarrinhoToque | null = null;
+      for (const t of touchesPorPedido.get(c.orderId) ?? []) {
+        if (t.disparadoEm > c.pagoEm) continue;
+        if (!creditado || t.disparadoEm > creditado.disparadoEm || (t.disparadoEm === creditado.disparadoEm && t.toque > creditado.toque)) {
+          creditado = t;
+        }
+      }
+      if (creditado) porToqueMap.set(creditado.toque, (porToqueMap.get(creditado.toque) ?? 0) + 1);
+    }
+    const porToque: ToqueConversao[] = Array.from(porToqueMap.entries())
+      .map(([toque, conversoes]) => ({ toque, conversoes }))
+      .sort((a, b) => a.toque - b.toque);
 
     const funil: FunilEtapa[] = [
       { etapa: 'Disparado', valor: totalCarrinhos },
@@ -213,10 +267,11 @@ export async function getCarrinhoData(dataInicial: string, dataFinal: string): P
       { etapa: 'Virou anunciante', valor: anuncianteCarrinhos },
     ];
 
-    const diaMap = new Map<string, { toques: number; retornos: number; pagamentos: number }>();
-    const mesMap = new Map<string, { toques: number; retornos: number; pagamentos: number }>();
-    const bump = (map: Map<string, { toques: number; retornos: number; pagamentos: number }>, key: string, campo: 'toques' | 'retornos' | 'pagamentos') => {
-      const entry = map.get(key) ?? { toques: 0, retornos: 0, pagamentos: 0 };
+    type PontoSerie = { toques: number; retornos: number; pagamentos: number; pagamentosMesmoDia: number };
+    const diaMap = new Map<string, PontoSerie>();
+    const mesMap = new Map<string, PontoSerie>();
+    const bump = (map: Map<string, PontoSerie>, key: string, campo: keyof PontoSerie) => {
+      const entry = map.get(key) ?? { toques: 0, retornos: 0, pagamentos: 0, pagamentosMesmoDia: 0 };
       entry[campo] += 1;
       map.set(key, entry);
     };
@@ -232,6 +287,31 @@ export async function getCarrinhoData(dataInicial: string, dataFinal: string): P
       if (c.ordemPaga && c.pagoEm) {
         bump(diaMap, diaKey(c.pagoEm), 'pagamentos');
         bump(mesMap, mesKey(c.pagoEm), 'pagamentos');
+      }
+    }
+    // "Pagou no mesmo dia": entre quem recebeu um toque num dia, quantos pagaram naquele mesmo dia
+    // (não em qualquer dia do período) — sinal de conversão rápida. Já temos disparado_em/pago_em
+    // por linha de toque; dedup por pedido+dia evita contar 2x se o mesmo pedido teve 2 toques no
+    // dia do pagamento.
+    const mesmoDiaVistoDia = new Set<string>();
+    const mesmoDiaVistoMes = new Set<string>();
+    for (const t of toques) {
+      if (!t.ordemPaga || !t.pagoEm) continue;
+      const diaDisparo = diaKey(t.disparadoEm);
+      if (diaDisparo === diaKey(t.pagoEm)) {
+        const chave = `${t.orderId}|${diaDisparo}`;
+        if (!mesmoDiaVistoDia.has(chave)) {
+          mesmoDiaVistoDia.add(chave);
+          bump(diaMap, diaDisparo, 'pagamentosMesmoDia');
+        }
+      }
+      const mesDisparo = mesKey(t.disparadoEm);
+      if (mesDisparo === mesKey(t.pagoEm)) {
+        const chaveMes = `${t.orderId}|${mesDisparo}`;
+        if (!mesmoDiaVistoMes.has(chaveMes)) {
+          mesmoDiaVistoMes.add(chaveMes);
+          bump(mesMap, mesDisparo, 'pagamentosMesmoDia');
+        }
       }
     }
     const seriePorDia = Array.from(diaMap.entries()).map(([periodo, v]) => ({ periodo, ...v })).sort((a, b) => a.periodo.localeCompare(b.periodo));
@@ -287,6 +367,12 @@ export async function getCarrinhoData(dataInicial: string, dataFinal: string): P
         taxaPagamento: totalCarrinhos > 0 ? pagaramCarrinhos / totalCarrinhos : 0,
         valorRecuperado,
         ticketMedioRecuperado: pagaramCarrinhos > 0 ? valorRecuperado / pagaramCarrinhos : 0,
+        pagaramViaCarrinho,
+        taxaConversaoViaCarrinho: totalCarrinhos > 0 ? pagaramViaCarrinho / totalCarrinhos : 0,
+        valorRecuperadoViaCarrinho,
+        pagaramSemCarrinho,
+        taxaConversaoSemCarrinho: totalCarrinhos > 0 ? pagaramSemCarrinho / totalCarrinhos : 0,
+        valorRecuperadoSemCarrinho,
         virouAnunciante: anuncianteCarrinhos,
         taxaAnunciante: totalCarrinhos > 0 ? anuncianteCarrinhos / totalCarrinhos : 0,
       },
@@ -296,6 +382,7 @@ export async function getCarrinhoData(dataInicial: string, dataFinal: string): P
       saudeEnvio,
       porCadencia,
       porSegmento,
+      porToque,
       toques,
       carrinhos,
     };

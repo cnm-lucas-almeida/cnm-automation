@@ -251,7 +251,7 @@ export default function MetasPage() {
   }
 
   return (
-    <div className={`max-w-[1800px] mx-auto p-6 space-y-5 transition-opacity duration-150 ${reloading ? 'opacity-50 pointer-events-none' : ''}`}>
+    <div className={`space-y-5 transition-opacity duration-150 ${reloading ? 'opacity-50 pointer-events-none' : ''}`}>
 
       {/* Header */}
       <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">

@@ -36,6 +36,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# banco local de autenticação (estado local, não vai no commit)
+/data/
+
 # logs e saídas de scripts (não são código-fonte)
 /logs/
 scripts/logs/
@@ -48,3 +51,5 @@ scripts/omie/erro_retorno.html
 next-env.d.ts
 
 .claude/
+
+*.xlsx

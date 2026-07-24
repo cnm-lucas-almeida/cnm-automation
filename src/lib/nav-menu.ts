@@ -19,6 +19,14 @@ export const menus: NavGroup[] = [
     ],
   },
   {
+    label: "Financeiro",
+    items: [
+      { label: "DRE", href: "/financeiro/dre" },
+      { label: "Projeção", href: "/financeiro/projecao" },
+      { label: "Quadro Comercial", href: "/financeiro/quadro-comercial" },
+    ],
+  },
+  {
     label: "Relatórios",
     items: [
       { label: "GLPI", href: "/glpi" },
@@ -51,15 +59,33 @@ export const menus: NavGroup[] = [
       {
         label: "Acesso",
         items: [
-          { label: "Rotas Públicas", href: "/configuracoes/rotas-publicas" },
+          { label: "Usuários", href: "/configuracoes/usuarios" },
+          { label: "Papéis", href: "/configuracoes/papeis" },
         ],
       },
     ],
   },
 ];
 
+// Monta a trilha de breadcrumb (grupo > submenu? > tela) a partir do pathname atual,
+// varrendo a árvore de menus. Retorna [] quando a rota não está no menu (ex.: "/").
+export function getBreadcrumbTrail(source: NavGroup[], pathname: string): string[] {
+  for (const group of source) {
+    for (const item of group.items) {
+      if (isSubmenu(item)) {
+        for (const link of item.items) {
+          if (link.href === pathname) return [group.label, item.label, link.label];
+        }
+      } else if (item.href === pathname) {
+        return [group.label, item.label];
+      }
+    }
+  }
+  return [];
+}
+
 // Achata os grupos/submenus numa lista simples de { grupo, label, href },
-// usada pela tela de configuração de rotas públicas para listar as páginas existentes.
+// usada pela tela de Papéis para listar as telas existentes e liberar por checkbox.
 export function flattenNavLinks(source: NavGroup[]): { grupo: string; label: string; href: string }[] {
   const result: { grupo: string; label: string; href: string }[] = [];
   for (const group of source) {

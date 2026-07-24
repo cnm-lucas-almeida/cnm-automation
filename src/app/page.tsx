@@ -11,11 +11,13 @@ import {
   Sliders,
   ShoppingCart,
   Presentation,
-  Globe,
+  Users,
+  ShieldCheck,
   ArrowUpDown,
   type LucideIcon,
 } from "lucide-react";
-import { canAccess } from "@/lib/admin";
+import { getSession } from "@/lib/auth/session";
+import { canAccessScreen } from "@/lib/auth/permissions";
 
 type CardItem = {
   key: string;
@@ -146,11 +148,18 @@ const groups: CardGroup[] = [
         icon: Sliders,
       },
       {
-        key: "rotas-publicas",
-        name: "Rotas Públicas",
-        description: "Escolha quais páginas ficam acessíveis sem login de admin.",
-        href: "/configuracoes/rotas-publicas",
-        icon: Globe,
+        key: "usuarios",
+        name: "Usuários",
+        description: "Cadastro de usuários e atribuição de papéis de acesso.",
+        href: "/configuracoes/usuarios",
+        icon: Users,
+      },
+      {
+        key: "papeis",
+        name: "Papéis",
+        description: "Papéis de acesso e as telas liberadas para cada um.",
+        href: "/configuracoes/papeis",
+        icon: ShieldCheck,
       },
     ],
   },
@@ -175,29 +184,28 @@ function Card({ item }: { item: CardItem }) {
   );
 }
 
-export default function Home() {
+export default async function Home() {
+  const session = await getSession();
   const visibleGroups = groups
-    .map((group) => ({ ...group, items: group.items.filter((item) => canAccess(item.href)) }))
+    .map((group) => ({ ...group, items: group.items.filter((item) => canAccessScreen(session, item.href)) }))
     .filter((group) => group.items.length > 0);
 
   return (
-    <div className="min-h-full bg-muted p-10">
-      <div className="mx-auto max-w-6xl">
-        <h1 className="text-3xl font-bold text-foreground">Painel de Automações — CNM</h1>
-        <p className="mt-2 mb-10 text-muted-foreground">Selecione o projeto que deseja acessar.</p>
+    <div>
+      <h1 className="text-3xl font-bold text-foreground">Painel de Automações — CNM</h1>
+      <p className="mt-2 mb-10 text-muted-foreground">Selecione o projeto que deseja acessar.</p>
 
-        <div className="flex flex-col gap-10">
-          {visibleGroups.map((group) => (
-            <section key={group.key}>
-              <h2 className="mb-4 text-lg font-bold text-foreground">{group.label}</h2>
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                {group.items.map((item) => (
-                  <Card key={item.key} item={item} />
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
+      <div className="flex flex-col gap-10">
+        {visibleGroups.map((group) => (
+          <section key={group.key}>
+            <h2 className="mb-4 text-lg font-bold text-foreground">{group.label}</h2>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {group.items.map((item) => (
+                <Card key={item.key} item={item} />
+              ))}
+            </div>
+          </section>
+        ))}
       </div>
     </div>
   );

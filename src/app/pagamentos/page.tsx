@@ -394,7 +394,7 @@ export default function PagamentosPage() {
 
   return (
     <div ref={containerRef}
-      className={`transition-opacity duration-150 ${reloading ? 'opacity-50 pointer-events-none' : ''} ${apresentacao ? 'max-w-none bg-background p-10 h-screen flex flex-col gap-5 overflow-hidden' : 'max-w-[1800px] mx-auto p-6 space-y-5'}`}>
+      className={`transition-opacity duration-150 ${reloading ? 'opacity-50 pointer-events-none' : ''} ${apresentacao ? 'max-w-none bg-background p-10 h-screen flex flex-col gap-5 overflow-hidden' : 'space-y-5'}`}>
 
       {/* Header */}
       <div className={`flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 ${apresentacao ? 'shrink-0' : ''}`}>

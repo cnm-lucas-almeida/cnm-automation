@@ -118,3 +118,6 @@ body {
 ::-webkit-scrollbar-track { background-color: var(--muted); }
 ::-webkit-scrollbar-thumb { background-color: color-mix(in srgb, var(--primary) 25%, transparent); border-radius: 9999px; }
 ::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--primary) 40%, transparent); }
+
+.scrollbar-hidden { scrollbar-width: none; -ms-overflow-style: none; }
+.scrollbar-hidden::-webkit-scrollbar { display: none; }

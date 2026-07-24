@@ -232,7 +232,7 @@ export default function PontoD1Page() {
   const iniciado = resumo !== null;
 
   return (
-    <div className="max-w-[1800px] mx-auto p-6 space-y-5">
+    <div className="space-y-5">
 
       {!iniciado ? (
         /* ── Estado inicial: título e busca centralizados ── */

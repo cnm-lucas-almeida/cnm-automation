@@ -4,7 +4,7 @@ import { getVendasData } from '@/lib/vendas';
 import { listarMetas } from '@/lib/metas';
 
 const CACHE_TTL = 15 * 60 * 1000;
-const GESTOR_NOME = 'Jackson Savi Alberti';
+export const GESTOR_NOME = 'Jackson Savi Alberti';
 const META_PV_ATIVA_DIVISOR = 20;
 
 export type Segmento = 'veiculos' | 'imoveis';
@@ -42,7 +42,7 @@ export type InsideSalesData = {
   linhas: InsideSalesRow[];
 };
 
-type VendedorAdminRow = {
+export type VendedorAdminRow = {
   cpf: string;
   idVendedor: number;
   supervisorNome: string | null;
@@ -53,7 +53,7 @@ type VendedorAdminRow = {
 type BaseRow = { id_vendedor: number | null; bases: number };
 type EstoqueRow = { id_vendedor: number | null; estoque_total: number | null };
 
-function segmentoFromDepartamento(departamento: string | null): Segmento | null {
+export function segmentoFromDepartamento(departamento: string | null): Segmento | null {
   if (!departamento) return null;
   const d = departamento.toLowerCase();
   if (d.includes('veículo') || d.includes('veiculo')) return 'veiculos';
@@ -102,7 +102,7 @@ const MAPA_ACENTOS: [string, string][] = [
   ['ç', 'c'], ['ñ', 'n'],
 ];
 
-function normalizarNome(nome: string): string {
+export function normalizarNome(nome: string): string {
   let s = nome.replace(/ /g, ' ').trim().toLowerCase().replace(/\s+/g, ' ');
   for (const [de, para] of MAPA_ACENTOS) s = s.split(de).join(para);
   return s;
@@ -119,7 +119,7 @@ function sqlNomeNormalizado(coluna: string): string {
  * Casa colaboradores da Convenia com tb_vendedor por CPF; quando o CPF não está
  * cadastrado no admin (comum em contratações recentes), cai para match por nome.
  */
-async function buscarDadosAdmin(
+export async function buscarDadosAdmin(
   colaboradores: { cpf: string | null; nome: string }[]
 ): Promise<{ porCpf: Map<string, VendedorAdminRow>; porNome: Map<string, VendedorAdminRow> }> {
   const porCpf = new Map<string, VendedorAdminRow>();

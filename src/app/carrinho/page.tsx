@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import axios from 'axios';
 import {
   Loader2, RefreshCw, AlertCircle, TrendingDown, Wallet, ShoppingCart, Undo2, Megaphone, Repeat2,
-  Download, Search, ChevronUp, ChevronDown, ChevronsUpDown, Maximize2, Minimize2,
+  Download, Search, ChevronUp, ChevronDown, ChevronsUpDown, Maximize2, Minimize2, AlertTriangle,
 } from 'lucide-react';
 import {
   BarChart, Bar, ComposedChart, Line, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList,
@@ -141,6 +141,7 @@ function EvolucaoTooltip({ active, payload, granularidade }: any) {
       <p>Toques enviados: <span className="font-semibold tabular-nums">{d.toques}</span></p>
       <p>Retornaram: <span className="font-semibold tabular-nums">{d.retornos}</span></p>
       <p>Pagaram: <span className="font-semibold tabular-nums">{d.pagamentos}</span></p>
+      <p>Pagaram no mesmo dia: <span className="font-semibold tabular-nums">{d.pagamentosMesmoDia}</span></p>
     </div>
   );
 }
@@ -160,6 +161,26 @@ function Badge({ ok }: { ok: boolean }) {
   return ok
     ? <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-success-bg text-success">Sim</span>
     : <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-muted text-muted-foreground">Não</span>;
+}
+
+// "Pagou" desmembrado: via carrinho (clicou o link antes de pagar, crédito real da automação) x
+// sem carrinho (pagou sem clicar, informativo — o cliente teria vindo de qualquer forma).
+function PagamentoBadge({ carrinho }: { carrinho: CarrinhoUnico }) {
+  if (!carrinho.ordemPaga) return <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-muted text-muted-foreground">Não</span>;
+  if (carrinho.pagouViaCarrinho) return <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-success-bg text-success" title="Pagou depois de clicar no link do disparo — crédito da automação.">Via carrinho</span>;
+  return <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-info-bg text-info" title="Pagou sem nunca clicar no link — não é mérito do disparo.">Sem carrinho</span>;
+}
+
+// Valor do anúncio muito acima do normal costuma ser erro de digitação no cadastro (zeros a
+// mais) — sinalizamos em vez de esconder, pois não dá pra confirmar sem checar o anúncio.
+function ValorSuspeitoFlag({ big }: { big?: boolean }) {
+  return (
+    <span
+      title="Valor muito acima do normal — provável erro de digitação no cadastro do anúncio (zeros a mais). Não confirmado."
+      className={`inline-flex items-center gap-1 font-bold rounded bg-warning-bg text-warning cursor-help ${big ? 'text-xs px-2 py-0.5' : 'text-[9px] px-1.5 py-0.5'}`}>
+      <AlertTriangle size={big ? 12 : 10} /> valor suspeito
+    </span>
+  );
 }
 
 export default function CarrinhoPage() {
@@ -319,6 +340,11 @@ export default function CarrinhoPage() {
     }));
   }, [dados]);
 
+  const porToqueRotulado = useMemo(() => {
+    if (!dados) return [];
+    return dados.porToque.map((t) => ({ ...t, rotulo: `Toque ${t.toque}` }));
+  }, [dados]);
+
   const funilComPercentual = useMemo(() => {
     if (!dados || dados.funil.length === 0) return [];
     const base = dados.funil[0].valor || 1;
@@ -366,11 +392,12 @@ export default function CarrinhoPage() {
 
   function exportarCsv() {
     if (!dados) return;
-    const header = ['Cliente', 'Número', 'Segmento', 'Anúncio', 'Valor anúncio', 'Valor plano', 'Toques', 'Primeiro toque', 'Retornou', 'Pagou', 'Virou anunciante'];
+    const header = ['Cliente', 'Número', 'Segmento', 'Anúncio', 'Valor anúncio', 'Valor plano', 'Toques', 'Primeiro toque', 'Retornou', 'Pagou', 'Converteu via carrinho', 'Virou anunciante'];
     const linhas = carrinhosFiltrados.map((c) => [
       c.cliente, c.numero ?? '', labelSegmento(c.segmento), c.anuncio ?? '',
       (c.valorAnuncio ?? 0).toFixed(2), (c.valorPlano ?? 0).toFixed(2), c.totalToques,
-      c.primeiroToqueEm, c.abriuAnuncio ? 'Sim' : 'Não', c.ordemPaga ? 'Sim' : 'Não', c.virouAnunciante ? 'Sim' : 'Não',
+      c.primeiroToqueEm, c.abriuAnuncio ? 'Sim' : 'Não', c.ordemPaga ? 'Sim' : 'Não',
+      c.ordemPaga ? (c.pagouViaCarrinho ? 'Sim' : 'Não') : '', c.virouAnunciante ? 'Sim' : 'Não',
     ]);
     const csv = [header, ...linhas].map((l) => l.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\n');
     const blob = new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8;' });
@@ -413,7 +440,7 @@ export default function CarrinhoPage() {
 
   return (
     <div ref={containerRef}
-      className={`mx-auto transition-opacity duration-150 ${reloading ? 'opacity-50 pointer-events-none' : ''} ${apresentacao ? 'max-w-none bg-background p-10 h-screen flex flex-col gap-5 overflow-hidden' : 'max-w-[1800px] p-6 space-y-5'}`}>
+      className={`mx-auto transition-opacity duration-150 ${reloading ? 'opacity-50 pointer-events-none' : ''} ${apresentacao ? 'max-w-none bg-background p-10 h-screen flex flex-col gap-5 overflow-hidden' : 'space-y-5'}`}>
 
       {/* Header */}
       <div className={`flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 ${apresentacao ? 'shrink-0' : ''}`}>
@@ -480,16 +507,19 @@ export default function CarrinhoPage() {
       {/* Slide 1: KPIs + Funil de recuperação */}
       {(!apresentacao || slideAtual === 0) && (
         <>
-          <div className={`grid grid-cols-2 lg:grid-cols-4 ${apresentacao ? 'gap-6 shrink-0' : 'gap-3'}`}>
+          <div className={`grid grid-cols-2 lg:grid-cols-5 ${apresentacao ? 'gap-6 shrink-0' : 'gap-3'}`}>
             <KpiCard big={apresentacao} title="Carrinhos abandonados" value={dados.kpis.totalCarrinhos.toLocaleString('pt-BR')}
               sub={`${dados.kpis.totalToques} mensagens disparadas`}
               icon={ShoppingCart} color="#323131" />
             <KpiCard big={apresentacao} title="Taxa de retorno" value={fmtPercent(dados.kpis.taxaRetorno)}
               sub={`${dados.kpis.retornaram} voltaram a ver o anúncio`}
               icon={Undo2} color="#1E7A34" />
-            <KpiCard big={apresentacao} title="Taxa de pagamento" value={fmtPercent(dados.kpis.taxaPagamento)}
-              sub={`${fmtMoeda(dados.kpis.valorRecuperado)} recuperados`}
+            <KpiCard big={apresentacao} title="Conversão via carrinho" value={fmtPercent(dados.kpis.taxaConversaoViaCarrinho)}
+              sub={`${fmtMoeda(dados.kpis.valorRecuperadoViaCarrinho)} recuperados`}
               icon={Wallet} color="#1E7A34" />
+            <KpiCard big={apresentacao} title="Conversão sem carrinho" value={fmtPercent(dados.kpis.taxaConversaoSemCarrinho)}
+              sub={`${fmtMoeda(dados.kpis.valorRecuperadoSemCarrinho)} pagos sem clicar`}
+              icon={Wallet} color="#155DFC" />
             <KpiCard big={apresentacao} title="Virou anunciante" value={fmtPercent(dados.kpis.taxaAnunciante)}
               sub={`${dados.kpis.virouAnunciante} anúncios foram ao ar`}
               icon={Megaphone} color="#CA3500" />
@@ -555,6 +585,7 @@ export default function CarrinhoPage() {
                   <Bar yAxisId="left" dataKey="toques" name="Toques enviados" fill="#D8D5D6" radius={[2, 2, 0, 0]} />
                   <Line yAxisId="right" dataKey="retornos" name="Retornaram" stroke="#8A8386" strokeWidth={2} dot={{ r: 3 }} />
                   <Line yAxisId="right" dataKey="pagamentos" name="Pagaram" stroke="#CA3500" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line yAxisId="right" dataKey="pagamentosMesmoDia" name="Pagaram no mesmo dia" stroke="#1E7A34" strokeWidth={2} strokeDasharray="4 3" dot={{ r: 3 }} />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
@@ -610,6 +641,32 @@ export default function CarrinhoPage() {
               </p>
             </div>
           )}
+
+          {!apresentacao && (
+            <div className="rounded-lg border border-border p-5">
+              <h2 className="text-sm font-semibold flex items-center gap-2 mb-1">
+                <Wallet size={16} className="text-primary" /> Qual toque converte mais
+              </h2>
+              <p className="text-xs text-muted-foreground mb-4">
+                Entre os carrinhos que pagaram, credita a conversão só no último toque disparado antes do pagamento — sem contar a mesma venda em mais de um toque.
+              </p>
+              {porToqueRotulado.length === 0 ? (
+                <div className="flex items-center justify-center py-10 text-muted-foreground text-sm">Nenhuma conversão no período.</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={porToqueRotulado} margin={{ top: 20, right: 8, left: -10, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#F6F5F5" />
+                    <XAxis dataKey="rotulo" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                    <Tooltip formatter={(v: any) => [v, 'Conversões']} />
+                    <Bar dataKey="conversoes" name="Conversões" fill="#1E7A34" radius={[4, 4, 0, 0]}>
+                      <LabelList dataKey="conversoes" position="top" style={{ fontSize: 11, fill: '#323131', fontWeight: 600 }} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          )}
         </>
       )}
 
@@ -626,13 +683,23 @@ export default function CarrinhoPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#F6F5F5" horizontal={false} />
                   <XAxis type="number" tick={{ fontSize: 13 }} tickFormatter={(v) => fmtMoeda(v)} />
                   <YAxis type="category" dataKey="cliente" width={230} tick={{ fontSize: 12 }} />
-                  <Tooltip formatter={(v: any) => fmtMoeda(Number(v))} />
-                  <Bar dataKey="valorPlano" name="Valor pago" fill="#1E7A34" radius={[0, 4, 4, 0]}>
+                  <Tooltip formatter={(v: any, _n: any, item: any) => [
+                    fmtMoeda(Number(v)) + (item?.payload?.pagouViaCarrinho ? ' — via carrinho' : ' — sem carrinho (pagou sem clicar)'),
+                    'Valor pago',
+                  ]} />
+                  <Bar dataKey="valorPlano" name="Valor pago" radius={[0, 4, 4, 0]}>
+                    {rankingRecuperados.map((c) => (
+                      <Cell key={c.orderId} fill={c.pagouViaCarrinho ? '#1E7A34' : '#155DFC'} />
+                    ))}
                     <LabelList dataKey="valorPlano" position="right" formatter={(v: any) => fmtMoeda(Number(v))} style={{ fontSize: 12, fill: '#323131', fontWeight: 600 }} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
+            <p className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border flex items-center gap-1.5">
+              <span className="inline-block w-2 h-2 rounded-full bg-success shrink-0" /> via carrinho
+              <span className="inline-block w-2 h-2 rounded-full bg-info shrink-0 ml-2" /> sem carrinho (pagou sem clicar no link)
+            </p>
           </div>
           <div className="rounded-lg border border-border p-8 flex flex-col">
             <h2 className="text-lg font-semibold flex items-center gap-2 mb-4 shrink-0">
@@ -644,13 +711,23 @@ export default function CarrinhoPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#F6F5F5" horizontal={false} />
                   <XAxis type="number" tick={{ fontSize: 13 }} tickFormatter={(v) => fmtMoeda(v)} />
                   <YAxis type="category" dataKey="cliente" width={230} tick={{ fontSize: 12 }} />
-                  <Tooltip formatter={(v: any) => fmtMoeda(Number(v))} />
-                  <Bar dataKey="valor" name="Valor do anúncio" fill="#CA3500" radius={[0, 4, 4, 0]}>
+                  <Tooltip formatter={(v: any, _n: any, item: any) => [
+                    fmtMoeda(Number(v)) + (item?.payload?.valorAnuncioSuspeito ? ' — valor suspeito (provável erro de cadastro)' : ''),
+                    'Valor do anúncio',
+                  ]} />
+                  <Bar dataKey="valor" name="Valor do anúncio" radius={[0, 4, 4, 0]}>
+                    {rankingPerdidos.map((c) => (
+                      <Cell key={c.orderId} fill={c.valorAnuncioSuspeito ? '#D08700' : '#CA3500'} />
+                    ))}
                     <LabelList dataKey="valor" position="right" formatter={(v: any) => fmtMoeda(Number(v))} style={{ fontSize: 12, fill: '#323131', fontWeight: 600 }} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
+            <p className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border flex items-center gap-1.5">
+              <AlertTriangle size={12} className="text-warning shrink-0" />
+              Barras em âmbar: valor de anúncio provavelmente com erro de cadastro (zeros a mais) — não confirmado.
+            </p>
           </div>
         </div>
       )}
@@ -674,7 +751,10 @@ export default function CarrinhoPage() {
                       <tr key={c.orderId} className="hover:bg-muted/50 transition-colors">
                         <td className="px-5 py-2.5">
                           <div className="font-medium">{c.cliente}</div>
-                          <div className="text-xs text-muted-foreground">{c.anuncio ?? '—'}</div>
+                          <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                            {c.anuncio ?? '—'}
+                            <PagamentoBadge carrinho={c} />
+                          </div>
                         </td>
                         <td className="px-5 py-2.5 text-right tabular-nums font-semibold text-xs text-success">{fmtMoeda(c.valorPlano ?? 0)}</td>
                       </tr>
@@ -700,7 +780,10 @@ export default function CarrinhoPage() {
                           <div className="font-medium">{c.cliente}</div>
                           <div className="text-xs text-muted-foreground">{c.anuncio ?? '—'} · {c.numero ?? 'sem telefone'}</div>
                         </td>
-                        <td className="px-5 py-2.5 text-right tabular-nums font-semibold text-xs text-destructive">{fmtMoeda(valorRanking(c))}</td>
+                        <td className="px-5 py-2.5 text-right">
+                          <div className="tabular-nums font-semibold text-xs text-destructive">{fmtMoeda(valorRanking(c))}</div>
+                          {c.valorAnuncioSuspeito && <div className="mt-1 flex justify-end"><ValorSuspeitoFlag /></div>}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -752,12 +835,15 @@ export default function CarrinhoPage() {
                           <div className="text-xs text-muted-foreground">{c.numero ?? '—'} · {labelSegmento(c.segmento)}</div>
                         </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">{c.anuncio ?? '—'}</td>
-                        <td className="px-4 py-3 text-right tabular-nums text-xs">{c.valorAnuncio !== null ? fmtMoeda(c.valorAnuncio) : '—'}</td>
+                        <td className="px-4 py-3 text-right tabular-nums text-xs">
+                          {c.valorAnuncio !== null ? fmtMoeda(c.valorAnuncio) : '—'}
+                          {c.valorAnuncioSuspeito && <div className="mt-1 flex justify-end"><ValorSuspeitoFlag /></div>}
+                        </td>
                         <td className="px-4 py-3 text-right tabular-nums text-xs">{c.valorPlano !== null ? fmtMoeda(c.valorPlano) : '—'}</td>
                         <td className="px-4 py-3 text-center tabular-nums text-xs">{c.totalToques}</td>
                         <td className="px-4 py-3 text-right tabular-nums text-xs text-muted-foreground">{fmtDataHora(c.primeiroToqueEm)}</td>
                         <td className="px-4 py-3 text-center"><Badge ok={c.abriuAnuncio} /></td>
-                        <td className="px-4 py-3 text-center"><Badge ok={c.ordemPaga} /></td>
+                        <td className="px-4 py-3 text-center"><PagamentoBadge carrinho={c} /></td>
                         <td className="px-5 py-3 text-center"><Badge ok={c.virouAnunciante} /></td>
                       </tr>
                     ))}

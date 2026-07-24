@@ -310,6 +310,15 @@ const COPA_DATA = '2026-06-29';
 const COPA_COMPENSACAO_INICIO = '2026-07-01';
 const TOLERANCIA_CLT_MIN = 10;
 
+export interface DiaDetalheCopa {
+  data: string; // YYYY-MM-DD
+  trabalhadoMin: number;
+  cargaMin: number;
+  diffMin: number; // trabalhadoMin - cargaMin (0 quando justificado — ver `motivo`)
+  tipo: 'extra' | 'atraso' | 'neutro' | 'justificado';
+  motivo: string | null; // ex.: "Atestado médico" — só preenchido quando tipo === 'justificado'
+}
+
 export interface BancoHorasCopa {
   devidoMin: number; // quanto a empresa deve pelo dia 29/06
   extrasMin: number; // horas trabalhadas além da escala, acumuladas desde 01/07
@@ -317,6 +326,9 @@ export interface BancoHorasCopa {
   compensadoMin: number; // extrasMin - atrasosMin
   faltaPagarMin: number; // devidoMin - compensadoMin
   diaCopaEncontrado: boolean;
+  // Detalhe dia a dia desde 01/07, usado pra explicar de onde vieram os
+  // valores de extras/atrasos acumulados (tela de "detalhes" por colaborador).
+  diasDetalhe: DiaDetalheCopa[];
 }
 
 // Em dias com status administrativo (atestado médico, abono, declaração, férias
@@ -331,7 +343,24 @@ function horarioValido(valor: string | null | undefined): boolean {
   return valor == null || HORARIO_REGEX.test(valor);
 }
 
-function diaComStatusEspecial(batida: Batida): boolean {
+// Nomes amigáveis pros marcadores mais comuns que o Secullum manda nesses campos.
+// Marcador não mapeado aqui ainda assim é exibido (com o texto cru), só não fica
+// bonito — completar esse mapa conforme formos vendo novos casos reais.
+const MOTIVO_LABELS: Record<string, string> = {
+  'AT. MÉD': 'Atestado médico',
+  'ABONO': 'Abono',
+  'DECL.': 'Declaração',
+  'FE. IND': 'Férias individual',
+};
+
+function formatarMotivo(marcador: string): string {
+  const chave = marcador.trim().toUpperCase();
+  return MOTIVO_LABELS[chave] ?? (marcador.trim() || 'Dia sem apuração no Secullum');
+}
+
+// Retorna o motivo (já formatado p/ exibição) do dia, ou null se o dia não tem
+// nenhum marcador de status especial (ou seja, é batida normal/ausência comum).
+function motivoStatusEspecial(batida: Batida): string | null {
   const campos: Array<string | null | undefined> = [
     batida.Entrada1, batida.Saida1,
     batida.Entrada2, batida.Saida2,
@@ -339,7 +368,8 @@ function diaComStatusEspecial(batida: Batida): boolean {
     batida.Entrada4, batida.Saida4,
     batida.Entrada5, batida.Saida5,
   ];
-  return campos.some((v) => v != null && !horarioValido(v));
+  const marcador = campos.find((v) => v != null && !horarioValido(v));
+  return marcador != null ? formatarMotivo(marcador) : null;
 }
 
 function calcularCargaEsperadaMin(batida: Batida): number {
@@ -368,10 +398,12 @@ export async function calcularBancoHorasCopa(cpf: string, dataFim: string): Prom
   let diaCopaEncontrado = false;
   let extrasMin = 0;
   let atrasosMin = 0;
+  const diasDetalhe: DiaDetalheCopa[] = [];
 
   for (const batida of batidas) {
     const dia = batida.Data.split('T')[0];
-    const pulaDia = batida.Folga || batida.Neutro || batida.NBanco || diaComStatusEspecial(batida);
+    const motivo = motivoStatusEspecial(batida);
+    const pulaDia = batida.Folga || batida.Neutro || batida.NBanco || motivo !== null;
     const trabalhadoMin = calcularHorasTrabalhadas(batida) * 60;
     const cargaMin = calcularCargaEsperadaMin(batida);
     const diffMin = trabalhadoMin - cargaMin;
@@ -379,9 +411,29 @@ export async function calcularBancoHorasCopa(cpf: string, dataFim: string): Prom
     if (dia === COPA_DATA) {
       devidoMin = pulaDia ? 0 : Math.max(0, -diffMin);
       diaCopaEncontrado = true;
-    } else if (dia >= COPA_COMPENSACAO_INICIO && !pulaDia && Math.abs(diffMin) > TOLERANCIA_CLT_MIN) {
-      if (diffMin > 0) extrasMin += diffMin;
-      else atrasosMin += -diffMin;
+    } else if (dia >= COPA_COMPENSACAO_INICIO) {
+      let tipo: DiaDetalheCopa['tipo'] = 'neutro';
+      // Dia justificado (atestado, abono etc.) não é déficit real — não soma em
+      // atrasosMin nem mostra a diferença de horas, senão parece que a pessoa
+      // ficou devendo o dia inteiro quando na verdade estava, por exemplo, de
+      // atestado médico.
+      let diffExibido = diffMin;
+      if (motivo !== null) {
+        tipo = 'justificado';
+        diffExibido = 0;
+      } else {
+        const contaNoSaldo = !pulaDia && Math.abs(diffMin) > TOLERANCIA_CLT_MIN;
+        if (contaNoSaldo) {
+          if (diffMin > 0) {
+            extrasMin += diffMin;
+            tipo = 'extra';
+          } else {
+            atrasosMin += -diffMin;
+            tipo = 'atraso';
+          }
+        }
+      }
+      diasDetalhe.push({ data: dia, trabalhadoMin, cargaMin, diffMin: diffExibido, tipo, motivo });
     }
   }
 
@@ -391,5 +443,5 @@ export async function calcularBancoHorasCopa(cpf: string, dataFim: string): Prom
   // nenhuma com a Copa, isso é banco de horas normal, não vira dívida da Copa.
   const faltaPagarMin = devidoMin > 0 ? devidoMin - compensadoMin : 0;
 
-  return { devidoMin, extrasMin, atrasosMin, compensadoMin, faltaPagarMin, diaCopaEncontrado };
+  return { devidoMin, extrasMin, atrasosMin, compensadoMin, faltaPagarMin, diaCopaEncontrado, diasDetalhe };
 }
