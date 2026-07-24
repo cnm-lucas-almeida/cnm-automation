@@ -32,20 +32,36 @@ async function SidebarContent() {
   const visibleMenus = filterMenusForAccess(menus, (href) => canAccessScreen(session, href));
   return (
     <>
-      <Link href="/" className="flex items-center px-6 py-8 shrink-0">
-        <Image src="/logo.png" alt="Chaves na Mão" width={224} height={120} priority className="h-14 w-auto" />
+      <Link
+        href="/"
+        className="flex items-center px-6 py-8 shrink-0 group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:px-2"
+      >
+        <Image
+          src="/logo.png"
+          alt="Chaves na Mão"
+          width={224}
+          height={120}
+          priority
+          className="h-14 w-auto group-data-[collapsed=true]/sidebar:h-8 group-data-[collapsed=true]/sidebar:w-8 group-data-[collapsed=true]/sidebar:object-contain"
+        />
       </Link>
       <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-5 scrollbar-hidden">
         <NavMenu menus={visibleMenus} />
       </nav>
       {session && (
-        <form action={logout} className="border-t border-border/50 p-4 flex items-center justify-between">
-          <span className="text-sm text-muted-foreground truncate">{session.username}</span>
+        <form
+          action={logout}
+          className="border-t border-border/50 p-4 flex items-center justify-between group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:px-2"
+        >
+          <span className="text-sm text-muted-foreground truncate group-data-[collapsed=true]/sidebar:hidden">
+            {session.username}
+          </span>
           <button
             type="submit"
+            title="Sair"
             className="flex items-center gap-1.5 px-2 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors shrink-0"
           >
-            <LogOut size={14} /> Sair
+            <LogOut size={14} /> <span className="group-data-[collapsed=true]/sidebar:hidden">Sair</span>
           </button>
         </form>
       )}

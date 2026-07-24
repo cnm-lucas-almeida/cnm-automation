@@ -27,6 +27,12 @@ export const menus: NavGroup[] = [
     ],
   },
   {
+    label: "Marketing",
+    items: [
+      { label: "Investimento em Mídia", href: "/marketing/campanhas" },
+    ],
+  },
+  {
     label: "Relatórios",
     items: [
       { label: "GLPI", href: "/glpi" },

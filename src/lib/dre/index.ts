@@ -55,8 +55,13 @@ export function parseBalanceteFile(buffer: Buffer): LinhaBalancete[] {
     );
   }
 
+  // O export do Omie tem um rodapé "Resumo" (Totaldedébitos, Totaldecréditos, Lucrodoperíodo
+  // etc.) que preenche a coluna "Conta" com texto e desloca um número para a coluna
+  // "Classificação" — passa no filtro de Classificação não-vazia e viraria uma linha de conta
+  // fantasma. "Conta" é sempre o ID interno numérico da conta nas linhas reais, então exigir
+  // que seja numérico descarta o rodapé sem afetar nenhuma conta de verdade.
   return rows
-    .filter((r) => String(r['Classificação']).trim() !== '')
+    .filter((r) => String(r['Classificação']).trim() !== '' && r['Conta'] !== '' && !Number.isNaN(Number(r['Conta'])))
     .map((r) => ({
       contaId: r['Conta'] !== '' ? Number(r['Conta']) : null,
       classificacao: String(r['Classificação']).trim(),

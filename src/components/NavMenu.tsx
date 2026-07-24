@@ -62,14 +62,15 @@ function LeafLink({ item, pathname }: { item: NavLinkType; pathname: string }) {
   return (
     <Link
       href={item.href}
-      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+      title={item.label}
+      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:px-2 ${
         active
           ? "bg-muted text-foreground font-semibold"
           : "text-muted-foreground hover:bg-accent hover:text-foreground font-medium"
       }`}
     >
       {Icon && <Icon size={17} className={active ? "text-primary" : ""} />}
-      {item.label}
+      <span className="group-data-[collapsed=true]/sidebar:hidden">{item.label}</span>
     </Link>
   );
 }
@@ -84,17 +85,21 @@ function SubmenuBlock({ item, pathname }: { item: NavSubmenu; pathname: string }
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className={`w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors cursor-pointer ${
+        title={item.label}
+        className={`w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors cursor-pointer group-data-[collapsed=true]/sidebar:justify-center group-data-[collapsed=true]/sidebar:px-2 ${
           hasActiveChild ? "text-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground"
         }`}
       >
         {Icon && <Icon size={17} />}
-        <span className="flex-1 text-left">{item.label}</span>
-        <ChevronDown size={14} className={`transition-transform ${open ? "rotate-180" : ""}`} />
+        <span className="flex-1 text-left group-data-[collapsed=true]/sidebar:hidden">{item.label}</span>
+        <ChevronDown
+          size={14}
+          className={`transition-transform group-data-[collapsed=true]/sidebar:hidden ${open ? "rotate-180" : ""}`}
+        />
       </button>
 
       {open && (
-        <div className="mt-1 ml-4 flex flex-col gap-1 border-l border-border/50 pl-4">
+        <div className="mt-1 ml-4 flex flex-col gap-1 border-l border-border/50 pl-4 group-data-[collapsed=true]/sidebar:hidden">
           {item.items.map((link) => (
             <LeafLink key={link.href} item={link} pathname={pathname} />
           ))}
@@ -113,7 +118,9 @@ export default function NavMenu({ menus }: { menus: NavGroup[] }) {
 
       {menus.map((group) => (
         <div key={group.label} className="flex flex-col gap-1">
-          <span className="px-3 text-xs font-semibold text-muted-foreground/80">{group.label}</span>
+          <span className="px-3 text-xs font-semibold text-muted-foreground/80 group-data-[collapsed=true]/sidebar:hidden">
+            {group.label}
+          </span>
           {group.items.map((item) =>
             isSubmenu(item) ? (
               <SubmenuBlock key={item.label} item={item} pathname={pathname} />
