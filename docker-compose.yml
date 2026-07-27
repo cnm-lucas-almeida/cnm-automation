@@ -8,14 +8,8 @@ services:
       - .env
     environment:
       NODE_ENV: production
-      CHOKIDAR_USEPOLLING: "true"
-      WATCHPACK_POLLING: "true"
     ports:
       - "3000:3000"
-    volumes:
-      - ./:/app
-      - /app/node_modules
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    command: npm run start -- --hostname 0.0.0.0
     restart: unless-stopped
