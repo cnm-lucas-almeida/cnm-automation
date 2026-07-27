@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: omie-validator-app
+    container_name: cnm-automation-app
     env_file:
       - .env
     environment:
@@ -11,7 +11,10 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./data:/app/data
+      - auth_data:/app/data
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
+
+volumes:
+  auth_data:
