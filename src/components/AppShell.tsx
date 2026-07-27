@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -9,7 +9,15 @@ import Breadcrumbs from "./Breadcrumbs";
 
 const SIDEBAR_COLLAPSED_KEY = "sidebar-collapsed";
 
-export default function AppShell({ sidebar, children }: { sidebar: ReactNode; children: ReactNode }) {
+export default function AppShell(props: { sidebar: ReactNode; children: ReactNode }) {
+  return (
+    <Suspense fallback={<>{props.children}</>}>
+      <AppShellInner {...props} />
+    </Suspense>
+  );
+}
+
+function AppShellInner({ sidebar, children }: { sidebar: ReactNode; children: ReactNode }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
