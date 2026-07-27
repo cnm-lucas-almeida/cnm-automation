@@ -23,6 +23,10 @@ import {
   Settings2,
   KeyRound,
   ShieldCheck,
+  Landmark,
+  TrendingUp,
+  Users2,
+  Megaphone,
   type LucideIcon,
 } from "lucide-react";
 import { isSubmenu, type NavGroup, type NavLink as NavLinkType, type NavSubmenu } from "@/lib/nav-menu";
@@ -50,6 +54,10 @@ const ICONS: Record<string, LucideIcon> = {
   "Acesso": KeyRound,
   "Usuários": Users,
   "Papéis": ShieldCheck,
+  "DRE": Landmark,
+  "Projeção": TrendingUp,
+  "Quadro Comercial": Users2,
+  "Investimento em Mídia": Megaphone,
 };
 
 function isActive(pathname: string, href: string) {

@@ -3,7 +3,7 @@ import { randomBytes } from 'crypto';
 import { getAuthDb } from './db';
 
 const COOKIE_NAME = 'cnm_session';
-const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
+const SESSION_DURATION_MS = 12 * 60 * 60 * 1000;
 
 export type Session = {
   userId: number;
