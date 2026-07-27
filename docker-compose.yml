@@ -7,7 +7,7 @@ services:
     env_file:
       - .env
     environment:
-      NODE_ENV: development
+      NODE_ENV: production
       CHOKIDAR_USEPOLLING: "true"
       WATCHPACK_POLLING: "true"
     ports:
@@ -17,5 +17,5 @@ services:
       - /app/node_modules
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    command: npm run dev -- --hostname 0.0.0.0
+    command: npm run start -- --hostname 0.0.0.0
     restart: unless-stopped
