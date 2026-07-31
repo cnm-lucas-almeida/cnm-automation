@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, type UIEvent, type RefObject } from 'react';
 import axios from 'axios';
 import {
-  Loader2, RefreshCw, AlertTriangle, Wallet, TrendingUp, MinusCircle, Upload, Plus, X, Users, Pencil,
+  Loader2, AlertTriangle, Wallet, TrendingUp, MinusCircle, Upload, Plus, X, Users, Pencil, Calculator,
 } from 'lucide-react';
 import { formatCurrencyBRL, formatNumberBR } from '@/lib/format';
 import { PercentInput } from '@/components/ui/PercentInput';
@@ -126,14 +126,13 @@ function corSaldo(valor: number): string {
   return '';
 }
 
-// Larguras fixas das colunas congeladas (Admissão/Nome/CPF) — sticky exige
+// Larguras fixas das colunas congeladas (Admissão/Nome) — sticky exige
 // offset previsível, não dá pra deixar a largura variar com o conteúdo.
+// CPF não é congelado — rola normalmente junto com o resto da tabela.
 const STICKY_ADMISSAO_W = 90;
 const STICKY_NOME_W = 170;
-const STICKY_CPF_W = 104;
 const STICKY_NOME_LEFT = STICKY_ADMISSAO_W;
-const STICKY_CPF_LEFT = STICKY_ADMISSAO_W + STICKY_NOME_W;
-const STICKY_TOTAL_W = STICKY_ADMISSAO_W + STICKY_NOME_W + STICKY_CPF_W;
+const STICKY_TOTAL_W = STICKY_ADMISSAO_W + STICKY_NOME_W;
 
 // width sozinho é só uma dica pro table-layout: auto — conteúdo (ex.: nome
 // longo) pode fazer a coluna renderizar mais larga que isso e desalinhar o
@@ -221,15 +220,38 @@ export default function FolhaPagamentoPage() {
   const [salvandoFalta, setSalvandoFalta] = useState<string | null>(null);
   const [progresso, setProgresso] = useState<ProgressoFechamento | null>(null);
 
-  const carregar = useCallback(async (forceRefresh = false, signal?: AbortSignal) => {
+  // Barra de scroll horizontal grudada no rodapé da tela — a tabela tem
+  // centenas de linhas, então o scrollbar nativo (no fim do container) fica
+  // longe da visão quando o usuário está no meio da lista. Essa segunda barra
+  // (sticky bottom-0) espelha o scrollLeft real da tabela nos dois sentidos.
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const bottomScrollRef = useRef<HTMLDivElement>(null);
+  const [tableWidth, setTableWidth] = useState(0);
+
+  useEffect(() => {
+    const el = tableScrollRef.current;
+    if (!el) return;
+    const medir = () => setTableWidth(el.scrollWidth);
+    medir();
+    const observer = new ResizeObserver(medir);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [dados]);
+
+  function sincronizarScroll(e: UIEvent<HTMLDivElement>, destino: RefObject<HTMLDivElement | null>) {
+    if (destino.current && destino.current.scrollLeft !== e.currentTarget.scrollLeft) {
+      destino.current.scrollLeft = e.currentTarget.scrollLeft;
+    }
+  }
+
+  const carregar = useCallback(async (forceRefresh = false) => {
     setLoading(true);
     setErro(null);
     setProgresso(null);
 
     // Intervalo é local a cada chamada (não uma ref compartilhada) — se 2
-    // chamadas se sobrepuserem (ex.: Strict Mode disparando o efeito de
-    // montagem 2x em dev), cada uma limpa só o próprio intervalo, sem uma
-    // apagar o timer da outra por engano.
+    // chamadas se sobrepuserem, cada uma limpa só o próprio intervalo, sem
+    // uma apagar o timer da outra por engano.
     const intervalId = setInterval(async () => {
       try {
         const { data } = await axios.get<ProgressoFechamento>('/api/folha-pagamento/progresso');
@@ -240,10 +262,9 @@ export default function FolhaPagamentoPage() {
     }, 800);
 
     try {
-      const { data } = await axios.get<FolhaPagamentoResultado>('/api/folha-pagamento', { params: { ano, mes, forceRefresh }, signal });
+      const { data } = await axios.get<FolhaPagamentoResultado>('/api/folha-pagamento', { params: { ano, mes, forceRefresh } });
       setDados(data);
     } catch (e: any) {
-      if (axios.isCancel(e) || e.code === 'ERR_CANCELED') return; // chamada duplicada abortada (ex.: Strict Mode em dev) — ignora silenciosamente
       setErro(e?.response?.data?.error ?? e.message);
     } finally {
       clearInterval(intervalId);
@@ -257,15 +278,9 @@ export default function FolhaPagamentoPage() {
     setOverrides(data.overrides);
   }, []);
 
-  useEffect(() => {
-    // AbortController pra evitar 2 chamadas concorrentes de verdade — o
-    // Strict Mode do React (dev) dispara esse efeito 2x no mount; sem isso,
-    // eram 2 buscas de salário no Convenia rodando juntas, furando o
-    // throttle e estourando 429 mesmo com o intervalo entre chamadas.
-    const controller = new AbortController();
-    carregar(false, controller.signal);
-    return () => controller.abort();
-  }, [carregar]);
+  // Sem carregamento automático ao entrar na tela — o fechamento é pesado
+  // (rate limit do Convenia, minutos de espera), então só roda quando o
+  // usuário escolhe o mês e pede explicitamente pelo botão "Calcular folha".
   useEffect(() => { if (mostrarConfig) carregarConfig(); }, [mostrarConfig, carregarConfig]);
 
   async function upload(tipo: 'unimed' | 'odonto' | 'consignado' | 'vale', file: File) {
@@ -396,8 +411,8 @@ export default function FolhaPagamentoPage() {
             disabled={loading}
             className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-sm hover:bg-muted/60 disabled:opacity-50"
           >
-            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
-            Atualizar Convenia
+            {loading ? <Loader2 size={15} className="animate-spin" /> : <Calculator size={15} />}
+            Calcular folha
           </button>
           <button
             onClick={() => setMostrarConfig((v) => !v)}
@@ -407,13 +422,6 @@ export default function FolhaPagamentoPage() {
             Exceções
           </button>
         </div>
-      </div>
-
-      <div className="flex items-center gap-3 flex-wrap">
-        <UploadButton label="Importar Unimed (PDF)" accept=".pdf" uploading={uploading === 'unimed'} onUpload={(f) => upload('unimed', f)} />
-        <UploadButton label="Importar Odonto (XLSX)" accept=".xlsx" uploading={uploading === 'odonto'} onUpload={(f) => upload('odonto', f)} />
-        <UploadButton label="Importar Consignado (JSON)" accept=".json" uploading={uploading === 'consignado'} onUpload={(f) => upload('consignado', f)} />
-        <UploadButton label="Importar VA/VT (XLSX)" accept=".xlsx" uploading={uploading === 'vale'} onUpload={(f) => upload('vale', f)} />
       </div>
 
       {erro && (
@@ -434,151 +442,186 @@ export default function FolhaPagamentoPage() {
 
       {loading && <ProgressoModal progresso={progresso} />}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard title="Total da folha" icon={Wallet} value={formatCurrencyBRL(totalFolha)} sub={`${colaboradores.length} colaboradores ativos`} />
-        <KpiCard title="Total comissões" icon={TrendingUp} value={formatCurrencyBRL(totalComissao)} />
-        <KpiCard title="Total descontos" icon={MinusCircle} value={formatCurrencyBRL(totalDescontos)} sub="Unimed + Odonto + Consignado + faltas" />
-        <KpiCard
-          title="Pendências"
-          icon={AlertTriangle}
-          value={String(pendencias)}
-          sub={dados?.colaboradoresSemCpf ? `+ ${dados.colaboradoresSemCpf} sem CPF no Convenia` : 'colaboradores a conferir manualmente'}
-        />
-      </div>
+      {!dados && !loading && (
+        <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border py-24 text-center">
+          <Calculator size={28} className="text-muted-foreground" />
+          <p className="text-sm font-medium">Escolha o mês/ano acima e clique em &quot;Calcular folha&quot; para começar</p>
+          <p className="text-xs text-muted-foreground max-w-sm">
+            O fechamento busca salário no Convenia, horas no Secullum e calcula comissão, descontos e benefícios — pode levar alguns minutos.
+          </p>
+        </div>
+      )}
 
-      <div className="rounded-lg border border-border overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-border bg-muted [&>th]:px-2 [&>th]:py-1 [&>th]:text-center [&>th]:font-semibold [&>th]:text-[10px] [&>th]:uppercase [&>th]:tracking-wider [&>th]:text-muted-foreground/70 [&>th]:whitespace-nowrap">
-              <th className="sticky z-10 bg-muted text-left!" style={stickyColStyle(0, STICKY_TOTAL_W)} colSpan={3}>Dados Gerais</th>
-              <th className="border-r border-border" colSpan={2}>&nbsp;</th>
-              <th className="border-r border-border" colSpan={4}>Salário</th>
-              <th className="border-r border-border" colSpan={3}>Comissão</th>
-              <th className="border-r border-border" colSpan={11}>Horas</th>
-              <th className="border-r border-border" colSpan={2}>Descontos</th>
-              <th className="border-r border-border" colSpan={4}>Benefícios</th>
-              <th colSpan={1}>Observações</th>
-            </tr>
-            <tr className="border-b border-border bg-muted [&>th]:px-2 [&>th]:py-2 [&>th]:text-left [&>th]:font-semibold [&>th]:text-muted-foreground [&>th]:whitespace-nowrap">
-              <th className="sticky z-10 bg-muted" style={stickyColStyle(0, STICKY_ADMISSAO_W)}>Admissão</th>
-              <th className="sticky z-10 bg-muted" style={stickyColStyle(STICKY_NOME_LEFT, STICKY_NOME_W)}>Nome</th>
-              <th className="sticky z-10 bg-muted" style={stickyColStyle(STICKY_CPF_LEFT, STICKY_CPF_W)}>CPF</th>
-              <th>Cargo</th><th className="border-r border-border">Dpto</th>
-              <th className="text-right">Salário Base</th><th className="text-right">Dissídio</th><th className="text-right">% Adicional</th><th className="text-right border-r border-border">Salário Atual.</th>
-              <th className="text-right">Comissão</th><th className="text-right">DSR Comis.</th><th className="text-right border-r border-border">Sal+Comis.</th>
-              <th className="text-right">Horas +</th><th className="text-right">Horas −</th><th className="text-right">Saldo Horas</th>
-              <th className="text-right">Valor Hora</th><th className="text-right">Hora Extra</th>
-              <th className="text-right">HE +75%</th><th className="text-right">DSR HE</th>
-              <th className="text-right">Salário/H</th><th className="text-right">Desc. Falta</th>
-              <th className="text-right">Falta</th><th className="text-right border-r border-border">DSR</th>
-              <th className="text-right">Consignado</th><th className="border-r border-border">SITEPD</th>
-              <th className="text-right">Unimed</th><th className="text-right">Odonto</th><th className="text-right">VA</th><th className="text-right border-r border-border">VT</th>
-              <th>Observações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {colaboradores.map((c) => {
-              const destaque = !c.secullumEncontrado || c.erro || c.comissaoMatchPorNome;
-              const bgSticky = destaque ? 'bg-warning-bg' : 'bg-card';
-              return (
-              <tr
-                key={c.cpf}
-                className={`border-b border-border last:border-0 [&>td]:px-2 [&>td]:py-1.5 [&>td]:whitespace-nowrap hover:bg-muted/30 ${
-                  destaque ? 'bg-warning-bg/30' : ''
-                }`}
-              >
-                <td className={`sticky z-10 ${bgSticky}`} style={stickyColStyle(0, STICKY_ADMISSAO_W)}>
-                  {c.admissao ? new Date(c.admissao).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '—'}
-                </td>
-                <td
-                  className={`sticky z-10 ${bgSticky} font-medium truncate`}
-                  style={stickyColStyle(STICKY_NOME_LEFT, STICKY_NOME_W)}
-                  title={c.erro ?? (c.comissaoMatchPorNome ? 'Comissão cruzada por nome — CPF ausente no cadastro do vendedor (tb_vendedor.documento vazio). Conferir manualmente.' : undefined)}
-                >
-                  {c.nome}
-                  {destaque && <AlertTriangle size={11} className="inline ml-1 text-warning" />}
-                </td>
-                <td className={`sticky z-10 ${bgSticky} tabular-nums`} style={stickyColStyle(STICKY_CPF_LEFT, STICKY_CPF_W)}>{c.cpf}</td>
-                <td className="max-w-[160px] truncate">{c.cargo}</td>
-                <td className="border-r border-border">{c.dpto}</td>
-                <td className="text-right tabular-nums">{formatCurrencyBRL(c.salarioBase)}</td>
-                <td className="text-right tabular-nums">{formatNumberBR(c.dissidioPercentual * 100, { maximumFractionDigits: 2 })}%</td>
-                <td className="text-right tabular-nums">{c.overridePercentual > 0 ? `${formatNumberBR(c.overridePercentual * 100, { maximumFractionDigits: 2 })}%` : '—'}</td>
-                <td className="text-right tabular-nums font-medium border-r border-border">{formatCurrencyBRL(c.salarioAtualizado)}</td>
-                <td className={`text-right tabular-nums ${corAcrescimo(c.comissao)}`}>{formatCurrencyBRL(c.comissao)}</td>
-                <td className={`text-right tabular-nums ${corAcrescimo(c.dsrComissao)}`}>{formatCurrencyBRL(c.dsrComissao)}</td>
-                <td className="text-right tabular-nums font-medium border-r border-border">{formatCurrencyBRL(c.salMaisComissao)}</td>
-                <td className="text-right tabular-nums min-w-[70px]">
-                  <div className="flex items-center justify-end gap-1">
-                    <EditableHorasCell
-                      decimal={c.horasPositivas}
-                      editando={editandoHoras?.cpf === c.cpf && editandoHoras.campo === 'horasPositivas'}
-                      onEditar={() => setEditandoHoras({ cpf: c.cpf, campo: 'horasPositivas' })}
-                      onSave={(v) => salvarHoras(c.cpf, 'horasPositivas', v)}
-                      corTexto={corAcrescimo(c.horasPositivas)}
-                      editadoManualmente={c.horasEditadasManualmente}
-                    />
-                    {salvandoHoras && editandoHoras?.cpf === c.cpf && <Loader2 size={10} className="animate-spin flex-shrink-0" />}
-                  </div>
-                </td>
-                <td className="text-right tabular-nums min-w-[70px]">
-                  <div className="flex items-center justify-end gap-1">
-                    <EditableHorasCell
-                      decimal={c.horasNegativas}
-                      editando={editandoHoras?.cpf === c.cpf && editandoHoras.campo === 'horasNegativas'}
-                      onEditar={() => setEditandoHoras({ cpf: c.cpf, campo: 'horasNegativas' })}
-                      onSave={(v) => salvarHoras(c.cpf, 'horasNegativas', v)}
-                      corTexto={corDesconto(c.horasNegativas)}
-                      editadoManualmente={c.horasEditadasManualmente}
-                    />
-                    {salvandoHoras && editandoHoras?.cpf === c.cpf && <Loader2 size={10} className="animate-spin flex-shrink-0" />}
-                  </div>
-                </td>
-                <td className={`text-right tabular-nums ${corSaldo(c.horasPositivas - c.horasNegativas)}`}>
-                  {decimalParaHHMM(c.horasPositivas - c.horasNegativas)}
-                </td>
-                <td className="text-right tabular-nums">{formatCurrencyBRL(c.valorHora)}</td>
-                <td className={`text-right tabular-nums ${corAcrescimo(c.horaExtra)}`}>{formatCurrencyBRL(c.horaExtra)}</td>
-                <td className={`text-right tabular-nums ${corAcrescimo(c.heMais75)}`}>{formatCurrencyBRL(c.heMais75)}</td>
-                <td className={`text-right tabular-nums ${corAcrescimo(c.dsrHoraExtra)}`}>{formatCurrencyBRL(c.dsrHoraExtra)}</td>
-                <td className="text-right tabular-nums">{formatCurrencyBRL(c.salarioPorHora)}</td>
-                <td className={`text-right tabular-nums ${corDesconto(c.descHorasFalta)}`}>{formatCurrencyBRL(c.descHorasFalta)}</td>
-                <td className="text-right tabular-nums min-w-[50px]" title={c.faltaDatas.join(', ')}>
-                  <div className="flex items-center justify-end gap-1">
-                    <EditableCell value={c.faltaQtd || null} numeric onSave={(v) => salvarFalta(c.cpf, v)} />
-                    {salvandoFalta === c.cpf && <Loader2 size={10} className="animate-spin flex-shrink-0" />}
-                  </div>
-                </td>
-                <td className={`text-right tabular-nums border-r border-border ${corDesconto(c.dsrValor)}`}>{formatCurrencyBRL(c.dsrValor)}</td>
-                <td className={`text-right tabular-nums ${corDesconto(c.consignado)}`}>{formatCurrencyBRL(c.consignado)}</td>
-                <td className="min-w-[90px] border-r border-border">
-                  <EditableCell value={c.sitepd} onSave={(v) => salvarManual(c.cpf, 'sitepd', v)} />
-                </td>
-                <td className={`text-right tabular-nums ${corDesconto(c.descontoUnimed)}`}>{formatCurrencyBRL(c.descontoUnimed)}</td>
-                <td className={`text-right tabular-nums ${corDesconto(c.descontoOdonto)}`}>{formatCurrencyBRL(c.descontoOdonto)}</td>
-                <td className="min-w-[80px] text-right">
-                  <EditableCell value={c.valeAlimentacao} numeric onSave={(v) => salvarManual(c.cpf, 'valeAlimentacao', v)} />
-                </td>
-                <td className="min-w-[80px] text-right border-r border-border">
-                  <EditableCell value={c.valeTransporte} numeric onSave={(v) => salvarManual(c.cpf, 'valeTransporte', v)} />
-                </td>
-                <td className="min-w-[140px]">
-                  <EditableCell value={c.observacoes} onSave={(v) => salvarManual(c.cpf, 'observacoes', v)} />
-                </td>
-              </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        {loading && (
-          <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-            <Loader2 size={16} className="animate-spin" /> Calculando folha — Convenia é limitado por rate limit, pode levar alguns minutos.
+      {dados && (
+        <>
+          <div className="flex items-center gap-3 flex-wrap">
+            <UploadButton label="Importar Unimed (PDF)" accept=".pdf" uploading={uploading === 'unimed'} onUpload={(f) => upload('unimed', f)} />
+            <UploadButton label="Importar Odonto (XLSX)" accept=".xlsx" uploading={uploading === 'odonto'} onUpload={(f) => upload('odonto', f)} />
+            <UploadButton label="Importar Consignado (JSON)" accept=".json" uploading={uploading === 'consignado'} onUpload={(f) => upload('consignado', f)} />
+            <UploadButton label="Importar VA/VT (XLSX)" accept=".xlsx" uploading={uploading === 'vale'} onUpload={(f) => upload('vale', f)} />
           </div>
-        )}
-        {!loading && colaboradores.length === 0 && (
-          <p className="text-center py-10 text-sm text-muted-foreground">Nenhum colaborador encontrado para o período.</p>
-        )}
-      </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <KpiCard title="Total da folha" icon={Wallet} value={formatCurrencyBRL(totalFolha)} sub={`${colaboradores.length} colaboradores ativos`} />
+            <KpiCard title="Total comissões" icon={TrendingUp} value={formatCurrencyBRL(totalComissao)} />
+            <KpiCard title="Total descontos" icon={MinusCircle} value={formatCurrencyBRL(totalDescontos)} sub="Unimed + Odonto + Consignado + faltas" />
+            <KpiCard
+              title="Pendências"
+              icon={AlertTriangle}
+              value={String(pendencias)}
+              sub={dados?.colaboradoresSemCpf ? `+ ${dados.colaboradoresSemCpf} sem CPF no Convenia` : 'colaboradores a conferir manualmente'}
+            />
+          </div>
+
+          <div
+            className="rounded-lg border border-border overflow-x-auto"
+            ref={tableScrollRef}
+            onScroll={(e) => sincronizarScroll(e, bottomScrollRef)}
+          >
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-border bg-muted [&>th]:px-2 [&>th]:py-1 [&>th]:text-center [&>th]:font-semibold [&>th]:text-[10px] [&>th]:uppercase [&>th]:tracking-wider [&>th]:text-muted-foreground/70 [&>th]:whitespace-nowrap">
+                  <th className="sticky z-10 bg-muted text-left!" style={stickyColStyle(0, STICKY_TOTAL_W)} colSpan={3}>Dados Gerais</th>
+                  <th className="border-r border-border" colSpan={2}>&nbsp;</th>
+                  <th className="border-r border-border" colSpan={4}>Salário</th>
+                  <th className="border-r border-border" colSpan={3}>Comissão</th>
+                  <th className="border-r border-border" colSpan={11}>Horas</th>
+                  <th className="border-r border-border" colSpan={2}>Descontos</th>
+                  <th className="border-r border-border" colSpan={4}>Benefícios</th>
+                  <th colSpan={1}>Observações</th>
+                </tr>
+                <tr className="border-b border-border bg-muted [&>th]:px-2 [&>th]:py-2 [&>th]:text-left [&>th]:font-semibold [&>th]:text-muted-foreground [&>th]:whitespace-nowrap">
+                  <th className="sticky z-10 bg-muted" style={stickyColStyle(0, STICKY_ADMISSAO_W)}>Admissão</th>
+                  <th className="sticky z-10 bg-muted" style={stickyColStyle(STICKY_NOME_LEFT, STICKY_NOME_W)}>Nome</th>
+                  <th>CPF</th>
+                  <th>Cargo</th><th className="border-r border-border">Dpto</th>
+                  <th className="text-right">Salário Base</th><th className="text-right">Dissídio</th><th className="text-right">% Adicional</th><th className="text-right border-r border-border">Salário Atual.</th>
+                  <th className="text-right">Comissão</th><th className="text-right">DSR Comis.</th><th className="text-right border-r border-border">Sal+Comis.</th>
+                  <th className="text-right">Horas +</th><th className="text-right">Horas −</th><th className="text-right">Saldo Horas</th>
+                  <th className="text-right">Valor Hora</th><th className="text-right">Hora Extra</th>
+                  <th className="text-right">HE +75%</th><th className="text-right">DSR HE</th>
+                  <th className="text-right">Salário/H</th><th className="text-right">Desc. Falta</th>
+                  <th className="text-right">Falta</th><th className="text-right border-r border-border">DSR</th>
+                  <th className="text-right">Consignado</th><th className="border-r border-border">SITEPD</th>
+                  <th className="text-right">Unimed</th><th className="text-right">Odonto</th><th className="text-right">VA</th><th className="text-right border-r border-border">VT</th>
+                  <th>Observações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {colaboradores.map((c) => {
+                  const destaque = !c.secullumEncontrado || c.erro || c.comissaoMatchPorNome;
+                  const bgSticky = destaque ? 'bg-warning-bg' : 'bg-card';
+                  return (
+                  <tr
+                    key={c.cpf}
+                    className={`border-b border-border last:border-0 [&>td]:px-2 [&>td]:py-1.5 [&>td]:whitespace-nowrap hover:bg-muted/30 ${
+                      destaque ? 'bg-warning-bg/30' : ''
+                    }`}
+                  >
+                    <td className={`sticky z-10 ${bgSticky}`} style={stickyColStyle(0, STICKY_ADMISSAO_W)}>
+                      {c.admissao ? new Date(c.admissao).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '—'}
+                    </td>
+                    <td
+                      className={`sticky z-10 ${bgSticky} font-medium truncate`}
+                      style={stickyColStyle(STICKY_NOME_LEFT, STICKY_NOME_W)}
+                      title={c.erro ?? (c.comissaoMatchPorNome ? 'Comissão cruzada por nome — CPF ausente no cadastro do vendedor (tb_vendedor.documento vazio). Conferir manualmente.' : undefined)}
+                    >
+                      {c.nome}
+                      {destaque && <AlertTriangle size={11} className="inline ml-1 text-warning" />}
+                    </td>
+                    <td className="tabular-nums">{c.cpf}</td>
+                    <td className="max-w-[160px] truncate">{c.cargo}</td>
+                    <td className="border-r border-border">{c.dpto}</td>
+                    <td className="text-right tabular-nums">{formatCurrencyBRL(c.salarioBase)}</td>
+                    <td className="text-right tabular-nums">{formatNumberBR(c.dissidioPercentual * 100, { maximumFractionDigits: 2 })}%</td>
+                    <td className="text-right tabular-nums">{c.overridePercentual > 0 ? `${formatNumberBR(c.overridePercentual * 100, { maximumFractionDigits: 2 })}%` : '—'}</td>
+                    <td className="text-right tabular-nums font-medium border-r border-border">{formatCurrencyBRL(c.salarioAtualizado)}</td>
+                    <td className={`text-right tabular-nums ${corAcrescimo(c.comissao)}`}>{formatCurrencyBRL(c.comissao)}</td>
+                    <td className={`text-right tabular-nums ${corAcrescimo(c.dsrComissao)}`}>{formatCurrencyBRL(c.dsrComissao)}</td>
+                    <td className="text-right tabular-nums font-medium border-r border-border">{formatCurrencyBRL(c.salMaisComissao)}</td>
+                    <td className="text-right tabular-nums min-w-[70px]">
+                      <div className="flex items-center justify-end gap-1">
+                        <EditableHorasCell
+                          decimal={c.horasPositivas}
+                          editando={editandoHoras?.cpf === c.cpf && editandoHoras.campo === 'horasPositivas'}
+                          onEditar={() => setEditandoHoras({ cpf: c.cpf, campo: 'horasPositivas' })}
+                          onSave={(v) => salvarHoras(c.cpf, 'horasPositivas', v)}
+                          corTexto={corAcrescimo(c.horasPositivas)}
+                          editadoManualmente={c.horasEditadasManualmente}
+                        />
+                        {salvandoHoras && editandoHoras?.cpf === c.cpf && <Loader2 size={10} className="animate-spin flex-shrink-0" />}
+                      </div>
+                    </td>
+                    <td className="text-right tabular-nums min-w-[70px]">
+                      <div className="flex items-center justify-end gap-1">
+                        <EditableHorasCell
+                          decimal={c.horasNegativas}
+                          editando={editandoHoras?.cpf === c.cpf && editandoHoras.campo === 'horasNegativas'}
+                          onEditar={() => setEditandoHoras({ cpf: c.cpf, campo: 'horasNegativas' })}
+                          onSave={(v) => salvarHoras(c.cpf, 'horasNegativas', v)}
+                          corTexto={corDesconto(c.horasNegativas)}
+                          editadoManualmente={c.horasEditadasManualmente}
+                        />
+                        {salvandoHoras && editandoHoras?.cpf === c.cpf && <Loader2 size={10} className="animate-spin flex-shrink-0" />}
+                      </div>
+                    </td>
+                    <td className={`text-right tabular-nums ${corSaldo(c.horasPositivas - c.horasNegativas)}`}>
+                      {decimalParaHHMM(c.horasPositivas - c.horasNegativas)}
+                    </td>
+                    <td className="text-right tabular-nums">{formatCurrencyBRL(c.valorHora)}</td>
+                    <td className={`text-right tabular-nums ${corAcrescimo(c.horaExtra)}`}>{formatCurrencyBRL(c.horaExtra)}</td>
+                    <td className={`text-right tabular-nums ${corAcrescimo(c.heMais75)}`}>{formatCurrencyBRL(c.heMais75)}</td>
+                    <td className={`text-right tabular-nums ${corAcrescimo(c.dsrHoraExtra)}`}>{formatCurrencyBRL(c.dsrHoraExtra)}</td>
+                    <td className="text-right tabular-nums">{formatCurrencyBRL(c.salarioPorHora)}</td>
+                    <td className={`text-right tabular-nums ${corDesconto(c.descHorasFalta)}`}>{formatCurrencyBRL(c.descHorasFalta)}</td>
+                    <td className="text-right tabular-nums min-w-[50px]" title={c.faltaDatas.join(', ')}>
+                      <div className="flex items-center justify-end gap-1">
+                        <EditableCell value={c.faltaQtd || null} numeric onSave={(v) => salvarFalta(c.cpf, v)} />
+                        {salvandoFalta === c.cpf && <Loader2 size={10} className="animate-spin flex-shrink-0" />}
+                      </div>
+                    </td>
+                    <td className={`text-right tabular-nums border-r border-border ${corDesconto(c.dsrValor)}`}>{formatCurrencyBRL(c.dsrValor)}</td>
+                    <td className={`text-right tabular-nums ${corDesconto(c.consignado)}`}>{formatCurrencyBRL(c.consignado)}</td>
+                    <td className="min-w-[90px] border-r border-border">
+                      <EditableCell value={c.sitepd} onSave={(v) => salvarManual(c.cpf, 'sitepd', v)} />
+                    </td>
+                    <td className={`text-right tabular-nums ${corDesconto(c.descontoUnimed)}`}>{formatCurrencyBRL(c.descontoUnimed)}</td>
+                    <td className={`text-right tabular-nums ${corDesconto(c.descontoOdonto)}`}>{formatCurrencyBRL(c.descontoOdonto)}</td>
+                    <td className="min-w-[80px] text-right">
+                      <EditableCell value={c.valeAlimentacao} numeric onSave={(v) => salvarManual(c.cpf, 'valeAlimentacao', v)} />
+                    </td>
+                    <td className="min-w-[80px] text-right border-r border-border">
+                      <EditableCell value={c.valeTransporte} numeric onSave={(v) => salvarManual(c.cpf, 'valeTransporte', v)} />
+                    </td>
+                    <td className="min-w-[140px]">
+                      <EditableCell value={c.observacoes} onSave={(v) => salvarManual(c.cpf, 'observacoes', v)} />
+                    </td>
+                  </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {loading && (
+              <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+                <Loader2 size={16} className="animate-spin" /> Calculando folha — Convenia é limitado por rate limit, pode levar alguns minutos.
+              </div>
+            )}
+            {!loading && colaboradores.length === 0 && (
+              <p className="text-center py-10 text-sm text-muted-foreground">Nenhum colaborador encontrado para o período.</p>
+            )}
+          </div>
+
+          {tableWidth > 0 && (
+            <div
+              className="sticky bottom-0 z-20 h-3 overflow-x-auto overflow-y-hidden rounded-b-lg border border-t-0 border-border bg-muted"
+              ref={bottomScrollRef}
+              onScroll={(e) => sincronizarScroll(e, tableScrollRef)}
+            >
+              <div style={{ width: tableWidth, height: 1 }} />
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
