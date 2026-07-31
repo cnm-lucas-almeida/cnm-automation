@@ -11,12 +11,18 @@ const SECULLUM_BANCO_ID = process.env.SECULLUM_BANCO_ID!;
 
 let tokenCache: { token: string; expiresAt: number; refreshToken: string } | null = null;
 
-async function getToken(): Promise<string> {
-  const now = Date.now();
-  if (tokenCache && tokenCache.expiresAt - 60_000 > now) {
-    return tokenCache.token;
-  }
+function esperar(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
+// O endpoint de autenticação do Secullum falha esporadicamente com 500 (sem
+// relação com credencial — reproduzido isolado, some numa nova tentativa).
+// Retry com backoff, e uma única chamada em voo mesmo se vários colaboradores
+// pedem token ao mesmo tempo (relatório roda com concorrência) — evita várias
+// requisições de login simultâneas na mesma conta.
+let requisicaoTokenEmVoo: Promise<string> | null = null;
+
+async function autenticar(tentativa = 1): Promise<{ token: string; expiresAt: number; refreshToken: string }> {
   const params = new URLSearchParams({
     grant_type: 'password',
     username: SECULLUM_USERNAME,
@@ -24,25 +30,44 @@ async function getToken(): Promise<string> {
     client_id: '3',
   });
 
-  let res: any;
   try {
-    res = await axios.post(`${AUTH_URL}/Token`, params.toString(), {
+    const res = await axios.post(`${AUTH_URL}/Token`, params.toString(), {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       timeout: 15_000,
     });
+    return {
+      token: res.data.access_token,
+      expiresAt: Date.now() + res.data.expires_in * 1000,
+      refreshToken: res.data.refresh_token,
+    };
   } catch (err: any) {
+    const status = err?.response?.status;
+    if (status === 500 && tentativa <= 3) {
+      await esperar(500 * tentativa);
+      return autenticar(tentativa + 1);
+    }
     const body = err?.response?.data ? JSON.stringify(err.response.data) : err.message;
-    console.error('[Secullum Auth] Falha no token:', err?.response?.status, body);
-    throw new Error(`Auth Secullum falhou (${err?.response?.status}): ${body}`);
+    console.error('[Secullum Auth] Falha no token:', status, body);
+    throw new Error(`Auth Secullum falhou (${status}): ${body}`);
+  }
+}
+
+async function getToken(): Promise<string> {
+  const now = Date.now();
+  if (tokenCache && tokenCache.expiresAt - 60_000 > now) {
+    return tokenCache.token;
   }
 
-  tokenCache = {
-    token: res.data.access_token,
-    expiresAt: now + res.data.expires_in * 1000,
-    refreshToken: res.data.refresh_token,
-  };
+  if (!requisicaoTokenEmVoo) {
+    requisicaoTokenEmVoo = autenticar().finally(() => {
+      requisicaoTokenEmVoo = null;
+    }).then((resultado) => {
+      tokenCache = resultado;
+      return resultado.token;
+    });
+  }
 
-  return tokenCache.token;
+  return requisicaoTokenEmVoo;
 }
 
 // ── /Calcular cache (max 100 req/h por banco) ─────────────────────────────────
@@ -156,6 +181,57 @@ export async function getCalcular(
 export function invalidarCacheCalcular(cpf: string, dataInicio: string, dataFim: string) {
   const key = `${cpf}|${dataInicio}|${dataFim}`;
   delete calcularCache[key];
+}
+
+// ── Orçamento de /Calcular para double-check de falta (folha-pagamento) ──────
+//
+// O /Batidas não expõe justificativa (declaração, abono) quando o dia não tem
+// nenhuma batida — só o /Calcular tem essa info (colunas JustPa./AbonoN). Mas
+// o /Calcular tem limite de 100 req/h por banco, então só vale a pena chamar
+// pontualmente pros colaboradores com um dia de falta suspeita (sem marcador
+// no /Batidas), nunca em massa. Teto de segurança abaixo do limite real —
+// se estourar (mês anômalo com muita falta suspeita, ou 429 do próprio
+// Secullum), degrada silenciosamente: mantém o comportamento atual (falta
+// integral) pros colaboradores que não couberem no orçamento, em vez de
+// travar o fechamento inteiro.
+const CALCULAR_ORCAMENTO_MAX_POR_HORA = 80;
+let calcularOrcamentoContagem = 0;
+let calcularOrcamentoJanelaInicio = Date.now();
+
+function reservarOrcamentoCalcular(): boolean {
+  const agora = Date.now();
+  if (agora - calcularOrcamentoJanelaInicio > 60 * 60 * 1000) {
+    calcularOrcamentoJanelaInicio = agora;
+    calcularOrcamentoContagem = 0;
+  }
+  if (calcularOrcamentoContagem >= CALCULAR_ORCAMENTO_MAX_POR_HORA) return false;
+  calcularOrcamentoContagem++;
+  return true;
+}
+
+// Retorna null quando não foi possível confirmar (sem orçamento disponível ou
+// 429 do Secullum) — quem chama deve tratar isso como "mantenha o cálculo
+// local", nunca propagar erro.
+export async function getCalcularComOrcamento(
+  cpf: string,
+  dataInicio: string,
+  dataFim: string
+): Promise<CalcularResponse | null> {
+  const key = `${cpf}|${dataInicio}|${dataFim}`;
+  const now = Date.now();
+  if (calcularCache[key] && now - calcularCache[key].timestamp < CALCULAR_CACHE_TTL) {
+    return calcularCache[key].data;
+  }
+
+  if (!reservarOrcamentoCalcular()) return null;
+
+  try {
+    const { data } = await getCalcular(cpf, dataInicio, dataFim);
+    return data;
+  } catch (err: any) {
+    if (err?.response?.status === 429) return null;
+    throw err;
+  }
 }
 
 // ── VR Calculation logic ──────────────────────────────────────────────────────
@@ -351,6 +427,8 @@ const MOTIVO_LABELS: Record<string, string> = {
   'ABONO': 'Abono',
   'DECL.': 'Declaração',
   'FE. IND': 'Férias individual',
+  'SUSP': 'Suspensão disciplinar',
+  'GERAR': 'Dia pendente de processamento no Secullum',
 };
 
 function formatarMotivo(marcador: string): string {
@@ -360,7 +438,7 @@ function formatarMotivo(marcador: string): string {
 
 // Retorna o motivo (já formatado p/ exibição) do dia, ou null se o dia não tem
 // nenhum marcador de status especial (ou seja, é batida normal/ausência comum).
-function motivoStatusEspecial(batida: Batida): string | null {
+export function motivoStatusEspecial(batida: Batida): string | null {
   const campos: Array<string | null | undefined> = [
     batida.Entrada1, batida.Saida1,
     batida.Entrada2, batida.Saida2,
@@ -372,7 +450,7 @@ function motivoStatusEspecial(batida: Batida): string | null {
   return marcador != null ? formatarMotivo(marcador) : null;
 }
 
-function calcularCargaEsperadaMin(batida: Batida): number {
+export function calcularCargaEsperadaMin(batida: Batida): number {
   const pares: Array<[string | null | undefined, string | null | undefined]> = [
     [batida.MemoriaEntrada1, batida.MemoriaSaida1],
     [batida.MemoriaEntrada2, batida.MemoriaSaida2],

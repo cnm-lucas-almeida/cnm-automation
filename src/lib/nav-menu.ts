@@ -14,6 +14,7 @@ export const menus: NavGroup[] = [
         items: [
           { label: "Intervalo Almoço", href: "/secullum/ponto-d1" },
           { label: "Banco de Horas - Copa", href: "/secullum/banco-horas-copa" },
+          { label: "Fechamento de Folha", href: "/folha-pagamento" },
         ],
       },
     ],
@@ -39,6 +40,7 @@ export const menus: NavGroup[] = [
       { label: "Vendas", href: "/vendas" },
       { label: "Abandono de Carrinho", href: "/carrinho" },
       { label: "Assinaturas PF", href: "/assinaturas" },
+      { label: "Congelamentos", href: "/congelamentos" },
       { label: "Pagamentos", href: "/pagamentos" },
       { label: "Movimentações de Aditivo", href: "/aditivos" },
       { label: "Verificação NFS-e", href: "/nfse" },

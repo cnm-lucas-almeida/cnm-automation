@@ -27,6 +27,7 @@ import {
   TrendingUp,
   Users2,
   Megaphone,
+  Snowflake,
   type LucideIcon,
 } from "lucide-react";
 import { isSubmenu, type NavGroup, type NavLink as NavLinkType, type NavSubmenu } from "@/lib/nav-menu";
@@ -39,6 +40,7 @@ const ICONS: Record<string, LucideIcon> = {
   "Vendas": BarChart3,
   "Abandono de Carrinho": ShoppingCart,
   "Assinaturas PF": Signature,
+  "Congelamentos": Snowflake,
   "Pagamentos": Receipt,
   "Movimentações de Aditivo": ArrowUpDown,
   "Verificação NFS-e": FileCheck2,

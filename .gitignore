@@ -53,3 +53,11 @@ next-env.d.ts
 .claude/
 
 *.xlsx
+docs/RH/Extrato Unimed Mês 07 - 26.pdf
+
+# planilhas/dumps reais de folha (CPF, salário, empréstimo) usados só pra
+# validação local — os .md de referência em docs/RH/ continuam versionados
+docs/RH/*.json
+
+# script de debug pontual (Secullum), não é código do produto
+/_scratch_batida_raw.js

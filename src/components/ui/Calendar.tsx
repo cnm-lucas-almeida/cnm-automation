@@ -45,7 +45,7 @@ export function Calendar({
             className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
             <ChevronLeft size={16} />
           </button>
-          <span className="text-sm font-semibold capitalize">{format(month, 'MMMM yyyy', { locale: ptBR })}</span>
+          <span className="text-sm capitalize">{format(month, 'MMMM yyyy', { locale: ptBR })}</span>
           <button type="button" onClick={() => onMonthChange(addMonths(month, 1))}
             className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
             <ChevronRight size={16} />
@@ -54,7 +54,7 @@ export function Calendar({
       )}
       {hideNav && (
         <div className="text-center mb-2">
-          <span className="text-sm font-semibold capitalize">{format(month, 'MMMM yyyy', { locale: ptBR })}</span>
+          <span className="text-sm capitalize">{format(month, 'MMMM yyyy', { locale: ptBR })}</span>
         </div>
       )}
 
@@ -84,10 +84,10 @@ export function Calendar({
                 type="button"
                 disabled={disabled}
                 onClick={() => onSelect(d)}
-                className={`h-7 w-7 flex items-center justify-center rounded-full text-xs transition-colors ${
+                className={`h-6 w-6 flex items-center justify-center rounded-full text-xs transition-colors ${
                   !inMonth ? 'invisible'
                   : disabled ? 'text-muted-foreground/40 cursor-not-allowed'
-                  : isEdge ? 'bg-primary text-primary-foreground font-semibold'
+                  : isEdge ? 'bg-primary text-primary-foreground'
                   : isToday(d) ? 'text-primary font-semibold hover:bg-muted'
                   : 'text-foreground hover:bg-muted'
                 }`}

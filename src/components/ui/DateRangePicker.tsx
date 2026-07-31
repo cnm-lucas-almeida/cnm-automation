@@ -126,8 +126,8 @@ export function DateRangePicker({ dataInicial, dataFinal, onChange, className }:
 
       {open && (
         <div className="absolute z-50 mt-1 right-0 flex rounded-lg border border-border bg-card shadow-lg overflow-hidden">
-          <div className="w-36 border-r border-border py-2 shrink-0">
-            <p className="px-3 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Atalhos</p>
+          <div className="w-36 border-r border-border py-2 px-1 shrink-0">
+            <p className="px-2 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Atalhos</p>
             {ATALHOS.map((a) => {
               const ativo = atalhoAtivo?.label === a.label;
               return (
@@ -135,7 +135,7 @@ export function DateRangePicker({ dataInicial, dataFinal, onChange, className }:
                   key={a.label}
                   type="button"
                   onClick={() => aplicarAtalho(a)}
-                  className={`w-full text-left px-3 py-1.5 text-sm transition-colors ${
+                  className={`w-full text-left rounded-lg px-2 py-1.5 text-sm transition-colors ${
                     ativo ? 'text-primary font-semibold bg-primary/10' : 'text-foreground hover:bg-muted'
                   }`}
                 >

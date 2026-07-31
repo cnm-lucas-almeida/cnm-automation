@@ -13,6 +13,7 @@
     "migrate:dre": "node scripts/migrate-dre.mjs",
     "migrate:quadro-comercial": "node scripts/migrate-quadro-comercial.mjs",
     "migrate:auth": "node scripts/migrate-auth.mjs",
+    "migrate:folha-pagamento": "node scripts/migrate-folha-pagamento.mjs",
     "seed:admin": "node scripts/seed-admin.mjs"
   },
   "dependencies": {
@@ -22,6 +23,7 @@
     "lucide-react": "^1.9.0",
     "mysql2": "^3.22.2",
     "next": "16.2.4",
+    "pdfjs-dist": "^6.2.108",
     "pg": "^8.22.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
