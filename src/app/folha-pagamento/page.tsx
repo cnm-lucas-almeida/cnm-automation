@@ -219,6 +219,7 @@ export default function FolhaPagamentoPage() {
   const [salvandoHoras, setSalvandoHoras] = useState(false);
   const [salvandoFalta, setSalvandoFalta] = useState<string | null>(null);
   const [progresso, setProgresso] = useState<ProgressoFechamento | null>(null);
+  const [linhaSelecionada, setLinhaSelecionada] = useState<string | null>(null);
 
   // Barra de scroll horizontal grudada no rodapé da tela — a tabela tem
   // centenas de linhas, então o scrollbar nativo (no fim do container) fica
@@ -510,12 +511,17 @@ export default function FolhaPagamentoPage() {
               <tbody>
                 {colaboradores.map((c) => {
                   const destaque = !c.secullumEncontrado || c.erro || c.comissaoMatchPorNome;
-                  const bgSticky = destaque ? 'bg-warning-bg' : 'bg-card';
+                  const selecionada = linhaSelecionada === c.cpf;
+                  // Seleção (clique na linha) tem prioridade visual sobre o
+                  // destaque de pendência — o usuário ainda vê o ícone de
+                  // aviso, só a cor de fundo muda.
+                  const bgSticky = selecionada ? 'bg-success-bg' : destaque ? 'bg-warning-bg' : 'bg-card';
                   return (
                   <tr
                     key={c.cpf}
-                    className={`border-b border-border last:border-0 [&>td]:px-2 [&>td]:py-1.5 [&>td]:whitespace-nowrap hover:bg-muted/30 ${
-                      destaque ? 'bg-warning-bg/30' : ''
+                    onClick={() => setLinhaSelecionada((atual) => (atual === c.cpf ? null : c.cpf))}
+                    className={`cursor-pointer border-b border-border last:border-0 [&>td]:px-2 [&>td]:py-1.5 [&>td]:whitespace-nowrap hover:bg-muted/30 ${
+                      selecionada ? 'bg-success-bg' : destaque ? 'bg-warning-bg/30' : ''
                     }`}
                   >
                     <td className={`sticky z-10 ${bgSticky}`} style={stickyColStyle(0, STICKY_ADMISSAO_W)}>

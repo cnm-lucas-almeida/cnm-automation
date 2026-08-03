@@ -71,7 +71,10 @@ export async function getFolhaPagamento(ano: number, mes: number, forceRefreshCo
     buscarValeDoMes(ano, mes),
   ]);
 
-  const ativos = colaboradoresConvenia.filter((c) => c.status === 'Ativo');
+  // "Em férias" continua na folha (salário normal, só não bate ponto) — só
+  // status de desligamento/afastamento de fato (Demitido, Aviso Prévio etc.)
+  // fica de fora.
+  const ativos = colaboradoresConvenia.filter((c) => c.status === 'Ativo' || c.status === 'Em férias');
   const paraComissao = ativos
     .filter((c): c is typeof c & { cpf: string } => !!c.cpf)
     .map((c) => ({ cpf: c.cpf, nome: c.nome }));
