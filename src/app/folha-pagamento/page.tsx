@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef, type UIEvent, type RefObject } from 'react';
 import axios from 'axios';
+import * as XLSX from 'xlsx';
 import {
-  Loader2, AlertTriangle, Wallet, TrendingUp, MinusCircle, Upload, Plus, X, Users, Pencil, Calculator,
+  Loader2, AlertTriangle, Wallet, TrendingUp, MinusCircle, Upload, Plus, X, Users, Pencil, Calculator, FileSpreadsheet,
 } from 'lucide-react';
 import { formatCurrencyBRL, formatNumberBR } from '@/lib/format';
 import { PercentInput } from '@/components/ui/PercentInput';
@@ -181,6 +182,58 @@ function EditableHorasCell({
       className="w-full px-1.5 py-0.5 rounded border border-border bg-background text-xs text-right tabular-nums"
     />
   );
+}
+
+// Colunas na mesma ordem exibida na tabela — planilha exportada deve poder
+// ser lida "de lado a lado" com a tela sem o usuário precisar remapear nada.
+function exportarExcel(dados: FolhaPagamentoResultado) {
+  const header = [
+    'Admissão', 'Nome', 'CPF', 'Cargo', 'Dpto',
+    'Salário Base', 'Dissídio %', '% Adicional', 'Salário Atualizado',
+    'Comissão', 'DSR Comissão', 'Sal+Comissão',
+    'Horas +', 'Horas -', 'Saldo Horas', 'Valor Hora', 'Hora Extra', 'HE +75%', 'DSR HE',
+    'Salário/H', 'Desc. Falta', 'Falta (qtd)', 'DSR',
+    'Consignado', 'SITEPD',
+    'Unimed', 'Odonto', 'VA', 'VT',
+    'Observações',
+  ];
+  const linhas = dados.colaboradores.map((c) => [
+    c.admissao ? new Date(c.admissao).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '',
+    c.nome,
+    c.cpf,
+    c.cargo ?? '',
+    c.dpto ?? '',
+    c.salarioBase,
+    c.dissidioPercentual * 100,
+    c.overridePercentual * 100,
+    c.salarioAtualizado,
+    c.comissao,
+    c.dsrComissao,
+    c.salMaisComissao,
+    decimalParaHHMM(c.horasPositivas),
+    decimalParaHHMM(c.horasNegativas),
+    decimalParaHHMM(c.horasPositivas - c.horasNegativas),
+    c.valorHora,
+    c.horaExtra,
+    c.heMais75,
+    c.dsrHoraExtra,
+    c.salarioPorHora,
+    c.descHorasFalta,
+    c.faltaQtd,
+    c.dsrValor,
+    c.consignado,
+    c.sitepd ?? '',
+    c.descontoUnimed,
+    c.descontoOdonto,
+    c.valeAlimentacao ?? '',
+    c.valeTransporte ?? '',
+    c.observacoes ?? '',
+  ]);
+
+  const planilha = XLSX.utils.aoa_to_sheet([header, ...linhas]);
+  const livro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(livro, planilha, 'Folha');
+  XLSX.writeFile(livro, `folha-pagamento-${dados.ano}-${String(dados.mes).padStart(2, '0')}.xlsx`);
 }
 
 function UploadButton({
@@ -460,6 +513,13 @@ export default function FolhaPagamentoPage() {
             <UploadButton label="Importar Odonto (XLSX)" accept=".xlsx" uploading={uploading === 'odonto'} onUpload={(f) => upload('odonto', f)} />
             <UploadButton label="Importar Consignado (JSON)" accept=".json" uploading={uploading === 'consignado'} onUpload={(f) => upload('consignado', f)} />
             <UploadButton label="Importar VA/VT (XLSX)" accept=".xlsx" uploading={uploading === 'vale'} onUpload={(f) => upload('vale', f)} />
+            <button
+              onClick={() => exportarExcel(dados)}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-sm hover:bg-muted/60 ml-auto"
+            >
+              <FileSpreadsheet size={15} />
+              Exportar Excel
+            </button>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
