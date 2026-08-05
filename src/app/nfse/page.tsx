@@ -5,7 +5,7 @@ import axios from 'axios';
 import {
   Loader2, RefreshCw, AlertCircle, FileWarning, FileCheck2, Download, AlertTriangle,
 } from 'lucide-react';
-import type { NfseVerificacaoData, PagamentoNfse } from '@/lib/nfse';
+import type { NfseVerificacaoData, PagamentoNfse, NotaOmie, GrupoDuplicado } from '@/lib/nfse';
 import { Select } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
 
@@ -79,6 +79,117 @@ function exportarCsv(nome: string, pagamentos: PagamentoNfse[]) {
   URL.revokeObjectURL(url);
 }
 
+function exportarCsvNotas(nome: string, notas: NotaOmie[]) {
+  const header = ['NFS-e', 'Destinatario', 'CPF/CNPJ', 'Valor', 'Emissao', 'Vinculada no Admin', 'Pagamento'];
+  const linhas = notas.map((n) => [
+    n.numero, n.destinatario ?? '', n.documento, n.valor.toFixed(2), fmtData(n.dataEmissao),
+    n.vinculadaNoAdmin ? 'Sim' : 'Não', n.idPagamentoVinculado ?? '',
+  ]);
+  const csv = [header, ...linhas].map((l) => l.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\n');
+  const blob = new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${nome}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function TabelaNotas({ titulo, notas, vazio }: { titulo: string; notas: NotaOmie[]; vazio: string }) {
+  return (
+    <div className="rounded-lg border border-border">
+      <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold">{titulo}</h2>
+        <span className="text-xs text-muted-foreground">{notas.length} nota(s)</span>
+      </div>
+      {notas.length === 0 ? (
+        <p className="px-5 py-6 text-sm text-muted-foreground">{vazio}</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-[11px] text-muted-foreground uppercase tracking-wider border-b border-border">
+                <th className="px-5 py-2.5 font-semibold">NFS-e</th>
+                <th className="px-4 py-2.5 font-semibold">Destinatário</th>
+                <th className="px-4 py-2.5 font-semibold">CPF/CNPJ</th>
+                <th className="px-4 py-2.5 font-semibold text-right">Valor</th>
+                <th className="px-4 py-2.5 font-semibold">Emissão</th>
+                <th className="px-5 py-2.5 font-semibold text-center">Vinculada no Admin</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {notas.map((n) => (
+                <tr key={n.numero} className="hover:bg-muted/50 transition-colors">
+                  <td className="px-5 py-2.5 font-semibold tabular-nums text-xs">Nº {n.numero}</td>
+                  <td className="px-4 py-2.5 text-xs">{n.destinatario ?? '—'}</td>
+                  <td className="px-4 py-2.5 text-xs tabular-nums">{n.documento}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-xs">{fmtMoeda(n.valor)}</td>
+                  <td className="px-4 py-2.5 text-xs">{fmtData(n.dataEmissao)}</td>
+                  <td className={`px-5 py-2.5 text-center text-xs font-semibold ${n.vinculadaNoAdmin ? 'text-success' : 'text-destructive'}`}>
+                    {n.vinculadaNoAdmin ? `Sim · pgto ${n.idPagamentoVinculado}` : 'Não'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TabelaDuplicadas({ grupos }: { grupos: GrupoDuplicado[] }) {
+  return (
+    <div className="rounded-lg border border-border">
+      <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold">Possíveis notas duplicadas</h2>
+        <span className="text-xs text-muted-foreground">{grupos.length} caso(s)</span>
+      </div>
+      {grupos.length === 0 ? (
+        <p className="px-5 py-6 text-sm text-muted-foreground">
+          Nenhuma duplicidade encontrada no período.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-[11px] text-muted-foreground uppercase tracking-wider border-b border-border">
+                <th className="px-5 py-2.5 font-semibold">Destinatário</th>
+                <th className="px-4 py-2.5 font-semibold">CPF/CNPJ</th>
+                <th className="px-4 py-2.5 font-semibold text-right">Valor</th>
+                <th className="px-4 py-2.5 font-semibold text-center">Qtd.</th>
+                <th className="px-5 py-2.5 font-semibold">Notas emitidas</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {grupos.map((g) => (
+                <tr key={`${g.documento}-${g.valor}`} className="hover:bg-muted/50 transition-colors">
+                  <td className="px-5 py-2.5 font-medium text-xs">{g.destinatario ?? '—'}</td>
+                  <td className="px-4 py-2.5 text-xs tabular-nums">{g.documento}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-xs">{fmtMoeda(g.valor)}</td>
+                  <td className="px-4 py-2.5 text-center text-xs font-bold text-destructive">{g.notas.length}</td>
+                  <td className="px-5 py-2.5 text-xs">
+                    <div className="flex flex-col gap-0.5">
+                      {g.notas.map((n) => (
+                        <span key={n.numero} className="tabular-nums">
+                          Nº {n.numero} · {fmtData(n.dataEmissao)}
+                          {n.vinculadaNoAdmin
+                            ? <span className="text-success"> · vinculada (pgto {n.idPagamentoVinculado})</span>
+                            : <span className="text-destructive"> · não vinculada</span>}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TabelaPagamentos({ titulo, pagamentos, vazio }: { titulo: string; pagamentos: PagamentoNfse[]; vazio: string }) {
   return (
     <div className="rounded-lg border border-border">
@@ -109,7 +220,11 @@ function TabelaPagamentos({ titulo, pagamentos, vazio }: { titulo: string; pagam
                   <td className="px-4 py-2.5 text-xs tabular-nums">{fmtDocumento(p.cpfCnpj)}</td>
                   <td className="px-4 py-2.5 text-xs">{fmtData(p.dataPagamento)}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-xs">{fmtMoeda(p.valor)}</td>
-                  <td className="px-4 py-2.5 text-center text-xs">{p.temNfsAdmin ? 'Sim' : '—'}</td>
+                  <td className="px-4 py-2.5 text-center text-xs">
+                    {p.numeroNfsAdmin
+                      ? <span className="tabular-nums">Nº {p.numeroNfsAdmin}</span>
+                      : p.temNfsAdmin ? <span className="text-muted-foreground">sem número</span> : '—'}
+                  </td>
                   <td className={`px-4 py-2.5 text-center text-xs font-semibold ${p.nfsConfirmadaOmie ? 'text-success' : 'text-destructive'}`}>
                     {p.nfsConfirmadaOmie ? 'Sim' : 'Não'}
                   </td>
@@ -232,14 +347,14 @@ export default function NfsePage() {
       </div>
 
       <p className="text-xs text-muted-foreground -mt-2">
-        Compara os pagamentos do Admin com as NFS-e emitidas na Omie por CPF/CNPJ do cliente
-        (busca até {fmtData(dados.periodo.dataFinalBuscaOmie)} para cobrir notas emitidas com atraso).
-        O casamento é por cliente, não por pagamento individual — se o cliente teve qualquer NFS-e
-        faturada no período, todos os pagamentos dele aparecem como confirmados.
+        Confronta os pagamentos do Admin com as NFS-e faturadas na Omie pelo <strong>número da nota</strong>
+        {' '}(a mesma chave gravada no Admin), então o casamento é exato — não por cliente.
+        A busca na Omie vai até {fmtData(dados.periodo.dataFinalBuscaOmie)} para cobrir notas emitidas com atraso.
+        Duplicidade = mais de uma NFS-e faturada para o mesmo destinatário e mesmo valor no período.
       </p>
 
       {/* KPI Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         <KpiCard title="Total de pagamentos" value={dados.kpis.totalPagamentos.toLocaleString('pt-BR')}
           sub={fmtMoeda(dados.kpis.valorTotal)}
           icon={FileWarning} color="#323131" />
@@ -249,9 +364,15 @@ export default function NfsePage() {
         <KpiCard title="Sem nota na Omie" value={dados.kpis.qtdSemNota.toLocaleString('pt-BR')}
           sub={fmtMoeda(dados.kpis.valorSemNota)}
           icon={FileWarning} color="#CA3500" />
-        <KpiCard title="Divergentes vs. Admin" value={dados.kpis.qtdDivergentes.toLocaleString('pt-BR')}
-          sub="admin e Omie não batem"
+        <KpiCard title="Notas na Omie" value={dados.kpis.qtdNotasOmie.toLocaleString('pt-BR')}
+          sub="faturadas no período"
+          icon={FileCheck2} color="#323131" />
+        <KpiCard title="Notas não vinculadas" value={dados.kpis.qtdNotasNaoVinculadas.toLocaleString('pt-BR')}
+          sub={`${fmtMoeda(dados.kpis.valorNotasNaoVinculadas)} · emitidas mas sem vínculo no Admin`}
           icon={AlertTriangle} color="#B8860B" />
+        <KpiCard title="Notas duplicadas" value={dados.kpis.qtdNotasDuplicadas.toLocaleString('pt-BR')}
+          sub="mesmo destinatário e valor"
+          icon={AlertCircle} color="#CA3500" />
       </div>
 
       {/* Sem nota */}
@@ -268,6 +389,24 @@ export default function NfsePage() {
           vazio="Nenhum pagamento sem NFS-e confirmada no período."
         />
       </div>
+
+      {/* Notas emitidas na Omie sem vínculo no Admin */}
+      <div className="space-y-2">
+        <div className="flex justify-end">
+          <button onClick={() => exportarCsvNotas(`notas-nao-vinculadas-${dataInicial}-a-${dataFinal}`, dados.notasNaoVinculadas)}
+            className="flex items-center gap-2 px-3 py-1.5 border border-border rounded-lg text-xs font-medium text-muted-foreground hover:bg-muted transition-colors">
+            <Download size={13} /> Exportar CSV
+          </button>
+        </div>
+        <TabelaNotas
+          titulo="NFS-e emitidas na Omie e ainda não vinculadas no Admin"
+          notas={dados.notasNaoVinculadas}
+          vazio="Todas as NFS-e faturadas no período estão vinculadas a um pagamento no Admin."
+        />
+      </div>
+
+      {/* Duplicadas */}
+      <TabelaDuplicadas grupos={dados.notasDuplicadas} />
 
       {/* Divergentes */}
       <div className="space-y-2">

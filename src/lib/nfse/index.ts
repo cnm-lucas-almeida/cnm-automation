@@ -17,7 +17,26 @@ export type PagamentoNfse = {
   tipoPessoa: string | null;
   temNfsAdmin: boolean;
   nfsConfirmadaOmie: boolean;
+  numeroNfsAdmin: string | null;
+  statusNfsAdmin: string | null;
   nfseOmie: { numero: string; valor: number; dataEmissao: string | null } | null;
+};
+
+export type NotaOmie = {
+  numero: string;
+  valor: number;
+  dataEmissao: string | null;
+  documento: string;
+  destinatario: string | null;
+  vinculadaNoAdmin: boolean;
+  idPagamentoVinculado: number | null;
+};
+
+export type GrupoDuplicado = {
+  documento: string;
+  destinatario: string | null;
+  valor: number;
+  notas: NotaOmie[];
 };
 
 export type NfseVerificacaoData = {
@@ -31,9 +50,15 @@ export type NfseVerificacaoData = {
     qtdSemNota: number;
     valorSemNota: number;
     qtdDivergentes: number;
+    qtdNotasOmie: number;
+    qtdNotasNaoVinculadas: number;
+    valorNotasNaoVinculadas: number;
+    qtdNotasDuplicadas: number;
   };
   pagamentosSemNota: PagamentoNfse[];
   pagamentosDivergentes: PagamentoNfse[];
+  notasNaoVinculadas: NotaOmie[];
+  notasDuplicadas: GrupoDuplicado[];
 };
 
 const QUERY_PAGAMENTOS = `
@@ -50,10 +75,13 @@ const QUERY_PAGAMENTOS = `
     cl.nome,
     cl.cpfcnpj,
     cl.tipo_pessoa,
-    p.id_nfs
+    p.id_nfs,
+    n.numero_nfs,
+    n.status AS nfs_status
   FROM tb_pagamento p
   INNER JOIN tb_cliente cl ON cl.id = p.id_cliente
   LEFT JOIN tb_empresa e ON e.id = p.id_empresa
+  LEFT JOIN tb_nfs n ON n.id = p.id_nfs
   WHERE p.deleted = 0
     AND p.estorno = 0
     AND p.data_pagamento BETWEEN ? AND ?
@@ -122,11 +150,26 @@ export async function getNfseVerificacaoData(dataInicial: string, dataFinal: str
     nfsePorDocumento.set(documento, lista);
   }
 
+  // O numero da NFS-e da Omie (nNumeroNFSe) e o mesmo gravado em tb_nfs.numero_nfs
+  // quando a nota e vinculada no Admin. Esse e o casamento exato entre os dois lados,
+  // sem heuristica de valor ou data.
+  const pagamentoPorNumeroNfs = new Map<string, any>();
+  for (const r of pagamentosRows) {
+    const numero = r.numero_nfs === null || r.numero_nfs === undefined ? null : String(r.numero_nfs);
+    if (numero) pagamentoPorNumeroNfs.set(numero, r);
+  }
+
   const pagamentos: PagamentoNfse[] = pagamentosRows.map((r) => {
+    const numeroAdmin = r.numero_nfs === null || r.numero_nfs === undefined ? null : String(r.numero_nfs);
     const documentoCliente = somenteDigitos(r.cpfcnpj);
     const nfsesDoCliente = documentoCliente ? nfsePorDocumento.get(documentoCliente) ?? [] : [];
-    const nfseEncontrada = nfsesDoCliente[0]?.Cabecalho ?? null;
-    const emissaoEncontrada = nfsesDoCliente[0]?.Emissao?.cDataEmissao ?? null;
+
+    // Confirmada = existe na Omie a MESMA nota que o Admin diz estar vinculada.
+    const notaNaOmie = numeroAdmin
+      ? nfsesDoCliente.find((nfse) => String(nfse?.Cabecalho?.nNumeroNFSe) === numeroAdmin) ?? null
+      : null;
+    const cabecalho = notaNaOmie?.Cabecalho ?? null;
+    const emissao = notaNaOmie?.Emissao?.cDataEmissao ?? null;
 
     return {
       idPagamento: r.id_pagamento,
@@ -141,14 +184,58 @@ export async function getNfseVerificacaoData(dataInicial: string, dataFinal: str
       cpfCnpj: r.cpfcnpj,
       tipoPessoa: r.tipo_pessoa,
       temNfsAdmin: r.id_nfs !== null,
-      nfsConfirmadaOmie: nfsesDoCliente.length > 0,
-      nfseOmie: nfseEncontrada ? {
-        numero: String(nfseEncontrada.nNumeroNFSe),
-        valor: toNum(nfseEncontrada.nValorNFSe),
-        dataEmissao: emissaoEncontrada ? dataBRParaIso(emissaoEncontrada) : null,
+      nfsConfirmadaOmie: cabecalho !== null,
+      numeroNfsAdmin: numeroAdmin,
+      statusNfsAdmin: r.nfs_status ?? null,
+      nfseOmie: cabecalho ? {
+        numero: String(cabecalho.nNumeroNFSe),
+        valor: toNum(cabecalho.nValorNFSe),
+        dataEmissao: emissao ? dataBRParaIso(emissao) : null,
       } : null,
     };
   });
+
+  // Lado inverso: notas que existem na Omie e o Admin nao conhece.
+  const notasOmie: NotaOmie[] = [];
+  for (const [documento, lista] of nfsePorDocumento) {
+    for (const nfse of lista) {
+      const cabecalho = nfse?.Cabecalho ?? {};
+      const numero = String(cabecalho.nNumeroNFSe);
+      const pagamentoVinculado = pagamentoPorNumeroNfs.get(numero) ?? null;
+      const emissao = nfse?.Emissao?.cDataEmissao ?? null;
+      notasOmie.push({
+        numero,
+        valor: toNum(cabecalho.nValorNFSe),
+        dataEmissao: emissao ? dataBRParaIso(emissao) : null,
+        documento,
+        destinatario: cabecalho.cRazaoSocialDestinatario ?? cabecalho.cNomeDestinatario ?? null,
+        vinculadaNoAdmin: pagamentoVinculado !== null,
+        idPagamentoVinculado: pagamentoVinculado ? pagamentoVinculado.id_pagamento : null,
+      });
+    }
+  }
+
+  const notasNaoVinculadas = notasOmie.filter((n) => !n.vinculadaNoAdmin);
+
+  // Duplicidade: mais de uma NFS-e faturada para o mesmo destinatario e mesmo valor.
+  const porDocumentoValor = new Map<string, NotaOmie[]>();
+  for (const nota of notasOmie) {
+    const chave = `${nota.documento}|${nota.valor.toFixed(2)}`;
+    const lista = porDocumentoValor.get(chave) ?? [];
+    lista.push(nota);
+    porDocumentoValor.set(chave, lista);
+  }
+  const notasDuplicadas: GrupoDuplicado[] = [];
+  for (const lista of porDocumentoValor.values()) {
+    if (lista.length < 2) continue;
+    notasDuplicadas.push({
+      documento: lista[0].documento,
+      destinatario: lista[0].destinatario,
+      valor: lista[0].valor,
+      notas: lista.slice().sort((a, b) => (a.dataEmissao ?? '').localeCompare(b.dataEmissao ?? '')),
+    });
+  }
+  notasDuplicadas.sort((a, b) => b.notas.length - a.notas.length || b.valor - a.valor);
 
   const confirmados = pagamentos.filter((p) => p.nfsConfirmadaOmie);
   const semNota = pagamentos.filter((p) => !p.nfsConfirmadaOmie);
@@ -165,8 +252,14 @@ export async function getNfseVerificacaoData(dataInicial: string, dataFinal: str
       qtdSemNota: semNota.length,
       valorSemNota: semNota.reduce((s, p) => s + p.valor, 0),
       qtdDivergentes: divergentes.length,
+      qtdNotasOmie: notasOmie.length,
+      qtdNotasNaoVinculadas: notasNaoVinculadas.length,
+      valorNotasNaoVinculadas: notasNaoVinculadas.reduce((s, n) => s + n.valor, 0),
+      qtdNotasDuplicadas: notasDuplicadas.reduce((s, g) => s + g.notas.length, 0),
     },
     pagamentosSemNota: semNota,
     pagamentosDivergentes: divergentes,
+    notasNaoVinculadas,
+    notasDuplicadas,
   };
 }
