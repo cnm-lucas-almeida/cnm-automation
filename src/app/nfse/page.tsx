@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import {
-  Loader2, RefreshCw, AlertCircle, FileWarning, FileCheck2, Download, AlertTriangle,
+  Loader2, RefreshCw, AlertCircle, FileWarning, FileCheck2, Download, AlertTriangle, Link2,
 } from 'lucide-react';
 import type { NfseVerificacaoData, PagamentoNfse, NotaOmie, GrupoDuplicado, ResumoDia } from '@/lib/nfse';
 import { Select } from '@/components/ui/Select';
@@ -323,7 +323,62 @@ function TabelaDuplicadas({ grupos }: { grupos: GrupoDuplicado[] }) {
   );
 }
 
-function TabelaPagamentos({ titulo, pagamentos, vazio }: { titulo: string; pagamentos: PagamentoNfse[]; vazio: string }) {
+type EstadoVinculo = { status: string; mensagem: string };
+
+// O Admin resolve a vinculação buscando a nota da OS já criada na Omie. Pagamento
+// que ainda não tem NFS-e (nem OS) precisa ser emitido antes — para esses o botão
+// não aparece, senão a ação falharia sempre.
+function podeVincular(p: PagamentoNfse): boolean {
+  return p.temNfsAdmin && !p.numeroNfsAdmin;
+}
+
+function BotaoVincular({
+  pagamento, vinculando, resultado, onVincular,
+}: {
+  pagamento: PagamentoNfse;
+  vinculando: boolean;
+  resultado?: EstadoVinculo;
+  onVincular: (id: number) => void;
+}) {
+  if (resultado) {
+    const cor = resultado.status === 'success' ? 'text-success'
+      : resultado.status === 'rate_limit' ? 'text-[#B8860B]'
+      : resultado.status === 'processing' ? 'text-muted-foreground'
+      : 'text-destructive';
+    return <span className={`text-[11px] ${cor}`} title={resultado.mensagem}>{
+      resultado.status === 'success' ? 'Vinculada'
+        : resultado.status === 'rate_limit' ? 'Omie ocupada'
+        : resultado.status === 'processing' ? 'Ainda não emitida'
+        : 'Falhou'
+    }</span>;
+  }
+
+  if (!podeVincular(pagamento)) {
+    return <span className="text-[11px] text-muted-foreground" title="Não há OS na Omie para este pagamento — precisa ser emitido antes.">—</span>;
+  }
+
+  return (
+    <button
+      onClick={() => onVincular(pagamento.idPagamento)}
+      disabled={vinculando}
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 border border-border rounded-md text-[11px] font-medium hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      {vinculando ? <Loader2 size={11} className="animate-spin" /> : <Link2 size={11} />}
+      {vinculando ? 'Vinculando…' : 'Vincular'}
+    </button>
+  );
+}
+
+function TabelaPagamentos({
+  titulo, pagamentos, vazio, vinculando, resultados, onVincular,
+}: {
+  titulo: string;
+  pagamentos: PagamentoNfse[];
+  vazio: string;
+  vinculando?: Set<number>;
+  resultados?: Map<number, EstadoVinculo>;
+  onVincular?: (id: number) => void;
+}) {
   return (
     <div className="rounded-lg border border-border">
       <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-2">
@@ -344,6 +399,7 @@ function TabelaPagamentos({ titulo, pagamentos, vazio }: { titulo: string; pagam
                 <th className="px-4 py-2.5 font-semibold text-center">Vinculado admin</th>
                 <th className="px-4 py-2.5 font-semibold text-center">Confirmado Omie</th>
                 <th className="px-5 py-2.5 font-semibold">NFS-e (Omie)</th>
+                {onVincular && <th className="px-5 py-2.5 font-semibold text-center">Ação</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -364,6 +420,16 @@ function TabelaPagamentos({ titulo, pagamentos, vazio }: { titulo: string; pagam
                   <td className="px-5 py-2.5 text-xs tabular-nums">
                     {p.nfseOmie ? `Nº ${p.nfseOmie.numero} · ${fmtMoeda(p.nfseOmie.valor)} · ${fmtData(p.nfseOmie.dataEmissao)}` : '—'}
                   </td>
+                  {onVincular && (
+                    <td className="px-5 py-2.5 text-center">
+                      <BotaoVincular
+                        pagamento={p}
+                        vinculando={vinculando?.has(p.idPagamento) ?? false}
+                        resultado={resultados?.get(p.idPagamento)}
+                        onVincular={onVincular}
+                      />
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -383,6 +449,43 @@ export default function NfsePage() {
   const [loading, setLoading] = useState(true);
   const [reloading, setReloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [vinculando, setVinculando] = useState<Set<number>>(new Set());
+  const [resultadosVinculo, setResultadosVinculo] = useState<Map<number, EstadoVinculo>>(new Map());
+  const [avisoVinculo, setAvisoVinculo] = useState<string | null>(null);
+
+  const vincular = useCallback(async (idPagamento: number) => {
+    setAvisoVinculo(null);
+    setVinculando((atual) => new Set(atual).add(idPagamento));
+    try {
+      const res = await axios.post('/api/nfse/vincular', { idsPagamento: [idPagamento] });
+      const { resultados, rateLimited, retryAfter } = res.data;
+
+      if (rateLimited) {
+        setAvisoVinculo(
+          `A API da Omie está bloqueada por consumo. Tente novamente em ~${Math.ceil((retryAfter ?? 300) / 60)} min.`,
+        );
+      }
+      const retorno = resultados?.[0];
+      if (retorno) {
+        setResultadosVinculo((atual) => new Map(atual).set(idPagamento, {
+          status: retorno.status,
+          mensagem: retorno.mensagem,
+        }));
+      }
+    } catch (err) {
+      const mensagem = (axios.isAxiosError(err) ? err.response?.data?.error : null)
+        ?? (err instanceof Error ? err.message : 'Falha ao vincular.');
+      setAvisoVinculo(mensagem);
+      setResultadosVinculo((atual) => new Map(atual).set(idPagamento, { status: 'error', mensagem }));
+    } finally {
+      setVinculando((atual) => {
+        const proximo = new Set(atual);
+        proximo.delete(idPagamento);
+        return proximo;
+      });
+    }
+  }, []);
 
   const fetchDados = useCallback(async (di: string, df: string) => {
     setError(null);
@@ -504,6 +607,17 @@ export default function NfsePage() {
           icon={AlertCircle} color="#CA3500" />
       </div>
 
+      {avisoVinculo && (
+        <div className="rounded-lg border border-[#B8860B]/40 bg-[#B8860B]/10 px-4 py-3 flex items-start gap-2">
+          <AlertTriangle size={15} className="text-[#B8860B] flex-shrink-0 mt-0.5" />
+          <div className="flex-1 text-xs">
+            <p className="text-foreground">{avisoVinculo}</p>
+          </div>
+          <button onClick={() => setAvisoVinculo(null)}
+            className="text-xs text-muted-foreground hover:text-foreground">Fechar</button>
+        </div>
+      )}
+
       {/* Fechamento por dia */}
       <div className="space-y-2">
         <div className="flex justify-end">
@@ -527,6 +641,9 @@ export default function NfsePage() {
           titulo="Pagamentos sem NFS-e confirmada na Omie"
           pagamentos={dados.pagamentosSemNota}
           vazio="Nenhum pagamento sem NFS-e confirmada no período."
+          vinculando={vinculando}
+          resultados={resultadosVinculo}
+          onVincular={vincular}
         />
       </div>
 
