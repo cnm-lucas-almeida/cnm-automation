@@ -39,6 +39,16 @@ export type GrupoDuplicado = {
   notas: NotaOmie[];
 };
 
+export type ResumoDia = {
+  dia: string;
+  qtdPagamentos: number;
+  valorPagamentos: number;
+  qtdConfirmados: number;
+  qtdSemNota: number;
+  valorSemNota: number;
+  percentualCobertura: number;
+};
+
 export type NfseVerificacaoData = {
   generatedAt: string;
   periodo: { dataInicial: string; dataFinal: string; dataFinalBuscaOmie: string };
@@ -59,6 +69,7 @@ export type NfseVerificacaoData = {
   pagamentosDivergentes: PagamentoNfse[];
   notasNaoVinculadas: NotaOmie[];
   notasDuplicadas: GrupoDuplicado[];
+  resumoPorDia: ResumoDia[];
 };
 
 const QUERY_PAGAMENTOS = `
@@ -118,6 +129,19 @@ function menorData(a: string, b: string): string {
   return a < b ? a : b;
 }
 
+// O driver do MySQL devolve DATETIME como Date, e o restante do fluxo trabalha com
+// texto ISO. Normaliza os dois casos para YYYY-MM-DD usando o fuso local, que e o
+// mesmo em que a data foi gravada (converter para UTC deslocaria o dia).
+function chaveDia(valor: unknown): string {
+  if (valor instanceof Date) {
+    const ano = valor.getFullYear();
+    const mes = String(valor.getMonth() + 1).padStart(2, '0');
+    const dia = String(valor.getDate()).padStart(2, '0');
+    return `${ano}-${mes}-${dia}`;
+  }
+  return String(valor ?? '').slice(0, 10);
+}
+
 export async function getNfseVerificacaoData(dataInicial: string, dataFinal: string): Promise<NfseVerificacaoData> {
   const connection = await getDbConnection();
   let pagamentosRows: any[];
@@ -153,10 +177,10 @@ export async function getNfseVerificacaoData(dataInicial: string, dataFinal: str
   // O numero da NFS-e da Omie (nNumeroNFSe) e o mesmo gravado em tb_nfs.numero_nfs
   // quando a nota e vinculada no Admin. Esse e o casamento exato entre os dois lados,
   // sem heuristica de valor ou data.
-  const pagamentoPorNumeroNfs = new Map<string, any>();
+  const idPagamentoPorNumeroNfs = new Map<string, number>();
   for (const r of pagamentosRows) {
     const numero = r.numero_nfs === null || r.numero_nfs === undefined ? null : String(r.numero_nfs);
-    if (numero) pagamentoPorNumeroNfs.set(numero, r);
+    if (numero) idPagamentoPorNumeroNfs.set(numero, r.id_pagamento);
   }
 
   const pagamentos: PagamentoNfse[] = pagamentosRows.map((r) => {
@@ -201,7 +225,7 @@ export async function getNfseVerificacaoData(dataInicial: string, dataFinal: str
     for (const nfse of lista) {
       const cabecalho = nfse?.Cabecalho ?? {};
       const numero = String(cabecalho.nNumeroNFSe);
-      const pagamentoVinculado = pagamentoPorNumeroNfs.get(numero) ?? null;
+      const idPagamentoVinculado = idPagamentoPorNumeroNfs.get(numero) ?? null;
       const emissao = nfse?.Emissao?.cDataEmissao ?? null;
       notasOmie.push({
         numero,
@@ -209,8 +233,8 @@ export async function getNfseVerificacaoData(dataInicial: string, dataFinal: str
         dataEmissao: emissao ? dataBRParaIso(emissao) : null,
         documento,
         destinatario: cabecalho.cRazaoSocialDestinatario ?? cabecalho.cNomeDestinatario ?? null,
-        vinculadaNoAdmin: pagamentoVinculado !== null,
-        idPagamentoVinculado: pagamentoVinculado ? pagamentoVinculado.id_pagamento : null,
+        vinculadaNoAdmin: idPagamentoVinculado !== null,
+        idPagamentoVinculado,
       });
     }
   }
@@ -241,6 +265,39 @@ export async function getNfseVerificacaoData(dataInicial: string, dataFinal: str
   const semNota = pagamentos.filter((p) => !p.nfsConfirmadaOmie);
   const divergentes = pagamentos.filter((p) => p.temNfsAdmin !== p.nfsConfirmadaOmie);
 
+  // Fechamento por dia do periodo: serve de relatorio diario/semanal/mensal,
+  // conforme o intervalo escolhido no filtro.
+  const acumuladoPorDia = new Map<string, ResumoDia>();
+  for (const p of pagamentos) {
+    const dia = chaveDia(p.dataPagamento);
+    const atual = acumuladoPorDia.get(dia) ?? {
+      dia,
+      qtdPagamentos: 0,
+      valorPagamentos: 0,
+      qtdConfirmados: 0,
+      qtdSemNota: 0,
+      valorSemNota: 0,
+      percentualCobertura: 0,
+    };
+    atual.qtdPagamentos += 1;
+    atual.valorPagamentos += p.valor;
+    if (p.nfsConfirmadaOmie) {
+      atual.qtdConfirmados += 1;
+    } else {
+      atual.qtdSemNota += 1;
+      atual.valorSemNota += p.valor;
+    }
+    acumuladoPorDia.set(dia, atual);
+  }
+  const resumoPorDia = Array.from(acumuladoPorDia.values())
+    .map((r) => ({
+      ...r,
+      percentualCobertura: r.qtdPagamentos > 0
+        ? Math.round((r.qtdConfirmados / r.qtdPagamentos) * 1000) / 10
+        : 0,
+    }))
+    .sort((a, b) => a.dia.localeCompare(b.dia));
+
   return {
     generatedAt: new Date().toISOString(),
     periodo: { dataInicial, dataFinal, dataFinalBuscaOmie },
@@ -261,5 +318,6 @@ export async function getNfseVerificacaoData(dataInicial: string, dataFinal: str
     pagamentosDivergentes: divergentes,
     notasNaoVinculadas,
     notasDuplicadas,
+    resumoPorDia,
   };
 }

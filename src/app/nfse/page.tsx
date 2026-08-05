@@ -5,11 +5,28 @@ import axios from 'axios';
 import {
   Loader2, RefreshCw, AlertCircle, FileWarning, FileCheck2, Download, AlertTriangle,
 } from 'lucide-react';
-import type { NfseVerificacaoData, PagamentoNfse, NotaOmie, GrupoDuplicado } from '@/lib/nfse';
+import type { NfseVerificacaoData, PagamentoNfse, NotaOmie, GrupoDuplicado, ResumoDia } from '@/lib/nfse';
 import { Select } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
 
-type Preset = 'este_mes' | 'mes_passado' | 'personalizado';
+type Preset =
+  | 'hoje'
+  | 'ontem'
+  | 'ultimos_7'
+  | 'este_mes'
+  | 'mes_passado'
+  | 'este_ano'
+  | 'personalizado';
+
+const PRESET_OPTIONS = [
+  { value: 'hoje', label: 'Hoje' },
+  { value: 'ontem', label: 'Ontem' },
+  { value: 'ultimos_7', label: 'Últimos 7 dias' },
+  { value: 'este_mes', label: 'Este mês' },
+  { value: 'mes_passado', label: 'Mês passado' },
+  { value: 'este_ano', label: 'Este ano' },
+  { value: 'personalizado', label: 'Personalizado' },
+];
 
 function fmtMoeda(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -33,12 +50,31 @@ function primeiroDiaMes(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
 }
 
+function isoLocal(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function presetParaDatas(preset: Preset): { dataInicial: string; dataFinal: string } {
   const hoje = new Date();
+
+  if (preset === 'hoje') {
+    return { dataInicial: isoLocal(hoje), dataFinal: isoLocal(hoje) };
+  }
+  if (preset === 'ontem') {
+    const ontem = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - 1);
+    return { dataInicial: isoLocal(ontem), dataFinal: isoLocal(ontem) };
+  }
+  if (preset === 'ultimos_7') {
+    const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - 6);
+    return { dataInicial: isoLocal(inicio), dataFinal: isoLocal(hoje) };
+  }
   if (preset === 'mes_passado') {
     const mesPassado = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
     const ultimoDia = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
-    return { dataInicial: primeiroDiaMes(mesPassado), dataFinal: ultimoDia.toISOString().slice(0, 10) };
+    return { dataInicial: primeiroDiaMes(mesPassado), dataFinal: isoLocal(ultimoDia) };
+  }
+  if (preset === 'este_ano') {
+    return { dataInicial: `${hoje.getFullYear()}-01-01`, dataFinal: isoLocal(hoje) };
   }
   return { dataInicial: primeiroDiaMes(hoje), dataFinal: isoHoje() };
 }
@@ -93,6 +129,103 @@ function exportarCsvNotas(nome: string, notas: NotaOmie[]) {
   a.download = `${nome}.csv`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function exportarCsvResumo(nome: string, resumo: ResumoDia[]) {
+  const header = ['Dia', 'Pagamentos', 'Valor', 'Com nota', 'Sem nota', 'Valor sem nota', 'Cobertura %'];
+  const linhas = resumo.map((r) => [
+    fmtData(r.dia), r.qtdPagamentos, r.valorPagamentos.toFixed(2),
+    r.qtdConfirmados, r.qtdSemNota, r.valorSemNota.toFixed(2),
+    String(r.percentualCobertura).replace('.', ','),
+  ]);
+  const csv = [header, ...linhas].map((l) => l.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\n');
+  const blob = new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${nome}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function corCobertura(pct: number): string {
+  if (pct >= 95) return '#1E7A34';
+  if (pct >= 70) return '#B8860B';
+  return '#CA3500';
+}
+
+function TabelaResumoDiario({ resumo }: { resumo: ResumoDia[] }) {
+  const totais = resumo.reduce(
+    (acc, r) => ({
+      qtdPagamentos: acc.qtdPagamentos + r.qtdPagamentos,
+      valorPagamentos: acc.valorPagamentos + r.valorPagamentos,
+      qtdConfirmados: acc.qtdConfirmados + r.qtdConfirmados,
+      qtdSemNota: acc.qtdSemNota + r.qtdSemNota,
+      valorSemNota: acc.valorSemNota + r.valorSemNota,
+    }),
+    { qtdPagamentos: 0, valorPagamentos: 0, qtdConfirmados: 0, qtdSemNota: 0, valorSemNota: 0 },
+  );
+  const coberturaTotal = totais.qtdPagamentos > 0
+    ? Math.round((totais.qtdConfirmados / totais.qtdPagamentos) * 1000) / 10
+    : 0;
+
+  return (
+    <div className="rounded-lg border border-border">
+      <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold">Fechamento por dia</h2>
+        <span className="text-xs text-muted-foreground">{resumo.length} dia(s)</span>
+      </div>
+      {resumo.length === 0 ? (
+        <p className="px-5 py-6 text-sm text-muted-foreground">Nenhum pagamento no período.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-[11px] text-muted-foreground uppercase tracking-wider border-b border-border">
+                <th className="px-5 py-2.5 font-semibold">Dia</th>
+                <th className="px-4 py-2.5 font-semibold text-right">Pagamentos</th>
+                <th className="px-4 py-2.5 font-semibold text-right">Valor</th>
+                <th className="px-4 py-2.5 font-semibold text-right">Com nota</th>
+                <th className="px-4 py-2.5 font-semibold text-right">Sem nota</th>
+                <th className="px-4 py-2.5 font-semibold text-right">Valor sem nota</th>
+                <th className="px-5 py-2.5 font-semibold text-right">Cobertura</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {resumo.map((r) => (
+                <tr key={r.dia} className="hover:bg-muted/50 transition-colors">
+                  <td className="px-5 py-2.5 text-xs font-medium">{fmtData(r.dia)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-xs">{r.qtdPagamentos.toLocaleString('pt-BR')}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-xs">{fmtMoeda(r.valorPagamentos)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-xs text-success">{r.qtdConfirmados.toLocaleString('pt-BR')}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-xs font-semibold">{r.qtdSemNota.toLocaleString('pt-BR')}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-xs">{fmtMoeda(r.valorSemNota)}</td>
+                  <td className="px-5 py-2.5 text-right tabular-nums text-xs font-bold"
+                    style={{ color: corCobertura(r.percentualCobertura) }}>
+                    {r.percentualCobertura.toLocaleString('pt-BR')}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-border bg-muted/30 font-semibold">
+                <td className="px-5 py-2.5 text-xs">Total</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-xs">{totais.qtdPagamentos.toLocaleString('pt-BR')}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-xs">{fmtMoeda(totais.valorPagamentos)}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-xs text-success">{totais.qtdConfirmados.toLocaleString('pt-BR')}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-xs">{totais.qtdSemNota.toLocaleString('pt-BR')}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-xs">{fmtMoeda(totais.valorSemNota)}</td>
+                <td className="px-5 py-2.5 text-right tabular-nums text-xs font-bold"
+                  style={{ color: corCobertura(coberturaTotal) }}>
+                  {coberturaTotal.toLocaleString('pt-BR')}%
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function TabelaNotas({ titulo, notas, vazio }: { titulo: string; notas: NotaOmie[]; vazio: string }) {
@@ -326,11 +459,7 @@ export default function NfsePage() {
             value={preset}
             onChange={(v) => aplicarPreset(v as Preset)}
             className="min-w-[170px]"
-            options={[
-              { value: 'este_mes', label: 'Este mês' },
-              { value: 'mes_passado', label: 'Mês passado' },
-              { value: 'personalizado', label: 'Personalizado' },
-            ]}
+            options={PRESET_OPTIONS}
           />
           {preset === 'personalizado' && (
             <>
@@ -373,6 +502,17 @@ export default function NfsePage() {
         <KpiCard title="Notas duplicadas" value={dados.kpis.qtdNotasDuplicadas.toLocaleString('pt-BR')}
           sub="mesmo destinatário e valor"
           icon={AlertCircle} color="#CA3500" />
+      </div>
+
+      {/* Fechamento por dia */}
+      <div className="space-y-2">
+        <div className="flex justify-end">
+          <button onClick={() => exportarCsvResumo(`fechamento-diario-${dataInicial}-a-${dataFinal}`, dados.resumoPorDia)}
+            className="flex items-center gap-2 px-3 py-1.5 border border-border rounded-lg text-xs font-medium text-muted-foreground hover:bg-muted transition-colors">
+            <Download size={13} /> Exportar CSV
+          </button>
+        </div>
+        <TabelaResumoDiario resumo={dados.resumoPorDia} />
       </div>
 
       {/* Sem nota */}

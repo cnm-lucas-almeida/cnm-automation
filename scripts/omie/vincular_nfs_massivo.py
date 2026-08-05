@@ -92,8 +92,8 @@ CNM_ADMIN_USER = _config.get("CNM_ADMIN_USER")
 CNM_ADMIN_PASS = _config.get("CNM_ADMIN_PASS")
 
 # Espelha os valores de Nfse_model::STATUS_ENUM e EMISSOR do PHP
-NFSE_STATUS_APPROVED = "APPROVED"
-NFSE_EMISSOR_OMIE    = "Omie"
+NFSE_STATUS_PENDING = ("OPENED", "PROCESSING")
+NFSE_EMISSOR_OMIE   = "Omie"
 
 
 # ---------------------------------------------------------------------------
@@ -133,12 +133,12 @@ def get_pending_payments(cursor, empresa=None, data_ini=None, data_fim=None, lim
         FROM tb_pagamento p
         JOIN tb_nfs    n ON n.id = p.id_nfs
         JOIN tb_cliente c ON c.id = p.id_cliente
-        WHERE n.status    = %s
+        WHERE n.status    IN (%s, %s)
           AND n.emissor   = %s
           AND n.numero_nfs IS NULL
           AND p.deleted   = 0
     """
-    params = [NFSE_STATUS_APPROVED, NFSE_EMISSOR_OMIE]
+    params = [NFSE_STATUS_PENDING[0], NFSE_STATUS_PENDING[1], NFSE_EMISSOR_OMIE]
 
     if empresa:
         sql += " AND p.id_empresa = %s"
