@@ -1,13 +1,51 @@
 'use client';
 
-import type { SaudeDiaria as SaudeDiariaData } from '@/lib/congelamentos';
+import type { EventoSaude, SaudeDiaria as SaudeDiariaData } from '@/lib/congelamentos';
 import axios from 'axios';
-import { Activity, AlertTriangle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle2, Loader2, RefreshCw, Snowflake, Unlock } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 function fmtDiaCurto(iso: string): string {
   const [, m, d] = iso.split('-');
   return `${d}/${m}`;
+}
+
+function verticalLabel(v: string | null): string {
+  return v === 'imovel' ? 'Imóveis' : v === 'veiculo' ? 'Veículos' : '';
+}
+
+function ListaEventos({ eventos, tipo }: { eventos: EventoSaude[]; tipo: 'congelou' | 'descongelou' }) {
+  if (eventos.length === 0) {
+    return <p className="px-5 py-6 text-sm text-muted-foreground text-center">Nada hoje.</p>;
+  }
+  return (
+    <div className="divide-y divide-border">
+      {eventos.map((e) => (
+        <div key={`${e.idCliente}-${e.hora}`} className="px-5 py-3 flex items-start gap-3 text-sm">
+          <span className="w-11 text-muted-foreground tabular-nums flex-shrink-0 pt-0.5">{e.hora}</span>
+          <div className="min-w-0 flex-1">
+            <p className="font-medium truncate">{e.cliente || `Cliente #${e.idCliente}`}</p>
+            <p className="text-xs text-muted-foreground">
+              #{e.idCliente}
+              {verticalLabel(e.vertical) && ` · ${verticalLabel(e.vertical)}`}
+              {tipo === 'descongelou' && e.diasCongelado != null && ` · ${e.diasCongelado} dias congelado`}
+              {e.motivo && ` · ${e.motivo}`}
+            </p>
+          </div>
+          <div className="flex-shrink-0 text-right">
+            {e.origem === 'automatico' ? (
+              <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-500">
+                {tipo === 'congelou' ? 'cron' : 'automático'}
+              </span>
+            ) : (
+              <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-destructive/10 text-destructive">manual</span>
+            )}
+            {e.origem === 'manual' && <p className="text-xs text-muted-foreground mt-0.5">{e.usuario || 'usuário ?'}</p>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function SaudeDiaria() {
@@ -58,6 +96,10 @@ export function SaudeDiaria() {
 
   const saudavel = !dados.alertas.manualHoje && !dados.alertas.backlog;
   const maxTend = Math.max(1, ...dados.tendencia.map((t) => t.automatico + t.manual));
+  const cong = dados.congelamentosHoje;
+  const desc = dados.descongelamentosHoje;
+
+  const historia = `Hoje ${cong.total} conta(s) foram congeladas (${cong.automatico} por cobrança automática, ${cong.manual} manual) e ${desc.total} descongeladas (${desc.automatico} automático após pagamento, ${desc.manual} manual).`;
 
   return (
     <div className="space-y-5">
@@ -68,44 +110,65 @@ export function SaudeDiaria() {
         </button>
       </div>
 
-      <div className={`rounded-lg border p-5 flex items-center gap-4 ${saudavel ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-destructive/40 bg-destructive/5'}`}>
+      <div className={`rounded-lg border p-5 flex items-start gap-4 ${saudavel ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-destructive/40 bg-destructive/5'}`}>
         {saudavel ? <CheckCircle2 size={28} className="text-emerald-500 flex-shrink-0" /> : <AlertTriangle size={28} className="text-destructive flex-shrink-0" />}
         <div>
           <p className="font-semibold">{saudavel ? 'Tudo automático' : 'Precisa de atenção'}</p>
-          <p className="text-sm text-muted-foreground">
-            {saudavel
-              ? 'Nenhum descongelamento manual hoje e nenhuma conta paga travada.'
-              : [
-                  dados.alertas.manualHoje ? `${dados.descongelamentosHoje.manual} descongelamento(s) manual(is) hoje` : null,
-                  dados.alertas.backlog ? `${dados.backlogPagoCongelado} conta(s) paga(s) ainda congelada(s)` : null,
-                ].filter(Boolean).join(' · ')}
-          </p>
+          <p className="text-sm text-muted-foreground mt-0.5">{historia}</p>
+          {!saudavel && (
+            <p className="text-sm text-destructive mt-1">
+              {[
+                dados.alertas.manualHoje ? `${desc.manual} descongelamento(s) manual(is) hoje` : null,
+                dados.alertas.backlog ? `${dados.backlogPagoCongelado} conta(s) paga(s) ainda congelada(s)` : null,
+              ].filter(Boolean).join(' · ')}
+            </p>
+          )}
         </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="rounded-lg border border-border p-5">
-          <p className="text-sm text-muted-foreground">Descongelados hoje</p>
-          <p className="text-3xl font-semibold tabular-nums mt-1">{dados.descongelamentosHoje.total}</p>
+          <p className="text-sm text-muted-foreground">Congelados hoje</p>
+          <p className="text-3xl font-semibold tabular-nums mt-1">{cong.total}</p>
           <div className="mt-3 flex gap-4 text-sm">
-            <span className="text-emerald-500">{dados.descongelamentosHoje.automatico} automático</span>
-            <span className={dados.descongelamentosHoje.manual > 0 ? 'text-destructive font-medium' : 'text-muted-foreground'}>{dados.descongelamentosHoje.manual} manual</span>
+            <span className="text-muted-foreground">{cong.automatico} cron</span>
+            <span className="text-muted-foreground">{cong.manual} manual</span>
           </div>
         </div>
 
         <div className="rounded-lg border border-border p-5">
-          <p className="text-sm text-muted-foreground">Congelados hoje</p>
-          <p className="text-3xl font-semibold tabular-nums mt-1">{dados.congelamentosHoje.total}</p>
+          <p className="text-sm text-muted-foreground">Descongelados hoje</p>
+          <p className="text-3xl font-semibold tabular-nums mt-1">{desc.total}</p>
           <div className="mt-3 flex gap-4 text-sm">
-            <span className="text-muted-foreground">{dados.congelamentosHoje.automatico} cron</span>
-            <span className="text-muted-foreground">{dados.congelamentosHoje.manual} manual</span>
+            <span className="text-emerald-500">{desc.automatico} automático</span>
+            <span className={desc.manual > 0 ? 'text-destructive font-medium' : 'text-muted-foreground'}>{desc.manual} manual</span>
           </div>
         </div>
 
         <div className={`rounded-lg border p-5 ${dados.alertas.backlog ? 'border-destructive/40 bg-destructive/5' : 'border-border'}`}>
           <p className="text-sm text-muted-foreground">Pago mas ainda congelado</p>
           <p className={`text-3xl font-semibold tabular-nums mt-1 ${dados.alertas.backlog ? 'text-destructive' : ''}`}>{dados.backlogPagoCongelado}</p>
-          <p className="mt-3 text-sm text-muted-foreground">Deve ficar em zero. Acima disso, algo escapou do automático.</p>
+          <p className="mt-3 text-sm text-muted-foreground">Deve ficar em zero.</p>
+        </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-lg border border-border">
+          <div className="px-5 py-4 border-b border-border flex items-center gap-2">
+            <Snowflake size={16} className="text-primary" />
+            <h2 className="text-sm font-semibold">Congelados hoje</h2>
+            <span className="ml-auto text-xs text-muted-foreground">{cong.total}</span>
+          </div>
+          <ListaEventos eventos={dados.congeladosLista} tipo="congelou" />
+        </div>
+
+        <div className="rounded-lg border border-border">
+          <div className="px-5 py-4 border-b border-border flex items-center gap-2">
+            <Unlock size={16} className="text-primary" />
+            <h2 className="text-sm font-semibold">Descongelados hoje</h2>
+            <span className="ml-auto text-xs text-muted-foreground">{desc.total}</span>
+          </div>
+          <ListaEventos eventos={dados.descongeladosLista} tipo="descongelou" />
         </div>
       </div>
 

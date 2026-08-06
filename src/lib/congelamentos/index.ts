@@ -684,39 +684,103 @@ export async function getDescongelamentosData(
   }
 }
 
+export type EventoSaude = {
+  idCliente: number;
+  cliente: string | null;
+  hora: string;
+  origem: 'automatico' | 'manual';
+  usuario: string | null;
+  motivo: string | null;
+  vertical: Vertical | null;
+  valor: number | null;
+  diasCongelado: number | null;
+};
+
 export type SaudeDiaria = {
   generatedAt: string;
-  descongelamentosHoje: { automatico: number; manual: number; total: number };
   congelamentosHoje: { automatico: number; manual: number; total: number };
+  descongelamentosHoje: { automatico: number; manual: number; total: number };
+  congeladosLista: EventoSaude[];
+  descongeladosLista: EventoSaude[];
   backlogPagoCongelado: number;
   tendencia: { dia: string; automatico: number; manual: number }[];
   alertas: { manualHoje: boolean; backlog: boolean };
 };
 
+function dedupPorCliente(rows: any[], map: (r: any) => EventoSaude): EventoSaude[] {
+  const vistos = new Set<number>();
+  const out: EventoSaude[] = [];
+  for (const r of rows) {
+    if (vistos.has(r.id_cliente)) continue;
+    vistos.add(r.id_cliente);
+    out.push(map(r));
+  }
+  return out;
+}
+
+function contaOrigem(lista: EventoSaude[]): { automatico: number; manual: number; total: number } {
+  const automatico = lista.filter((e) => e.origem === 'automatico').length;
+  const manual = lista.filter((e) => e.origem === 'manual').length;
+  return { automatico, manual, total: lista.length };
+}
+
 export async function getSaudeDiaria(): Promise<SaudeDiaria> {
   const connection = await getDbConnection();
   try {
     const [thawRows] = await connection.query(`
-      SELECT
-        COALESCE(SUM(id_usuario_descongelou IS NULL), 0) auto,
-        COALESCE(SUM(id_usuario_descongelou IS NOT NULL), 0) manual
-      FROM tb_cliente_congelamento
-      WHERE deleted = 0 AND DATE(data_descongelamento) = CURDATE()
+      SELECT cc.id_cliente,
+        COALESCE(cc.nome_fantasia_congelamento, cc.nome_cliente_congelamento) cliente,
+        TIME(cc.data_descongelamento) hora,
+        cc.id_usuario_descongelou uid,
+        u.name usuario,
+        m.reason motivo,
+        cc.vertical_congelamento vertical,
+        cc.valor_mensalidade_congelamento valor,
+        DATEDIFF(cc.data_descongelamento, cc.data_congelamento) dias
+      FROM tb_cliente_congelamento cc
+      LEFT JOIN tb_sys_user u ON u.id = cc.id_usuario_descongelou
+      LEFT JOIN tb_cliente_congelado_motivo m ON m.id = cc.id_motivo_congelamento
+      WHERE cc.deleted = 0 AND DATE(cc.data_descongelamento) = CURDATE()
+      ORDER BY cc.data_descongelamento DESC
     `);
-    const t = (thawRows as any[])[0];
-    const descAuto = toNum(t?.auto);
-    const descManual = toNum(t?.manual);
+    const descongeladosLista = dedupPorCliente(thawRows as any[], (r) => ({
+      idCliente: r.id_cliente,
+      cliente: r.cliente,
+      hora: String(r.hora ?? '').slice(0, 5),
+      origem: r.uid == null ? 'automatico' : 'manual',
+      usuario: r.uid == null ? null : r.usuario,
+      motivo: r.motivo,
+      vertical: r.vertical,
+      valor: r.valor == null ? null : toNum(r.valor),
+      diasCongelado: r.dias == null ? null : toNum(r.dias),
+    }));
 
-    const [freezeRows] = await connection.query(`
-      SELECT
-        COALESCE(SUM(id_usuario_congelou = 0), 0) auto,
-        COALESCE(SUM(COALESCE(id_usuario_congelou, -1) <> 0), 0) manual
-      FROM tb_cliente_congelamento
-      WHERE deleted = 0 AND DATE(data_congelamento) = CURDATE()
+    const [freezeDetailRows] = await connection.query(`
+      SELECT cc.id_cliente,
+        COALESCE(cc.nome_fantasia_congelamento, cc.nome_cliente_congelamento) cliente,
+        TIME(cc.data_congelamento) hora,
+        cc.id_usuario_congelou uid,
+        u.name usuario,
+        m.reason motivo,
+        cc.vertical_congelamento vertical,
+        cc.valor_mensalidade_congelamento valor
+      FROM tb_cliente_congelamento cc
+      LEFT JOIN tb_sys_user u ON u.id = cc.id_usuario_congelou
+      LEFT JOIN tb_cliente_congelado_motivo m ON m.id = cc.id_motivo_congelamento
+      WHERE cc.deleted = 0 AND DATE(cc.data_congelamento) = CURDATE()
+      ORDER BY cc.data_congelamento DESC
     `);
-    const f = (freezeRows as any[])[0];
-    const congAuto = toNum(f?.auto);
-    const congManual = toNum(f?.manual);
+    const congeladosLista = dedupPorCliente(freezeDetailRows as any[], (r) => ({
+      idCliente: r.id_cliente,
+      cliente: r.cliente,
+      hora: String(r.hora ?? '').slice(0, 5),
+      origem: r.uid === 0 ? 'automatico' : 'manual',
+      usuario: r.uid && r.uid !== 0 ? r.usuario : null,
+      motivo: r.motivo,
+      vertical: r.vertical,
+      valor: r.valor == null ? null : toNum(r.valor),
+      diasCongelado: null,
+    }));
 
     const [backlogRows] = await connection.query(`
       SELECT COUNT(*) total FROM (
@@ -735,8 +799,8 @@ export async function getSaudeDiaria(): Promise<SaudeDiaria> {
 
     const [trendRows] = await connection.query(`
       SELECT DATE(data_descongelamento) dia,
-        COALESCE(SUM(id_usuario_descongelou IS NULL), 0) auto,
-        COALESCE(SUM(id_usuario_descongelou IS NOT NULL), 0) manual
+        COUNT(DISTINCT CASE WHEN id_usuario_descongelou IS NULL THEN id_cliente END) auto,
+        COUNT(DISTINCT CASE WHEN id_usuario_descongelou IS NOT NULL THEN id_cliente END) manual
       FROM tb_cliente_congelamento
       WHERE deleted = 0 AND data_descongelamento >= (CURDATE() - INTERVAL 13 DAY)
       GROUP BY dia
@@ -752,13 +816,18 @@ export async function getSaudeDiaria(): Promise<SaudeDiaria> {
       return { dia, automatico: v.auto, manual: v.manual };
     });
 
+    const descongelamentosHoje = contaOrigem(descongeladosLista);
+    const congelamentosHoje = contaOrigem(congeladosLista);
+
     return {
       generatedAt: new Date().toISOString(),
-      descongelamentosHoje: { automatico: descAuto, manual: descManual, total: descAuto + descManual },
-      congelamentosHoje: { automatico: congAuto, manual: congManual, total: congAuto + congManual },
+      congelamentosHoje,
+      descongelamentosHoje,
+      congeladosLista,
+      descongeladosLista,
       backlogPagoCongelado: backlog,
       tendencia,
-      alertas: { manualHoje: descManual > 0, backlog: backlog > 0 },
+      alertas: { manualHoje: descongelamentosHoje.manual > 0, backlog: backlog > 0 },
     };
   } finally {
     await connection.end();
