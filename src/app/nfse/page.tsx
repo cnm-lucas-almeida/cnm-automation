@@ -154,6 +154,35 @@ function corCobertura(pct: number): string {
   return '#CA3500';
 }
 
+const ITENS_POR_PAGINA = 50;
+
+// ponytail: paginação client-side simples (dados já vêm inteiros do servidor).
+// Se o volume por período crescer a ponto de pesar no navegador, paginar no backend.
+function usePaginacao<T>(itens: T[]): { visiveis: T[]; pagina: number; totalPaginas: number; setPagina: (p: number) => void } {
+  const [pagina, setPagina] = useState(1);
+  useEffect(() => { setPagina(1); }, [itens]);
+  const totalPaginas = Math.max(1, Math.ceil(itens.length / ITENS_POR_PAGINA));
+  const p = Math.min(pagina, totalPaginas);
+  const visiveis = itens.slice((p - 1) * ITENS_POR_PAGINA, p * ITENS_POR_PAGINA);
+  return { visiveis, pagina: p, totalPaginas, setPagina };
+}
+
+function Paginacao({ pagina, totalPaginas, total, onPagina }: { pagina: number; totalPaginas: number; total: number; onPagina: (p: number) => void }) {
+  if (totalPaginas <= 1) return null;
+  const btn = 'px-2.5 py-1 border border-border rounded-md text-xs font-medium hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
+  return (
+    <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-border">
+      <span className="text-xs text-muted-foreground tabular-nums">
+        {total.toLocaleString('pt-BR')} registro(s) · página {pagina} de {totalPaginas}
+      </span>
+      <div className="flex items-center gap-1.5">
+        <button className={btn} disabled={pagina <= 1} onClick={() => onPagina(pagina - 1)}>Anterior</button>
+        <button className={btn} disabled={pagina >= totalPaginas} onClick={() => onPagina(pagina + 1)}>Próxima</button>
+      </div>
+    </div>
+  );
+}
+
 function TabelaResumoDiario({ resumo }: { resumo: ResumoDia[] }) {
   const totais = resumo.reduce(
     (acc, r) => ({
@@ -229,6 +258,7 @@ function TabelaResumoDiario({ resumo }: { resumo: ResumoDia[] }) {
 }
 
 function TabelaNotas({ titulo, notas, vazio }: { titulo: string; notas: NotaOmie[]; vazio: string }) {
+  const { visiveis, pagina, totalPaginas, setPagina } = usePaginacao(notas);
   return (
     <div className="rounded-lg border border-border">
       <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-2">
@@ -251,9 +281,9 @@ function TabelaNotas({ titulo, notas, vazio }: { titulo: string; notas: NotaOmie
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {notas.map((n) => (
-                <tr key={n.numero} className="hover:bg-muted/50 transition-colors">
-                  <td className="px-5 py-2.5 font-semibold tabular-nums text-xs">Nº {n.numero}</td>
+              {visiveis.map((n, i) => (
+                <tr key={`${n.numero || n.documento}-${i}`} className="hover:bg-muted/50 transition-colors">
+                  <td className="px-5 py-2.5 font-semibold tabular-nums text-xs">{n.numero ? `Nº ${n.numero}` : '—'}</td>
                   <td className="px-4 py-2.5 text-xs">{n.destinatario ?? '—'}</td>
                   <td className="px-4 py-2.5 text-xs tabular-nums">{n.documento}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-xs">{fmtMoeda(n.valor)}</td>
@@ -267,6 +297,7 @@ function TabelaNotas({ titulo, notas, vazio }: { titulo: string; notas: NotaOmie
           </table>
         </div>
       )}
+      <Paginacao pagina={pagina} totalPaginas={totalPaginas} total={notas.length} onPagina={setPagina} />
     </div>
   );
 }
@@ -379,6 +410,7 @@ function TabelaPagamentos({
   resultados?: Map<number, EstadoVinculo>;
   onVincular?: (id: number) => void;
 }) {
+  const { visiveis, pagina, totalPaginas, setPagina } = usePaginacao(pagamentos);
   return (
     <div className="rounded-lg border border-border">
       <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-2">
@@ -403,7 +435,7 @@ function TabelaPagamentos({
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {pagamentos.map((p) => (
+              {visiveis.map((p) => (
                 <tr key={p.idPagamento} className="hover:bg-muted/50 transition-colors">
                   <td className="px-5 py-2.5 font-medium">{p.clienteNome}</td>
                   <td className="px-4 py-2.5 text-xs tabular-nums">{fmtDocumento(p.cpfCnpj)}</td>
@@ -436,6 +468,7 @@ function TabelaPagamentos({
           </table>
         </div>
       )}
+      <Paginacao pagina={pagina} totalPaginas={totalPaginas} total={pagamentos.length} onPagina={setPagina} />
     </div>
   );
 }
