@@ -491,6 +491,72 @@ function periodoJaEncerrado(dataFinalBR: string): boolean {
   return fimDoDia.getTime() < Date.now() - 1000 * 60 * 60 * 24; // margem de 1 dia
 }
 
+// Resolve o codigo numerico do cliente no Omie a partir do codigo de integracao
+// (que e o id do cliente no Admin). Retorna null se o cliente nao existe no Omie.
+export async function consultarCodigoClienteOmie(codigoIntegracao: string | number): Promise<number | null> {
+  const cacheKey = `cliente-codigo:${codigoIntegracao}`;
+  return fetchWithCache(cacheKey, async () => {
+    try {
+      const resposta = await postOmieWithRetry('geral/clientes/', {
+        call: 'ConsultarCliente',
+        app_key: OMIE_APP_KEY,
+        app_secret: OMIE_APP_SECRET,
+        param: [{ codigo_cliente_integracao: String(codigoIntegracao) }],
+      });
+      return resposta?.codigo_cliente_omie ?? null;
+    } catch (error: unknown) {
+      const details = getOmieErrorDetails(error) || '';
+      // Cliente sem cadastro no Omie: nao e erro, so nao ha o que consultar.
+      if (String(details).toLowerCase().includes('não encontrado') ||
+          String(details).toLowerCase().includes('nao encontrado')) {
+        return null;
+      }
+      throw error;
+    }
+  }, STALE_CACHE_TTL);
+}
+
+// Lista todas as NFS-e faturadas de um cliente especifico (por codigo Omie),
+// varrendo o historico inteiro. O ListarNFSEs aceita nCodigoCliente como filtro
+// de destinatario, entao a Omie ja devolve so as notas desse cliente.
+export async function listarNFSePorCliente(nCodigoCliente: number) {
+  const cacheKey = `nfse-cliente:${nCodigoCliente}`;
+  return fetchWithCache(cacheKey, async () => {
+    const buscarPagina = (pagina: number) => postOmieWithRetry('servicos/nfse/', {
+      call: 'ListarNFSEs',
+      app_key: OMIE_APP_KEY,
+      app_secret: OMIE_APP_SECRET,
+      param: [{
+        nPagina: pagina,
+        nRegPorPagina: 500,
+        nCodigoCliente,
+        cStatusNFSe: 'F',
+      }],
+    }, 4);
+
+    try {
+      const primeira = await buscarPagina(1);
+      let todas: unknown[] = primeira.nfseEncontradas ?? [];
+      const totalPaginas = primeira.nTotPaginas || 1;
+      const restantes = Array.from({ length: Math.max(0, totalPaginas - 1) }, (_, i) => i + 2);
+      for (let i = 0; i < restantes.length; i += OMIE_NFSE_CONCURRENCIA) {
+        const lote = restantes.slice(i, i + OMIE_NFSE_CONCURRENCIA);
+        const respostas = await Promise.all(lote.map(buscarPagina));
+        for (const data of respostas) {
+          if (data.nfseEncontradas) todas = todas.concat(data.nfseEncontradas);
+        }
+      }
+      return { nfseEncontradas: todas };
+    } catch (error: unknown) {
+      const details = getOmieErrorDetails(error) || '';
+      if (String(details).includes('Não existem registros para a página')) {
+        return { nfseEncontradas: [] };
+      }
+      throw error;
+    }
+  }, STALE_CACHE_TTL);
+}
+
 export async function listarNFSePorPeriodo(dataEmissaoInicial: string, dataEmissaoFinal: string) {
   const cacheKey = `nfse-periodo:${dataEmissaoInicial}:${dataEmissaoFinal}`;
   const ttl = periodoJaEncerrado(dataEmissaoFinal) ? NFSE_CACHE_TTL_PERIODO_FECHADO : CACHE_TTL;
