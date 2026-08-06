@@ -741,6 +741,9 @@ export default function NfsePage() {
         <KpiCard title="Notas não vinculadas" value={dados.kpis.qtdNotasNaoVinculadas.toLocaleString('pt-BR')}
           sub={`${fmtMoeda(dados.kpis.valorNotasNaoVinculadas)} · emitidas mas sem vínculo no Admin`}
           icon={AlertTriangle} color="#B8860B" />
+        <KpiCard title="Faturamento em aberto" value={dados.kpis.qtdNotasEmAberto.toLocaleString('pt-BR')}
+          sub={`${fmtMoeda(dados.kpis.valorNotasEmAberto)} · na Omie ainda não faturadas`}
+          icon={FileWarning} color="#B8860B" />
         <KpiCard title="Notas duplicadas" value={dados.kpis.qtdNotasDuplicadas.toLocaleString('pt-BR')}
           sub="mesmo destinatário e valor"
           icon={AlertCircle} color="#CA3500" />
@@ -798,6 +801,21 @@ export default function NfsePage() {
           titulo="NFS-e emitidas na Omie e ainda não vinculadas no Admin"
           notas={dados.notasNaoVinculadas}
           vazio="Todas as NFS-e faturadas no período estão vinculadas a um pagamento no Admin."
+        />
+      </div>
+
+      {/* Faturamento em aberto na Omie (NFS-e não faturada) */}
+      <div className="space-y-2">
+        <div className="flex justify-end">
+          <button onClick={() => exportarCsvNotas(`faturamento-em-aberto-${dataInicial}-a-${dataFinal}`, dados.notasEmAberto)}
+            className="flex items-center gap-2 px-3 py-1.5 border border-border rounded-lg text-xs font-medium text-muted-foreground hover:bg-muted transition-colors">
+            <Download size={13} /> Exportar CSV
+          </button>
+        </div>
+        <TabelaNotas
+          titulo="Faturamento em aberto na Omie (NFS-e ainda não faturadas)"
+          notas={dados.notasEmAberto}
+          vazio="Nenhuma NFS-e em aberto (não faturada) na Omie no período."
         />
       </div>
 

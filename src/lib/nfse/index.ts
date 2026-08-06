@@ -63,11 +63,14 @@ export type NfseVerificacaoData = {
     qtdNotasOmie: number;
     qtdNotasNaoVinculadas: number;
     valorNotasNaoVinculadas: number;
+    qtdNotasEmAberto: number;
+    valorNotasEmAberto: number;
     qtdNotasDuplicadas: number;
   };
   pagamentosSemNota: PagamentoNfse[];
   pagamentosDivergentes: PagamentoNfse[];
   notasNaoVinculadas: NotaOmie[];
+  notasEmAberto: NotaOmie[];
   notasDuplicadas: GrupoDuplicado[];
   resumoPorDia: ResumoDia[];
 };
@@ -163,10 +166,15 @@ export async function getNfseVerificacaoData(dataInicial: string, dataFinal: str
 
   // A Omie não filtra ListarNFSEs por documento do destinatário, então o casamento é feito
   // aqui em memória, por CPF/CNPJ (sem pontuação) e apenas para NFS-e com status "Faturada".
+  // cStatusNFSe (Omie): F=Faturada, C=Cancelada, R=Registrada (emitida sem número
+  // fiscal, faturamento em aberto). Cancelada fica fora; F segue o fluxo de confirmação;
+  // qualquer outro status (R e afins) vai para o balde de faturamento em aberto.
   const nfsePorDocumento = new Map<string, any[]>();
+  const nfseNaoFaturadas: any[] = [];
   for (const nfse of nfseList) {
     const cabecalho = nfse?.Cabecalho ?? {};
-    if (cabecalho.cStatusNFSe !== 'F') continue;
+    if (cabecalho.cStatusNFSe === 'C') continue;
+    if (cabecalho.cStatusNFSe !== 'F') { nfseNaoFaturadas.push(nfse); continue; }
     const documento = somenteDigitos(cabecalho.cCNPJDestinatario || cabecalho.cCPFDestinatario);
     if (!documento) continue;
     const lista = nfsePorDocumento.get(documento) ?? [];
@@ -232,7 +240,7 @@ export async function getNfseVerificacaoData(dataInicial: string, dataFinal: str
         valor: toNum(cabecalho.nValorNFSe),
         dataEmissao: emissao ? dataBRParaIso(emissao) : null,
         documento,
-        destinatario: cabecalho.cRazaoSocialDestinatario ?? cabecalho.cNomeDestinatario ?? null,
+        destinatario: cabecalho.cRazaoDestinatario ?? cabecalho.cRazaoSocialDestinatario ?? cabecalho.cNomeDestinatario ?? null,
         vinculadaNoAdmin: idPagamentoVinculado !== null,
         idPagamentoVinculado,
       });
@@ -240,6 +248,26 @@ export async function getNfseVerificacaoData(dataInicial: string, dataFinal: str
   }
 
   const notasNaoVinculadas = notasOmie.filter((n) => !n.vinculadaNoAdmin);
+
+  // Faturamento em aberto: NFS-e existe na Omie mas ainda não foi faturada (status N).
+  // Mesmo casamento por número do Admin, para sinalizar as que ele nem conhece.
+  const notasEmAberto: NotaOmie[] = nfseNaoFaturadas
+    .map((nfse) => {
+      const cabecalho = nfse?.Cabecalho ?? {};
+      const numero = String(cabecalho.nNumeroNFSe ?? '');
+      const idPagamentoVinculado = numero ? idPagamentoPorNumeroNfs.get(numero) ?? null : null;
+      const emissao = nfse?.Emissao?.cDataEmissao ?? null;
+      return {
+        numero,
+        valor: toNum(cabecalho.nValorNFSe),
+        dataEmissao: emissao ? dataBRParaIso(emissao) : null,
+        documento: somenteDigitos(cabecalho.cCNPJDestinatario || cabecalho.cCPFDestinatario),
+        destinatario: cabecalho.cRazaoDestinatario ?? cabecalho.cRazaoSocialDestinatario ?? cabecalho.cNomeDestinatario ?? null,
+        vinculadaNoAdmin: idPagamentoVinculado !== null,
+        idPagamentoVinculado,
+      };
+    })
+    .sort((a, b) => b.valor - a.valor);
 
   // Duplicidade: mais de uma NFS-e faturada para o mesmo destinatario e mesmo valor.
   const porDocumentoValor = new Map<string, NotaOmie[]>();
@@ -312,11 +340,14 @@ export async function getNfseVerificacaoData(dataInicial: string, dataFinal: str
       qtdNotasOmie: notasOmie.length,
       qtdNotasNaoVinculadas: notasNaoVinculadas.length,
       valorNotasNaoVinculadas: notasNaoVinculadas.reduce((s, n) => s + n.valor, 0),
+      qtdNotasEmAberto: notasEmAberto.length,
+      valorNotasEmAberto: notasEmAberto.reduce((s, n) => s + n.valor, 0),
       qtdNotasDuplicadas: notasDuplicadas.reduce((s, g) => s + g.notas.length, 0),
     },
     pagamentosSemNota: semNota,
     pagamentosDivergentes: divergentes,
     notasNaoVinculadas,
+    notasEmAberto,
     notasDuplicadas,
     resumoPorDia,
   };
