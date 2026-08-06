@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import {
   Loader2, RefreshCw, AlertCircle, FileWarning, FileCheck2, Download, AlertTriangle, Link2, Search,
@@ -154,6 +154,27 @@ function corCobertura(pct: number): string {
   return '#CA3500';
 }
 
+function filtrarPorDoc<T>(itens: T[], busca: string, getDoc: (t: T) => string | null): T[] {
+  const q = busca.replace(/\D/g, '');
+  if (!q) return itens;
+  return itens.filter((t) => (getDoc(t) ?? '').replace(/\D/g, '').includes(q));
+}
+
+function BuscaDoc({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="relative">
+      <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Buscar CPF/CNPJ"
+        inputMode="numeric"
+        className="pl-8 pr-2 py-1.5 w-44 border border-border rounded-md text-xs bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+      />
+    </div>
+  );
+}
+
 const ITENS_POR_PAGINA = 50;
 
 // ponytail: paginação client-side simples (dados já vêm inteiros do servidor).
@@ -258,15 +279,22 @@ function TabelaResumoDiario({ resumo }: { resumo: ResumoDia[] }) {
 }
 
 function TabelaNotas({ titulo, notas, vazio }: { titulo: string; notas: NotaOmie[]; vazio: string }) {
-  const { visiveis, pagina, totalPaginas, setPagina } = usePaginacao(notas);
+  const [busca, setBusca] = useState('');
+  const filtrados = useMemo(() => filtrarPorDoc(notas, busca, (n) => n.documento), [notas, busca]);
+  const { visiveis, pagina, totalPaginas, setPagina } = usePaginacao(filtrados);
   return (
     <div className="rounded-lg border border-border">
       <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold">{titulo}</h2>
-        <span className="text-xs text-muted-foreground">{notas.length} nota(s)</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-muted-foreground">{filtrados.length} nota(s)</span>
+          <BuscaDoc value={busca} onChange={setBusca} />
+        </div>
       </div>
       {notas.length === 0 ? (
         <p className="px-5 py-6 text-sm text-muted-foreground">{vazio}</p>
+      ) : filtrados.length === 0 ? (
+        <p className="px-5 py-6 text-sm text-muted-foreground">Nenhuma nota para o CPF/CNPJ buscado.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -297,22 +325,29 @@ function TabelaNotas({ titulo, notas, vazio }: { titulo: string; notas: NotaOmie
           </table>
         </div>
       )}
-      <Paginacao pagina={pagina} totalPaginas={totalPaginas} total={notas.length} onPagina={setPagina} />
+      <Paginacao pagina={pagina} totalPaginas={totalPaginas} total={filtrados.length} onPagina={setPagina} />
     </div>
   );
 }
 
 function TabelaDuplicadas({ grupos }: { grupos: GrupoDuplicado[] }) {
+  const [busca, setBusca] = useState('');
+  const filtrados = useMemo(() => filtrarPorDoc(grupos, busca, (g) => g.documento), [grupos, busca]);
   return (
     <div className="rounded-lg border border-border">
       <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold">Possíveis notas duplicadas</h2>
-        <span className="text-xs text-muted-foreground">{grupos.length} caso(s)</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-muted-foreground">{filtrados.length} caso(s)</span>
+          <BuscaDoc value={busca} onChange={setBusca} />
+        </div>
       </div>
       {grupos.length === 0 ? (
         <p className="px-5 py-6 text-sm text-muted-foreground">
           Nenhuma duplicidade encontrada no período.
         </p>
+      ) : filtrados.length === 0 ? (
+        <p className="px-5 py-6 text-sm text-muted-foreground">Nenhum caso para o CPF/CNPJ buscado.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -327,7 +362,7 @@ function TabelaDuplicadas({ grupos }: { grupos: GrupoDuplicado[] }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {grupos.map((g) => (
+              {filtrados.map((g) => (
                 <tr key={`${g.documento}-${g.valor}`} className="hover:bg-muted/50 transition-colors">
                   <td className="px-5 py-2.5 font-medium text-xs">{g.destinatario ?? '—'}</td>
                   <td className="px-4 py-2.5 text-xs tabular-nums">{g.documento}</td>
@@ -412,15 +447,22 @@ function TabelaPagamentos({
   resultados?: Map<number, EstadoVinculo>;
   onVincular?: (id: number) => void;
 }) {
-  const { visiveis, pagina, totalPaginas, setPagina } = usePaginacao(pagamentos);
+  const [busca, setBusca] = useState('');
+  const filtrados = useMemo(() => filtrarPorDoc(pagamentos, busca, (p) => p.cpfCnpj), [pagamentos, busca]);
+  const { visiveis, pagina, totalPaginas, setPagina } = usePaginacao(filtrados);
   return (
     <div className="rounded-lg border border-border">
       <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold">{titulo}</h2>
-        <span className="text-xs text-muted-foreground">{pagamentos.length} registro(s)</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-muted-foreground">{filtrados.length} registro(s)</span>
+          <BuscaDoc value={busca} onChange={setBusca} />
+        </div>
       </div>
       {pagamentos.length === 0 ? (
         <p className="px-5 py-6 text-sm text-muted-foreground">{vazio}</p>
+      ) : filtrados.length === 0 ? (
+        <p className="px-5 py-6 text-sm text-muted-foreground">Nenhum registro para o CPF/CNPJ buscado.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -470,7 +512,7 @@ function TabelaPagamentos({
           </table>
         </div>
       )}
-      <Paginacao pagina={pagina} totalPaginas={totalPaginas} total={pagamentos.length} onPagina={setPagina} />
+      <Paginacao pagina={pagina} totalPaginas={totalPaginas} total={filtrados.length} onPagina={setPagina} />
     </div>
   );
 }
