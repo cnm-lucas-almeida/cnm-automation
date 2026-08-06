@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Users, Clock, CheckCircle2, CalendarX2, AlertCircle, Search, Copy, Check, RefreshCw, Info, X, ListTree } from 'lucide-react';
+import { Users, TrendingDown, TrendingUp, CalendarX2, AlertCircle, Search, Copy, Check, RefreshCw, Info, X, ListTree } from 'lucide-react';
 import { loadSessionState, saveSessionState } from '@/lib/sessionCache';
 import { DatePicker } from '@/components/ui/DatePicker';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-interface DiaDetalheCopa {
+interface DiaDetalheBanco {
   data: string;
   trabalhadoMin: number;
   cargaMin: number;
@@ -16,14 +16,12 @@ interface DiaDetalheCopa {
   motivo: string | null;
 }
 
-interface BancoHorasCopa {
-  devidoMin: number;
+interface BancoHoras {
   extrasMin: number;
   atrasosMin: number;
-  compensadoMin: number;
-  faltaPagarMin: number;
-  diaCopaEncontrado: boolean;
-  diasDetalhe: DiaDetalheCopa[];
+  saldoMin: number;
+  temRegistro: boolean;
+  diasDetalhe: DiaDetalheBanco[];
 }
 
 interface ResultadoColaborador {
@@ -31,22 +29,22 @@ interface ResultadoColaborador {
   cpf: string;
   cargo: string | null;
   departamento: string | null;
-  status: 'pendente' | 'quitado' | 'sem_registro' | 'erro';
-  banco?: BancoHorasCopa;
+  status: 'ok' | 'sem_registro' | 'erro';
+  banco?: BancoHoras;
   erro?: string;
   rateLimited?: boolean;
 }
 
 interface Resumo {
   totalColaboradores: number;
-  totalPendentes: number;
-  totalQuitados: number;
+  totalDevendo: number;
+  totalPositivos: number;
   totalSemRegistro: number;
   totalErros: number;
   totalRateLimited: number;
 }
 
-type FiltroStatus = 'todos' | 'pendente' | 'quitado' | 'sem_registro' | 'erro';
+type Filtro = 'todos' | 'devendo' | 'positivo' | 'sem_registro' | 'erro';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -68,36 +66,43 @@ function formatarMin(min: number): string {
   return `${negativo ? '-' : ''}${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
+function isoDe(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 // Usa D-1 por padrão: o dia corrente ainda está em aberto no Secullum (turno não
-// fechado), o que faz o /Calcular contar as horas restantes do dia como "atraso".
+// fechado), o que faria as horas restantes do dia contarem como "atraso".
 function dataD1Padrao(): string {
   const d = new Date();
   d.setDate(d.getDate() - 1);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return isoDe(d);
+}
+
+function inicioMesPadrao(): string {
+  const d = new Date();
+  return isoDe(new Date(d.getFullYear(), d.getMonth(), 1));
 }
 
 function primeiroNome(nomeCompleto: string): string {
   return nomeCompleto.trim().split(/\s+/)[0];
 }
 
-function montarMensagem(nome: string, dataFim: string, banco: BancoHorasCopa): string {
-  const sinalCompensado = banco.compensadoMin >= 0 ? '+' : '';
-  const faltaPagar = Math.max(0, banco.faltaPagarMin);
+function montarMensagem(nome: string, dataInicio: string, dataFim: string, banco: BancoHoras): string {
+  const sinal = banco.saldoMin >= 0 ? '+' : '';
   return (
     `Oi, ${primeiroNome(nome)}! Tudo bem?\n\n` +
-    `Sobre o pagamento das horas da Copa (jogo do Brasil em 29/06):\n` +
-    `• Valor devido: ${formatarMin(banco.devidoMin)}\n` +
-    `• Extras desde 01/07: +${formatarMin(banco.extrasMin)}\n` +
-    `• Atrasos desde 01/07: -${formatarMin(banco.atrasosMin)}\n` +
-    `• Compensado até ${formatarData(dataFim)}: ${sinalCompensado}${formatarMin(banco.compensadoMin)}\n` +
-    `• Falta pagar: ${formatarMin(faltaPagar)}`
+    `Seu banco de horas de ${formatarData(dataInicio)} a ${formatarData(dataFim)}:\n` +
+    `• Horas extras: +${formatarMin(banco.extrasMin)}\n` +
+    `• Atrasos: -${formatarMin(banco.atrasosMin)}\n` +
+    `• Saldo: ${sinal}${formatarMin(banco.saldoMin)}`
   );
 }
 
-const CACHE_KEY = 'secullum-banco-horas-copa';
+const CACHE_KEY = 'secullum-banco-horas';
 
 interface CacheState {
+  dataInicio: string;
   dataFim: string;
   resumo: Resumo;
   resultados: ResultadoColaborador[];
@@ -206,14 +211,14 @@ function BotaoCopiar({ texto }: { texto: string }) {
 
 // ── Modal de detalhes diários ─────────────────────────────────────────────────
 
-const TIPO_LABEL: Record<DiaDetalheCopa['tipo'], string> = {
+const TIPO_LABEL: Record<DiaDetalheBanco['tipo'], string> = {
   extra: 'Extra',
   atraso: 'Atraso',
   neutro: 'Neutro',
   justificado: 'Justificado',
 };
 
-const TIPO_CLASSE: Record<DiaDetalheCopa['tipo'], string> = {
+const TIPO_CLASSE: Record<DiaDetalheBanco['tipo'], string> = {
   extra: 'bg-success-bg text-success',
   atraso: 'bg-destructive/10 text-destructive',
   neutro: 'bg-muted text-muted-foreground',
@@ -237,7 +242,7 @@ function ModalDetalhe({ colaborador, onClose }: { colaborador: ResultadoColabora
           <div>
             <h3 className="text-sm font-semibold">{colaborador.nome}</h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Extras: +{formatarMin(banco.extrasMin)} · Atrasos: -{formatarMin(banco.atrasosMin)} · Compensado: {banco.compensadoMin >= 0 ? '+' : ''}{formatarMin(banco.compensadoMin)}
+              Extras: +{formatarMin(banco.extrasMin)} · Atrasos: -{formatarMin(banco.atrasosMin)} · Saldo: {banco.saldoMin >= 0 ? '+' : ''}{formatarMin(banco.saldoMin)}
             </p>
           </div>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground flex-shrink-0">
@@ -248,7 +253,7 @@ function ModalDetalhe({ colaborador, onClose }: { colaborador: ResultadoColabora
         <div className="overflow-y-auto flex-1">
           {dias.length === 0 ? (
             <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
-              Nenhuma batida encontrada desde 01/07.
+              Nenhuma batida encontrada no período.
             </div>
           ) : (
             <table className="w-full text-sm">
@@ -291,17 +296,18 @@ function ModalDetalhe({ colaborador, onClose }: { colaborador: ResultadoColabora
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function BancoHorasCopaPage() {
+export default function BancoHorasPage() {
   // Estado inicial precisa ser igual no servidor e no cliente (sessionStorage não
   // existe durante o SSR) — o cache salvo só é restaurado depois de montar, no
   // useEffect abaixo, senão dá mismatch de hidratação quando já há relatório salvo.
+  const [dataInicio, setDataInicio] = useState(inicioMesPadrao());
   const [dataFim, setDataFim] = useState(dataD1Padrao());
   const [resumo, setResumo] = useState<Resumo | null>(null);
   const [resultados, setResultados] = useState<ResultadoColaborador[]>([]);
   const [progresso, setProgresso] = useState({ processed: 0, total: 0 });
   const [carregando, setCarregando] = useState(false);
   const [erroGlobal, setErroGlobal] = useState('');
-  const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>('pendente');
+  const [filtroTipo, setFiltroTipo] = useState<Filtro>('devendo');
   const [filtro, setFiltro] = useState('');
   const [limiteHoras, setLimiteHoras] = useState('');
   const [limiteMinutos, setLimiteMinutos] = useState('');
@@ -312,14 +318,26 @@ export default function BancoHorasCopaPage() {
   useEffect(() => {
     const cache = loadSessionState<CacheState>(CACHE_KEY);
     if (cache) {
+      setDataInicio(cache.dataInicio);
       setDataFim(cache.dataFim);
       setResumo(cache.resumo);
       setResultados(cache.resultados);
     }
   }, []);
 
+  function montarResumo(lista: ResultadoColaborador[]): Resumo {
+    return {
+      totalColaboradores: lista.length,
+      totalDevendo: lista.filter((r) => r.banco && r.banco.saldoMin < 0).length,
+      totalPositivos: lista.filter((r) => r.banco && r.banco.saldoMin > 0).length,
+      totalSemRegistro: lista.filter((r) => r.status === 'sem_registro').length,
+      totalErros: lista.filter((r) => r.status === 'erro').length,
+      totalRateLimited: lista.filter((r) => r.rateLimited).length,
+    };
+  }
+
   async function carregar() {
-    if (!dataFim) return;
+    if (!dataInicio || !dataFim) return;
     setCarregando(true);
     setErroGlobal('');
     setResultados([]);
@@ -327,7 +345,7 @@ export default function BancoHorasCopaPage() {
     setProgresso({ processed: 0, total: 0 });
 
     try {
-      const res = await fetch(`/api/secullum/banco-horas-copa?dataFim=${dataFim}`);
+      const res = await fetch(`/api/secullum/banco-horas?dataInicio=${dataInicio}&dataFim=${dataFim}`);
       if (!res.ok || !res.body) {
         const json = await res.json().catch(() => ({}));
         throw new Error(json.error || 'Erro ao carregar relatório');
@@ -358,7 +376,7 @@ export default function BancoHorasCopaPage() {
             setResultados([...acumulado]);
           } else if (evento.type === 'done') {
             setResumo(evento.resumo);
-            saveSessionState<CacheState>(CACHE_KEY, { dataFim, resumo: evento.resumo, resultados: acumulado });
+            saveSessionState<CacheState>(CACHE_KEY, { dataInicio, dataFim, resumo: evento.resumo, resultados: acumulado });
           } else if (evento.type === 'error') {
             throw new Error(evento.message);
           }
@@ -374,23 +392,16 @@ export default function BancoHorasCopaPage() {
   async function tentarNovamente(cpf: string) {
     setRetentando(cpf);
     try {
-      const res = await fetch(`/api/secullum/banco-horas-copa?dataFim=${dataFim}&cpf=${cpf}`);
+      const res = await fetch(`/api/secullum/banco-horas?dataInicio=${dataInicio}&dataFim=${dataFim}&cpf=${cpf}`);
       const atualizado: ResultadoColaborador = await res.json();
       if (!res.ok) throw new Error((atualizado as any).error || 'Erro ao tentar novamente');
 
       setResultados((prev) => {
         const proximos = prev.map((r) => (r.cpf === cpf ? atualizado : r));
         if (resumo) {
-          const novoResumo: Resumo = {
-            totalColaboradores: proximos.length,
-            totalPendentes: proximos.filter((r) => r.status === 'pendente').length,
-            totalQuitados: proximos.filter((r) => r.status === 'quitado').length,
-            totalSemRegistro: proximos.filter((r) => r.status === 'sem_registro').length,
-            totalErros: proximos.filter((r) => r.status === 'erro').length,
-            totalRateLimited: proximos.filter((r) => r.rateLimited).length,
-          };
+          const novoResumo = montarResumo(proximos);
           setResumo(novoResumo);
-          saveSessionState<CacheState>(CACHE_KEY, { dataFim, resumo: novoResumo, resultados: proximos });
+          saveSessionState<CacheState>(CACHE_KEY, { dataInicio, dataFim, resumo: novoResumo, resultados: proximos });
         }
         return proximos;
       });
@@ -401,8 +412,8 @@ export default function BancoHorasCopaPage() {
     }
   }
 
-  function toggleFiltroStatus(status: FiltroStatus) {
-    setFiltroStatus((prev) => (prev === status ? 'todos' : status));
+  function toggleFiltroTipo(tipo: Filtro) {
+    setFiltroTipo((prev) => (prev === tipo ? 'todos' : tipo));
     setPagina(1);
   }
 
@@ -420,6 +431,16 @@ export default function BancoHorasCopaPage() {
   const limiteMin = (parseInt(limiteHoras || '0', 10) || 0) * 60 + (parseInt(limiteMinutos || '0', 10) || 0);
   const limiteAtivo = limiteHoras.trim() !== '' || limiteMinutos.trim() !== '';
 
+  function bateFiltroTipo(r: ResultadoColaborador): boolean {
+    switch (filtroTipo) {
+      case 'devendo': return !!r.banco && r.banco.saldoMin < 0;
+      case 'positivo': return !!r.banco && r.banco.saldoMin > 0;
+      case 'sem_registro': return r.status === 'sem_registro';
+      case 'erro': return r.status === 'erro';
+      default: return true;
+    }
+  }
+
   const listados = resultados.filter((r) => {
     if (buscaAtiva) {
       const termoLower = filtro.toLowerCase();
@@ -427,11 +448,12 @@ export default function BancoHorasCopaPage() {
       const bateNome = r.nome.toLowerCase().includes(termoLower);
       const bateCpf = termoDigitos.length > 0 && r.cpf.includes(termoDigitos);
       if (!bateNome && !bateCpf) return false;
-    } else if (filtroStatus !== 'todos' && r.status !== filtroStatus) {
+    } else if (!bateFiltroTipo(r)) {
       return false;
     }
 
-    if (limiteAtivo && (!r.banco || r.banco.faltaPagarMin <= limiteMin)) return false;
+    // "Deve mais de" filtra pelo tamanho do saldo negativo.
+    if (limiteAtivo && (!r.banco || -r.banco.saldoMin <= limiteMin)) return false;
 
     return true;
   });
@@ -441,23 +463,38 @@ export default function BancoHorasCopaPage() {
   const paginaAtual = Math.min(pagina, totalPaginas);
   const listadosPagina = listados.slice((paginaAtual - 1) * ITENS_POR_PAGINA, paginaAtual * ITENS_POR_PAGINA);
 
-  const TITULO_TABELA: Record<FiltroStatus, string> = {
+  const TITULO_TABELA: Record<Filtro, string> = {
     todos: 'Todos os colaboradores',
-    pendente: 'Colaboradores com saldo pendente da Copa',
-    quitado: 'Colaboradores já quitados',
-    sem_registro: 'Sem registro no dia 29/06',
+    devendo: 'Colaboradores com saldo negativo',
+    positivo: 'Colaboradores com saldo positivo',
+    sem_registro: 'Sem registro no período',
     erro: 'Erros de consulta',
   };
 
-  const VAZIO_TABELA: Record<FiltroStatus, string> = {
+  const VAZIO_TABELA: Record<Filtro, string> = {
     todos: 'Nenhum colaborador encontrado.',
-    pendente: 'Nenhum colaborador com saldo pendente.',
-    quitado: 'Nenhum colaborador quitado ainda.',
-    sem_registro: 'Todos os colaboradores têm registro no dia 29/06.',
+    devendo: 'Nenhum colaborador com saldo negativo.',
+    positivo: 'Nenhum colaborador com saldo positivo.',
+    sem_registro: 'Todos os colaboradores têm registro no período.',
     erro: 'Nenhum erro de consulta.',
   };
 
   const iniciado = resumo !== null;
+
+  const seletorPeriodo = (
+    <div className="flex items-center gap-2 flex-wrap">
+      <DatePicker value={dataInicio} onChange={setDataInicio} placeholder="Data inicial" maxDate={dataFim} />
+      <span className="text-xs text-muted-foreground">até</span>
+      <DatePicker value={dataFim} onChange={setDataFim} placeholder="Data final" minDate={dataInicio} />
+      <button
+        onClick={carregar}
+        disabled={carregando || !dataInicio || !dataFim}
+        className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:pointer-events-none transition-colors whitespace-nowrap"
+      >
+        {carregando ? 'Calculando...' : iniciado ? 'Atualizar' : 'Gerar relatório'}
+      </button>
+    </div>
+  );
 
   return (
     <div className="space-y-5">
@@ -465,22 +502,13 @@ export default function BancoHorasCopaPage() {
       {!iniciado ? (
         <div className="min-h-[65vh] flex flex-col items-center justify-center text-center gap-5">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Banco de Horas — Copa (29/06)</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">Banco de Horas</h1>
             <p className="text-sm text-muted-foreground mt-0.5 max-w-md mx-auto">
-              Calcula quanto falta pagar de cada colaborador pelas horas liberadas no jogo do Brasil,
-              descontando as horas extras e somando os atrasos registrados a partir de 01/07.
+              Compara o ponto batido com a escala esperada de cada dia e mostra o saldo
+              de horas do colaborador no período (extras menos atrasos).
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <DatePicker value={dataFim} onChange={setDataFim} placeholder="Selecionar data de referência" />
-            <button
-              onClick={carregar}
-              disabled={carregando || !dataFim}
-              className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:pointer-events-none transition-colors whitespace-nowrap"
-            >
-              {carregando ? 'Calculando...' : 'Gerar relatório'}
-            </button>
-          </div>
+          {seletorPeriodo}
 
           {erroGlobal && (
             <p className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">{erroGlobal}</p>
@@ -506,23 +534,14 @@ export default function BancoHorasCopaPage() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] items-center gap-3">
             <div>
-              <h1 className="text-2xl font-semibold tracking-tight">Banco de Horas — Copa (29/06)</h1>
+              <h1 className="text-2xl font-semibold tracking-tight">Banco de Horas</h1>
               <p className="text-sm text-muted-foreground mt-0.5">
-                Saldo calculado a partir do ponto batido no Secullum, considerando extras e atrasos desde 01/07.
+                Saldo de {formatarData(dataInicio)} a {formatarData(dataFim)}, calculado a partir do ponto batido no Secullum.
               </p>
             </div>
-            <div className="flex items-center gap-2 sm:justify-self-center">
-              <DatePicker value={dataFim} onChange={setDataFim} placeholder="Selecionar data de referência" />
-              <button
-                onClick={carregar}
-                disabled={carregando || !dataFim}
-                className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:pointer-events-none transition-colors whitespace-nowrap"
-              >
-                {carregando ? 'Calculando...' : 'Atualizar'}
-              </button>
-            </div>
+            {seletorPeriodo}
           </div>
 
           {erroGlobal && (
@@ -556,30 +575,30 @@ export default function BancoHorasCopaPage() {
             <KpiCard title="Colaboradores" value={resumo.totalColaboradores}
               icon={Users} color="#323131" borderColor="#6F686B"
               tooltip="Total de colaboradores ativos consultados."
-              active={filtroStatus === 'todos'} onClick={() => setFiltroStatus('todos')} />
-            <KpiCard title="Pendentes" value={resumo.totalPendentes}
-              sub={resumo.totalPendentes > 0 ? 'ainda deve pagar' : undefined}
-              icon={Clock} color={resumo.totalPendentes > 0 ? '#CA3500' : '#323131'} borderColor="#FF6900"
-              tooltip="Colaboradores com saldo ainda a pagar referente à Copa."
-              active={filtroStatus === 'pendente'} onClick={() => toggleFiltroStatus('pendente')} />
-            <KpiCard title="Quitados" value={resumo.totalQuitados}
-              icon={CheckCircle2} color="#227A4C" borderColor="#227A4C"
-              tooltip="Já compensaram (via extras) o total devido pela Copa."
-              active={filtroStatus === 'quitado'} onClick={() => toggleFiltroStatus('quitado')} />
-            <KpiCard title="Sem registro 29/06" value={resumo.totalSemRegistro}
+              active={filtroTipo === 'todos'} onClick={() => setFiltroTipo('todos')} />
+            <KpiCard title="Devendo horas" value={resumo.totalDevendo}
+              sub={resumo.totalDevendo > 0 ? 'saldo negativo' : undefined}
+              icon={TrendingDown} color={resumo.totalDevendo > 0 ? '#CA3500' : '#323131'} borderColor="#FF6900"
+              tooltip="Colaboradores com mais atrasos do que horas extras no período."
+              active={filtroTipo === 'devendo'} onClick={() => toggleFiltroTipo('devendo')} />
+            <KpiCard title="Saldo positivo" value={resumo.totalPositivos}
+              icon={TrendingUp} color="#227A4C" borderColor="#227A4C"
+              tooltip="Colaboradores com mais horas extras do que atrasos no período."
+              active={filtroTipo === 'positivo'} onClick={() => toggleFiltroTipo('positivo')} />
+            <KpiCard title="Sem registro" value={resumo.totalSemRegistro}
               icon={CalendarX2} color="#323131" borderColor="#6F686B"
-              tooltip="Colaborador sem batida/cálculo no dia 29/06 (admitido depois, férias, etc)."
-              active={filtroStatus === 'sem_registro'} onClick={() => toggleFiltroStatus('sem_registro')} />
+              tooltip="Colaborador sem nenhuma batida no período (admitido depois, férias, etc)."
+              active={filtroTipo === 'sem_registro'} onClick={() => toggleFiltroTipo('sem_registro')} />
             <KpiCard title="Erros" value={resumo.totalErros}
               icon={AlertCircle} color={resumo.totalErros > 0 ? '#A65F00' : '#323131'} borderColor="#D08700"
-              tooltip="Falha ao consultar o Secullum (pode ser limite de 100 req/h)."
-              active={filtroStatus === 'erro'} onClick={() => toggleFiltroStatus('erro')} />
+              tooltip="Falha ao consultar o Secullum (pode ser limite de requisições)."
+              active={filtroTipo === 'erro'} onClick={() => toggleFiltroTipo('erro')} />
           </div>
 
           <div className="rounded-lg border border-border">
             <div className="px-5 py-4 border-b border-border flex flex-col sm:flex-row sm:items-center gap-3 justify-between flex-wrap">
               <h2 className="text-sm font-semibold">
-                {buscaAtiva ? `Resultados da busca por "${filtro}"` : TITULO_TABELA[filtroStatus]}
+                {buscaAtiva ? `Resultados da busca por "${filtro}"` : TITULO_TABELA[filtroTipo]}
               </h2>
               <div className="flex gap-3 items-center flex-wrap">
                 <div className="relative">
@@ -613,10 +632,10 @@ export default function BancoHorasCopaPage() {
                   />
                   <span className="text-xs text-muted-foreground">min</span>
                 </div>
-                {(filtroStatus !== 'todos' || buscaAtiva || limiteAtivo) && (
+                {(filtroTipo !== 'todos' || buscaAtiva || limiteAtivo) && (
                   <button
                     onClick={() => {
-                      setFiltroStatus('todos');
+                      setFiltroTipo('todos');
                       setFiltro('');
                       setLimiteHoras('');
                       setLimiteMinutos('');
@@ -632,7 +651,7 @@ export default function BancoHorasCopaPage() {
 
             {listados.length === 0 ? (
               <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">
-                {buscaAtiva || limiteAtivo ? 'Nenhum colaborador encontrado com esses filtros.' : VAZIO_TABELA[filtroStatus]}
+                {buscaAtiva || limiteAtivo ? 'Nenhum colaborador encontrado com esses filtros.' : VAZIO_TABELA[filtroTipo]}
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -642,12 +661,9 @@ export default function BancoHorasCopaPage() {
                       <th className="px-5 py-3 font-semibold">Funcionário</th>
                       <th className="px-4 py-3 font-semibold">Departamento</th>
                       <th className="px-4 py-3 font-semibold text-center">CPF</th>
-                      <th className="px-4 py-3 font-semibold text-center">Devido Copa</th>
-                      <th className="px-4 py-3 font-semibold text-center">Extras (jul)</th>
-                      <th className="px-4 py-3 font-semibold text-center">Atrasos (jul)</th>
-                      <th className="px-4 py-3 font-semibold text-center">Compensado</th>
-                      <th className="px-4 py-3 font-semibold text-center">Falta pagar</th>
-                      <th className="px-4 py-3 font-semibold text-center">Status</th>
+                      <th className="px-4 py-3 font-semibold text-center">Extras</th>
+                      <th className="px-4 py-3 font-semibold text-center">Atrasos</th>
+                      <th className="px-4 py-3 font-semibold text-center">Saldo</th>
                       <th className="px-5 py-3 font-semibold text-center">Ações</th>
                     </tr>
                   </thead>
@@ -660,38 +676,14 @@ export default function BancoHorasCopaPage() {
                         </td>
                         <td className="px-4 py-3 text-muted-foreground text-xs">{r.departamento || '—'}</td>
                         <td className="px-4 py-3 text-center text-muted-foreground font-mono text-xs">{formatarCpf(r.cpf)}</td>
-                        <td className="px-4 py-3 text-center tabular-nums">{r.banco ? formatarMin(r.banco.devidoMin) : '—'}</td>
                         <td className="px-4 py-3 text-center tabular-nums">{r.banco ? formatarMin(r.banco.extrasMin) : '—'}</td>
                         <td className="px-4 py-3 text-center tabular-nums">{r.banco ? formatarMin(r.banco.atrasosMin) : '—'}</td>
-                        <td className="px-4 py-3 text-center tabular-nums">{r.banco ? formatarMin(r.banco.compensadoMin) : '—'}</td>
-                        <td className="px-4 py-3 text-center tabular-nums font-semibold">
-                          {r.banco ? formatarMin(Math.max(0, r.banco.faltaPagarMin)) : '—'}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {r.status === 'pendente' && (
-                            <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-destructive/10 text-destructive">
-                              Pendente
-                            </span>
-                          )}
-                          {r.status === 'quitado' && (
-                            <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-success-bg text-success">
-                              Quitado
-                            </span>
-                          )}
-                          {r.status === 'sem_registro' && (
-                            <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-muted text-muted-foreground">
-                              Sem registro
-                            </span>
-                          )}
-                          {r.status === 'erro' && (
-                            <span
-                              className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-warning-bg text-warning cursor-help"
-                              title={r.erro || 'Erro desconhecido ao consultar o Secullum.'}
-                            >
-                              <Info size={11} />
-                              {r.rateLimited ? 'Limite Secullum' : 'Erro na consulta'}
-                            </span>
-                          )}
+                        <td
+                          className={`px-4 py-3 text-center tabular-nums font-semibold ${
+                            !r.banco ? '' : r.banco.saldoMin < 0 ? 'text-destructive' : r.banco.saldoMin > 0 ? 'text-success' : ''
+                          }`}
+                        >
+                          {r.banco ? `${r.banco.saldoMin >= 0 ? '+' : ''}${formatarMin(r.banco.saldoMin)}` : '—'}
                         </td>
                         <td className="px-5 py-3 text-center">
                           {r.status === 'erro' ? (
@@ -699,6 +691,7 @@ export default function BancoHorasCopaPage() {
                               onClick={() => tentarNovamente(r.cpf)}
                               disabled={retentando === r.cpf}
                               className="inline-flex items-center gap-1 text-xs text-info hover:underline font-medium disabled:opacity-50"
+                              title={r.erro || 'Erro desconhecido ao consultar o Secullum.'}
                             >
                               <RefreshCw size={12} className={retentando === r.cpf ? 'animate-spin' : ''} />
                               Tentar novamente
@@ -712,10 +705,13 @@ export default function BancoHorasCopaPage() {
                                 <ListTree size={12} />
                                 Detalhes
                               </button>
-                              <BotaoCopiar texto={montarMensagem(r.nome, dataFim, r.banco)} />
+                              <BotaoCopiar texto={montarMensagem(r.nome, dataInicio, dataFim, r.banco)} />
                             </div>
                           ) : (
-                            '—'
+                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                              <Info size={11} />
+                              Sem registro
+                            </span>
                           )}
                         </td>
                       </tr>

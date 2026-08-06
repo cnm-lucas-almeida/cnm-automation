@@ -13,7 +13,7 @@ export const menus: NavGroup[] = [
         label: "RH",
         items: [
           { label: "Intervalo Almoço", href: "/secullum/ponto-d1" },
-          { label: "Banco de Horas - Copa", href: "/secullum/banco-horas-copa" },
+          { label: "Banco de Horas", href: "/secullum/banco-horas" },
           { label: "Fechamento de Folha", href: "/folha-pagamento" },
         ],
       },

@@ -47,9 +47,9 @@ const groups: CardGroup[] = [
       },
       {
         key: "secullum-banco-horas",
-        name: "Banco de Horas — Copa",
-        description: "Acompanhamento do banco de horas dos colaboradores durante a Copa.",
-        href: "/secullum/banco-horas-copa",
+        name: "Banco de Horas",
+        description: "Saldo de horas dos colaboradores no período: extras, atrasos e saldo.",
+        href: "/secullum/banco-horas",
         icon: Clock,
       },
     ],
