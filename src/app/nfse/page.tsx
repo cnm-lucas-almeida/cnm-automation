@@ -321,7 +321,8 @@ function TabelaDuplicadas({ grupos }: { grupos: GrupoDuplicado[] }) {
                 <th className="px-5 py-2.5 font-semibold">Destinatário</th>
                 <th className="px-4 py-2.5 font-semibold">CPF/CNPJ</th>
                 <th className="px-4 py-2.5 font-semibold text-right">Valor</th>
-                <th className="px-4 py-2.5 font-semibold text-center">Qtd.</th>
+                <th className="px-4 py-2.5 font-semibold text-center">Pagamentos</th>
+                <th className="px-4 py-2.5 font-semibold text-center">Notas</th>
                 <th className="px-5 py-2.5 font-semibold">Notas emitidas</th>
               </tr>
             </thead>
@@ -331,7 +332,8 @@ function TabelaDuplicadas({ grupos }: { grupos: GrupoDuplicado[] }) {
                   <td className="px-5 py-2.5 font-medium text-xs">{g.destinatario ?? '—'}</td>
                   <td className="px-4 py-2.5 text-xs tabular-nums">{g.documento}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-xs">{fmtMoeda(g.valor)}</td>
-                  <td className="px-4 py-2.5 text-center text-xs font-bold text-destructive">{g.notas.length}</td>
+                  <td className="px-4 py-2.5 text-center text-xs tabular-nums">{g.qtdPagamentos}</td>
+                  <td className="px-4 py-2.5 text-center text-xs font-bold text-destructive tabular-nums">{g.notas.length}</td>
                   <td className="px-5 py-2.5 text-xs">
                     <div className="flex flex-col gap-0.5">
                       {g.notas.map((n) => (
@@ -669,11 +671,17 @@ export default function NfsePage() {
     }
   }, []);
 
+  // Carga inicial apenas. O filtro só é aplicado ao clicar em "Filtrar",
+  // nunca ao trocar o preset ou editar as datas.
   useEffect(() => {
-    setReloading(true);
     fetchDados(dataInicial, dataFinal);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataInicial, dataFinal]);
+  }, []);
+
+  function filtrar() {
+    setReloading(true);
+    fetchDados(dataInicial, dataFinal);
+  }
 
   function aplicarPreset(p: Preset) {
     setPreset(p);
@@ -723,7 +731,7 @@ export default function NfsePage() {
           <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2">
             {updatedAt && <span>Atualizado às {updatedAt}</span>}
             {reloading && <Loader2 size={12} className="animate-spin text-primary" />}
-            <span>· {fmtData(dataInicial)} a {fmtData(dataFinal)}</span>
+            <span>· {fmtData(dados.periodo.dataInicial)} a {fmtData(dados.periodo.dataFinal)}</span>
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -740,9 +748,9 @@ export default function NfsePage() {
               <DatePicker value={dataFinal} onChange={setDataFinal} placeholder="Data final" minDate={dataInicial} />
             </>
           )}
-          <button onClick={() => { setReloading(true); fetchDados(dataInicial, dataFinal); }}
-            className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
-            <RefreshCw size={14} /> Atualizar
+          <button onClick={filtrar}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">
+            <Search size={14} /> Filtrar
           </button>
         </div>
       </div>
@@ -751,7 +759,7 @@ export default function NfsePage() {
         Confronta os pagamentos do Admin com as NFS-e faturadas na Omie pelo <strong>número da nota</strong>
         {' '}(a mesma chave gravada no Admin), então o casamento é exato — não por cliente.
         A busca na Omie vai até {fmtData(dados.periodo.dataFinalBuscaOmie)} para cobrir notas emitidas com atraso.
-        Duplicidade = mais de uma NFS-e faturada para o mesmo destinatário e mesmo valor no período.
+        Duplicidade = mesmo cliente e valor com mais notas do que pagamentos no período (uma cobrança faturada mais de uma vez); notas de pagamentos distintos não contam.
       </p>
 
       {/* Consulta por cliente */}

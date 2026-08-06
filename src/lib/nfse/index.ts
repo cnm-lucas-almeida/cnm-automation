@@ -36,6 +36,7 @@ export type GrupoDuplicado = {
   documento: string;
   destinatario: string | null;
   valor: number;
+  qtdPagamentos: number;
   notas: NotaOmie[];
 };
 
@@ -269,7 +270,16 @@ export async function getNfseVerificacaoData(dataInicial: string, dataFinal: str
     })
     .sort((a, b) => b.valor - a.valor);
 
-  // Duplicidade: mais de uma NFS-e faturada para o mesmo destinatario e mesmo valor.
+  // Duplicidade real: um mesmo pagamento com mais de uma NFS-e. Como o período não
+  // traz o número da OS, usamos documento+valor e comparamos com quantos pagamentos
+  // existem nessa chave: se há mais notas que pagamentos (e ao menos um pagamento),
+  // sobrou nota. Notas de pagamentos distintos (mesmo valor, cobranças diferentes)
+  // não contam — cada nota tem o seu pagamento.
+  const pagamentosPorDocValor = new Map<string, number>();
+  for (const r of pagamentosRows) {
+    const chave = `${somenteDigitos(r.cpfcnpj)}|${toNum(r.valor).toFixed(2)}`;
+    pagamentosPorDocValor.set(chave, (pagamentosPorDocValor.get(chave) ?? 0) + 1);
+  }
   const porDocumentoValor = new Map<string, NotaOmie[]>();
   for (const nota of notasOmie) {
     const chave = `${nota.documento}|${nota.valor.toFixed(2)}`;
@@ -278,12 +288,15 @@ export async function getNfseVerificacaoData(dataInicial: string, dataFinal: str
     porDocumentoValor.set(chave, lista);
   }
   const notasDuplicadas: GrupoDuplicado[] = [];
-  for (const lista of porDocumentoValor.values()) {
+  for (const [chave, lista] of porDocumentoValor) {
     if (lista.length < 2) continue;
+    const qtdPagamentos = pagamentosPorDocValor.get(chave) ?? 0;
+    if (qtdPagamentos < 1 || lista.length <= qtdPagamentos) continue;
     notasDuplicadas.push({
       documento: lista[0].documento,
       destinatario: lista[0].destinatario,
       valor: lista[0].valor,
+      qtdPagamentos,
       notas: lista.slice().sort((a, b) => (a.dataEmissao ?? '').localeCompare(b.dataEmissao ?? '')),
     });
   }
