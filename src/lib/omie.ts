@@ -505,13 +505,18 @@ export async function consultarCodigoClienteOmie(codigoIntegracao: string | numb
       });
       return resposta?.codigo_cliente_omie ?? null;
     } catch (error: unknown) {
-      const details = getOmieErrorDetails(error) || '';
-      // Cliente sem cadastro no Omie: nao e erro, so nao ha o que consultar.
-      if (String(details).toLowerCase().includes('não encontrado') ||
-          String(details).toLowerCase().includes('nao encontrado')) {
+      const texto = formatOmieError(getOmieErrorDetails(error)).toLowerCase();
+      // Cliente sem cadastro no Omie: nao e erro, so nao ha nota para consultar.
+      if (/(nao|não) (encontrad|cadastrad|localizad|existe)/.test(texto) ||
+          texto.includes('nenhum registro')) {
         return null;
       }
-      throw error;
+      // Bloqueio temporario do Omie (consumo): mensagem amigavel em vez do erro cru.
+      if (isTemporaryOmieBlock(error)) {
+        throw new Error('Omie temporariamente indisponível por consumo. Tente novamente em instantes.');
+      }
+      // Qualquer outra falha: propaga a mensagem real do Omie, nao o "status 500" cru.
+      throw new Error(`Falha ao consultar cliente na Omie: ${formatOmieError(getOmieErrorDetails(error))}`);
     }
   }, STALE_CACHE_TTL);
 }
@@ -552,7 +557,10 @@ export async function listarNFSePorCliente(nCodigoCliente: number) {
       if (String(details).includes('Não existem registros para a página')) {
         return { nfseEncontradas: [] };
       }
-      throw error;
+      if (isTemporaryOmieBlock(error)) {
+        throw new Error('Omie temporariamente indisponível por consumo. Tente novamente em instantes.');
+      }
+      throw new Error(`Falha ao listar NFS-e do cliente na Omie: ${formatOmieError(details)}`);
     }
   }, STALE_CACHE_TTL);
 }

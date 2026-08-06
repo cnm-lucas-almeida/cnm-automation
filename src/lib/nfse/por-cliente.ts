@@ -112,41 +112,47 @@ export async function consultarNfsePorCliente(termo: string): Promise<ConsultaPo
       aviso: null,
     };
 
-    const codigoOmie = await consultarCodigoClienteOmie(c.id);
-    if (!codigoOmie) {
-      base.aviso = 'Cliente ainda não sincronizado na Omie (sem notas emitidas por aqui).';
-      clientes.push(base);
-      continue;
+    // Falha do Omie em UM cliente vira aviso na linha dele, sem derrubar a
+    // consulta inteira (a tela sempre renderiza).
+    try {
+      const codigoOmie = await consultarCodigoClienteOmie(c.id);
+      if (!codigoOmie) {
+        base.aviso = 'Cliente ainda não sincronizado na Omie (sem notas emitidas por aqui).';
+        clientes.push(base);
+        continue;
+      }
+      base.codigoOmie = codigoOmie;
+
+      type NfseOmie = {
+        Cabecalho?: {
+          nNumeroNFSe?: number | string;
+          nValorNFSe?: number | string;
+          cNumeroOS?: number | string;
+          cCodigoVerificacao?: string;
+        };
+        Emissao?: { cDataEmissao?: string };
+      };
+      const resposta = await listarNFSePorCliente(codigoOmie);
+      const encontradas: NfseOmie[] = resposta?.nfseEncontradas ?? [];
+      const notas: NotaCliente[] = encontradas.map((nfse) => {
+        const cabecalho = nfse?.Cabecalho ?? {};
+        return {
+          numero: String(cabecalho.nNumeroNFSe ?? ''),
+          valor: toNum(cabecalho.nValorNFSe),
+          dataEmissao: dataBRParaIso(nfse?.Emissao?.cDataEmissao),
+          numeroOs: cabecalho.cNumeroOS ? String(cabecalho.cNumeroOS) : null,
+          codVerificacao: cabecalho.cCodigoVerificacao ?? null,
+          duplicada: false,
+        };
+      });
+
+      notas.sort((a, b) => (b.dataEmissao ?? '').localeCompare(a.dataEmissao ?? ''));
+      base.qtdDuplicadas = detectarDuplicadas(notas);
+      base.notas = notas;
+      base.totalNotas = notas.length;
+    } catch (error) {
+      base.aviso = error instanceof Error ? error.message : 'Falha ao consultar NFS-e na Omie.';
     }
-    base.codigoOmie = codigoOmie;
-
-    type NfseOmie = {
-      Cabecalho?: {
-        nNumeroNFSe?: number | string;
-        nValorNFSe?: number | string;
-        cNumeroOS?: number | string;
-        cCodigoVerificacao?: string;
-      };
-      Emissao?: { cDataEmissao?: string };
-    };
-    const resposta = await listarNFSePorCliente(codigoOmie);
-    const encontradas: NfseOmie[] = resposta?.nfseEncontradas ?? [];
-    const notas: NotaCliente[] = encontradas.map((nfse) => {
-      const cabecalho = nfse?.Cabecalho ?? {};
-      return {
-        numero: String(cabecalho.nNumeroNFSe ?? ''),
-        valor: toNum(cabecalho.nValorNFSe),
-        dataEmissao: dataBRParaIso(nfse?.Emissao?.cDataEmissao),
-        numeroOs: cabecalho.cNumeroOS ? String(cabecalho.cNumeroOS) : null,
-        codVerificacao: cabecalho.cCodigoVerificacao ?? null,
-        duplicada: false,
-      };
-    });
-
-    notas.sort((a, b) => (b.dataEmissao ?? '').localeCompare(a.dataEmissao ?? ''));
-    base.qtdDuplicadas = detectarDuplicadas(notas);
-    base.notas = notas;
-    base.totalNotas = notas.length;
     clientes.push(base);
   }
 
