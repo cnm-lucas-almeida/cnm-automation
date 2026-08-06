@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import {
-  Loader2, RefreshCw, AlertCircle, FileWarning, FileCheck2, Download, AlertTriangle, Link2,
+  Loader2, RefreshCw, AlertCircle, FileWarning, FileCheck2, Download, AlertTriangle, Link2, Search,
 } from 'lucide-react';
 import type { NfseVerificacaoData, PagamentoNfse, NotaOmie, GrupoDuplicado, ResumoDia } from '@/lib/nfse';
 import { Select } from '@/components/ui/Select';
@@ -440,6 +440,142 @@ function TabelaPagamentos({
   );
 }
 
+type ClienteNfseResultado = {
+  id: number;
+  nome: string;
+  cpfCnpj: string | null;
+  codigoOmie: number | null;
+  totalNotas: number;
+  qtdDuplicadas: number;
+  aviso: string | null;
+  notas: Array<{
+    numero: string;
+    valor: number;
+    dataEmissao: string | null;
+    numeroOs: string | null;
+    codVerificacao: string | null;
+    duplicada: boolean;
+  }>;
+};
+
+function ConsultaPorCliente() {
+  const [termo, setTermo] = useState('');
+  const [buscando, setBuscando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [clientes, setClientes] = useState<ClienteNfseResultado[] | null>(null);
+
+  const buscar = useCallback(async () => {
+    const t = termo.trim();
+    if (t.length < 3) { setErro('Digite CPF/CNPJ, id do cliente ou nome (mínimo 3 caracteres).'); return; }
+    setBuscando(true);
+    setErro(null);
+    try {
+      const res = await axios.get('/api/nfse/cliente', { params: { termo: t } });
+      setClientes(res.data.clientes ?? []);
+    } catch (err) {
+      const msg = (axios.isAxiosError(err) ? err.response?.data?.error : null)
+        ?? (err instanceof Error ? err.message : 'Falha na consulta.');
+      setErro(msg);
+      setClientes(null);
+    } finally {
+      setBuscando(false);
+    }
+  }, [termo]);
+
+  return (
+    <div className="rounded-lg border border-border">
+      <div className="px-5 py-4 border-b border-border">
+        <h2 className="text-sm font-semibold">Consultar notas na Omie por cliente</h2>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Busca todo o histórico de NFS-e do cliente direto na Omie e marca possíveis duplicidades
+          (mesmo valor no mesmo mês de emissão).
+        </p>
+      </div>
+      <div className="p-5 space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            value={termo}
+            onChange={(e) => setTermo(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') buscar(); }}
+            placeholder="CPF/CNPJ, id do cliente ou nome"
+            className="flex-1 min-w-[240px] px-3 py-2 border border-border rounded-lg text-sm bg-background"
+          />
+          <button
+            onClick={buscar}
+            disabled={buscando}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+          >
+            {buscando ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+            Consultar
+          </button>
+        </div>
+
+        {erro && <p className="text-xs text-destructive">{erro}</p>}
+
+        {clientes && clientes.length === 0 && (
+          <p className="text-sm text-muted-foreground">Nenhum cliente encontrado para “{termo}”.</p>
+        )}
+
+        {clientes?.map((c) => (
+          <div key={c.id} className="rounded-lg border border-border">
+            <div className="px-4 py-3 border-b border-border flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold">{c.nome}</p>
+                <p className="text-xs text-muted-foreground tabular-nums">
+                  {c.cpfCnpj ?? '—'} · id {c.id}{c.codigoOmie ? ` · Omie ${c.codigoOmie}` : ''}
+                </p>
+              </div>
+              <div className="flex items-center gap-3 text-xs">
+                <span className="text-muted-foreground">{c.totalNotas} nota(s)</span>
+                {c.qtdDuplicadas > 0 && (
+                  <span className="inline-flex items-center gap-1 text-destructive font-semibold">
+                    <AlertTriangle size={13} /> {c.qtdDuplicadas} em duplicidade
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {c.aviso ? (
+              <p className="px-4 py-4 text-sm text-muted-foreground">{c.aviso}</p>
+            ) : c.notas.length === 0 ? (
+              <p className="px-4 py-4 text-sm text-muted-foreground">Nenhuma NFS-e faturada para este cliente na Omie.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-[11px] text-muted-foreground uppercase tracking-wider border-b border-border">
+                      <th className="px-4 py-2.5 font-semibold">NFS-e</th>
+                      <th className="px-4 py-2.5 font-semibold">OS</th>
+                      <th className="px-4 py-2.5 font-semibold text-right">Valor</th>
+                      <th className="px-4 py-2.5 font-semibold">Emissão</th>
+                      <th className="px-4 py-2.5 font-semibold text-center">Situação</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {c.notas.map((n) => (
+                      <tr key={n.numero} className={n.duplicada ? 'bg-destructive/5' : 'hover:bg-muted/50'}>
+                        <td className="px-4 py-2.5 text-xs font-semibold tabular-nums">Nº {n.numero}</td>
+                        <td className="px-4 py-2.5 text-xs tabular-nums">{n.numeroOs ?? '—'}</td>
+                        <td className="px-4 py-2.5 text-right text-xs tabular-nums font-semibold">{fmtMoeda(n.valor)}</td>
+                        <td className="px-4 py-2.5 text-xs">{fmtData(n.dataEmissao)}</td>
+                        <td className="px-4 py-2.5 text-center text-xs">
+                          {n.duplicada
+                            ? <span className="text-destructive font-semibold">Possível duplicidade</span>
+                            : <span className="text-muted-foreground">—</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function NfsePage() {
   const [preset, setPreset] = useState<Preset>('este_mes');
   const [dataInicial, setDataInicial] = useState(() => presetParaDatas('este_mes').dataInicial);
@@ -584,6 +720,9 @@ export default function NfsePage() {
         A busca na Omie vai até {fmtData(dados.periodo.dataFinalBuscaOmie)} para cobrir notas emitidas com atraso.
         Duplicidade = mais de uma NFS-e faturada para o mesmo destinatário e mesmo valor no período.
       </p>
+
+      {/* Consulta por cliente */}
+      <ConsultaPorCliente />
 
       {/* KPI Row */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
