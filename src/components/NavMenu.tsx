@@ -28,6 +28,9 @@ import {
   Users2,
   Megaphone,
   Snowflake,
+  Wallet,
+  Target,
+  CalendarDays,
   type LucideIcon,
 } from "lucide-react";
 import { isSubmenu, type NavGroup, type NavLink as NavLinkType, type NavSubmenu } from "@/lib/nav-menu";
@@ -46,10 +49,13 @@ const ICONS: Record<string, LucideIcon> = {
   "Verificação NFS-e": FileCheck2,
   "Inadimplência": TrendingDown,
   "Inside Sales": PhoneCall,
+  "IS 30/60/90": Target,
+  "Vendas Dia a Dia": CalendarDays,
   "Modo Apresentação": Presentation,
   "RH": Users,
   "Intervalo Almoço": Clock,
   "Banco de Horas - Copa": Clock,
+  "Fechamento de Folha": Wallet,
   "Comercial": Briefcase,
   "Metas": Sliders,
   "Automações": Settings2,

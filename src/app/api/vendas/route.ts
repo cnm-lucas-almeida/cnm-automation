@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getVendasData, type Segmento } from '@/lib/vendas';
+import { getVendasData, type Segmento, type StatusVenda, type TipoContrato } from '@/lib/vendas';
 
 const SEGMENTOS_VALIDOS: (Segmento | 'todos')[] = ['todos', 'imoveis', 'veiculos', 'outro'];
+const TIPOS_VALIDOS: TipoContrato[] = ['todos', 'usados', 'lancamento'];
+const STATUS_VALIDOS: StatusVenda[] = ['ativa', 'congelada', 'cancelada'];
 
 function primeiroDiaDoMes(): string {
   const d = new Date();
@@ -18,7 +20,18 @@ export async function GET(request: NextRequest) {
     const dataFinal = request.nextUrl.searchParams.get('dataFinal') || hoje();
     const segmentoParam = request.nextUrl.searchParams.get('segmento');
     const segmento = SEGMENTOS_VALIDOS.includes(segmentoParam as any) ? (segmentoParam as Segmento | 'todos') : 'todos';
-    const data = await getVendasData(dataInicial, dataFinal, segmento);
+
+    const squadParam = request.nextUrl.searchParams.get('squad');
+    const treinadorParam = request.nextUrl.searchParams.get('treinador');
+    const tipoParam = request.nextUrl.searchParams.get('tipo');
+    const statusParam = request.nextUrl.searchParams.get('status');
+
+    const data = await getVendasData(dataInicial, dataFinal, segmento, {
+      squad: squadParam || undefined,
+      treinador: treinadorParam || undefined,
+      tipo: TIPOS_VALIDOS.includes(tipoParam as any) ? (tipoParam as TipoContrato) : undefined,
+      status: STATUS_VALIDOS.includes(statusParam as any) ? (statusParam as StatusVenda) : undefined,
+    });
     return NextResponse.json(data);
   } catch (error: any) {
     console.error('[vendas]', error);

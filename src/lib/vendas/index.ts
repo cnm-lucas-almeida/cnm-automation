@@ -1,8 +1,11 @@
 import { getDbConnection } from '@/lib/db';
+import { diasUteisEntre } from './business-day';
 
 const MOTIVO_REATIVADO = 16;
 
 export type Segmento = 'imoveis' | 'veiculos' | 'outro';
+export type StatusVenda = 'ativa' | 'congelada' | 'cancelada';
+export type TipoContrato = 'todos' | 'usados' | 'lancamento';
 
 function segmentoFromTipoPessoa2(tipoPessoa2: string | null): Segmento {
   if (tipoPessoa2 === 'IMOB' || tipoPessoa2 === 'CORRETOR') return 'imoveis';
@@ -27,7 +30,7 @@ export type VendaContrato = {
   squadNome: string | null;
   treinadorNome: string | null;
   pago: boolean | null;
-  status: 'ativa' | 'congelada' | 'cancelada';
+  status: StatusVenda;
   paga: boolean;
 };
 
@@ -57,6 +60,26 @@ export type RankingSquad = {
   valorTotal: number;
 };
 
+export type SequenciaVendedor = {
+  idVendedor: number;
+  nome: string;
+  squadNome: string | null;
+  treinadorNome: string | null;
+  diasUteisNoPeriodo: number;
+  diasSemVenda: number;
+  vendeuTodoDia: boolean;
+  ultimaVenda: string | null;
+};
+
+export type FiltrosVendas = { squads: string[]; treinadores: string[] };
+
+export type VendasFiltros = {
+  squad?: string;
+  treinador?: string;
+  tipo?: TipoContrato;
+  status?: StatusVenda;
+};
+
 export type VendasData = {
   generatedAt: string;
   periodo: { dataInicial: string; dataFinal: string; segmento: Segmento | 'todos' };
@@ -72,11 +95,16 @@ export type VendasData = {
     valorAtivas: number;
     maiorVenda: number;
     menorVenda: number;
+    vendasUsados: number;
+    valorUsados: number;
+    vendasLancamento: number;
+    valorLancamento: number;
   };
   seriePorDia: SeriePeriodo[];
   seriePorMes: SeriePeriodo[];
   rankingVendedores: RankingVendedor[];
   rankingSquads: RankingSquad[];
+  sequenciaVendedores: SequenciaVendedor[];
   vendas: VendaContrato[];
 };
 
@@ -131,6 +159,57 @@ const QUERY = `
   ORDER BY fc.data_contrato ASC
 `;
 
+// Vendedores ativos "de carteira" na data de referência (mesmo critério do legado
+// `getVendorsHasNoSales`) — sem essa lista, quem ficou zerado o período inteiro não
+// aparece em nenhuma linha da query principal e sumiria da sequência de vendas.
+const QUERY_VENDEDORES_ATIVOS = `
+  SELECT
+    v.id AS id_vendedor,
+    v.nome AS vendedor_nome,
+    squad.name AS squad_nome,
+    v2.nome AS treinador_nome
+  FROM tb_vendedor v
+  LEFT JOIN crm_salesperson_allocation csa ON csa.id = (
+    SELECT csai.id
+    FROM crm_salesperson_allocation csai
+    WHERE csai.salesperson_id = v.id
+      AND ? BETWEEN csai.started_at AND COALESCE(csai.finished_at, ?)
+    ORDER BY csai.started_at DESC, csai.id DESC
+    LIMIT 1
+  )
+  LEFT JOIN crm_squad squad ON squad.id = csa.squad_id
+  LEFT JOIN tb_vendedor_grupo vg ON vg.id_vendedor = v.id AND vg.deleted = 0 AND vg.perfil = 4
+    AND ? >= vg.data_inicio AND (vg.data_fim IS NULL OR ? <= vg.data_fim)
+  LEFT JOIN tb_vendedor v2 ON v2.id = vg.id_vendedor_pai AND v2.deleted = 0
+  WHERE v.deleted = 0
+    AND v.perfil = 0
+    AND v.comissao_parcelas = 1
+    AND v.comissao_parcela_inicial = 1
+    AND v.data_fim IS NULL
+  ORDER BY v.nome ASC
+`;
+
+const QUERY_FILTROS = `
+  SELECT DISTINCT squad.name AS squad, v2.nome AS treinador
+  FROM tb_financeiro_contrato fc
+  INNER JOIN tb_vendedor v ON v.id = fc.id_vendedor
+  LEFT JOIN crm_salesperson_allocation csa ON csa.id = (
+    SELECT csai.id
+    FROM crm_salesperson_allocation csai
+    WHERE csai.salesperson_id = v.id
+      AND fc.data_contrato BETWEEN csai.started_at AND COALESCE(csai.finished_at, NOW())
+    ORDER BY csai.started_at DESC, csai.id DESC
+    LIMIT 1
+  )
+  LEFT JOIN crm_squad squad ON squad.id = csa.squad_id
+  LEFT JOIN tb_vendedor_grupo vg ON vg.id_vendedor = v.id AND vg.deleted = 0 AND vg.perfil = 4
+    AND fc.data_contrato >= vg.data_inicio AND (vg.data_fim IS NULL OR fc.data_contrato <= vg.data_fim)
+  LEFT JOIN tb_vendedor v2 ON v2.id = vg.id_vendedor_pai AND v2.deleted = 0
+  WHERE fc.deleted = 0 AND fc.valor_mensalidade_original > 0.01
+    AND (squad.name IS NOT NULL OR v2.nome IS NOT NULL)
+  ORDER BY squad, treinador
+`;
+
 function toNum(v: unknown): number {
   return v === null || v === undefined ? 0 : Number(v);
 }
@@ -152,20 +231,81 @@ function mesKey(d: string | Date): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
+type VendedorAtivoRow = { id_vendedor: number; vendedor_nome: string; squad_nome: string | null; treinador_nome: string | null };
+
+/**
+ * Dias úteis sem venda (contando de trás pra frente a partir do fim do período filtrado —
+ * não é uma janela fixa até hoje) e se o vendedor vendeu em todos os dias úteis do período.
+ * Inclui vendedores ativos sem nenhuma venda no período (`vendedoresAtivos`), igual ao legado.
+ */
+function calcularSequenciaVendedores(
+  vendas: VendaContrato[],
+  vendedoresAtivos: VendedorAtivoRow[],
+  dataInicial: string,
+  dataFinal: string,
+  squad?: string,
+  treinador?: string
+): SequenciaVendedor[] {
+  const diasUteis = diasUteisEntre(dataInicial, dataFinal);
+
+  type Info = { vendedor: string; squad: string | null; treinador: string | null };
+  const universo = new Map<number, Info>();
+  for (const v of vendedoresAtivos) {
+    if (squad && v.squad_nome !== squad) continue;
+    if (treinador && v.treinador_nome !== treinador) continue;
+    universo.set(v.id_vendedor, { vendedor: v.vendedor_nome, squad: v.squad_nome, treinador: v.treinador_nome });
+  }
+
+  const diasVendidos = new Map<number, Set<string>>();
+  for (const v of vendas) {
+    if (!universo.has(v.idVendedor)) {
+      universo.set(v.idVendedor, { vendedor: v.vendedorNome, squad: v.squadNome, treinador: v.treinadorNome });
+    }
+    const dKey = diaKey(v.dataContrato);
+    if (!diasUteis.includes(dKey)) continue;
+    const dias = diasVendidos.get(v.idVendedor) ?? new Set<string>();
+    dias.add(dKey);
+    diasVendidos.set(v.idVendedor, dias);
+  }
+
+  const resultado: SequenciaVendedor[] = [];
+  for (const [idVendedor, info] of universo) {
+    const dias = diasVendidos.get(idVendedor) ?? new Set<string>();
+    let diasSemVenda = 0;
+    for (let i = diasUteis.length - 1; i >= 0; i--) {
+      if (dias.has(diasUteis[i])) break;
+      diasSemVenda += 1;
+    }
+    const ultimaVenda = [...dias].sort().at(-1) ?? null;
+    resultado.push({
+      idVendedor,
+      nome: info.vendedor,
+      squadNome: info.squad,
+      treinadorNome: info.treinador,
+      diasUteisNoPeriodo: diasUteis.length,
+      diasSemVenda,
+      vendeuTodoDia: diasUteis.length > 0 && diasUteis.every((d) => dias.has(d)),
+      ultimaVenda,
+    });
+  }
+
+  return resultado.sort((a, b) => b.diasSemVenda - a.diasSemVenda);
+}
+
 export async function getVendasData(
   dataInicial: string,
   dataFinal: string,
-  segmento: Segmento | 'todos' = 'todos'
+  segmento: Segmento | 'todos' = 'todos',
+  filtros: VendasFiltros = {}
 ): Promise<VendasData> {
   const connection = await getDbConnection();
   try {
     const [rows] = await connection.query(QUERY, [dataFinal, dataInicial, dataFinal]);
+    const [vendedoresAtivosRows] = await connection.query(QUERY_VENDEDORES_ATIVOS, [
+      dataFinal, dataFinal, dataFinal, dataFinal,
+    ]);
 
-    const rowsFiltradas = segmento === 'todos'
-      ? (rows as any[])
-      : (rows as any[]).filter((r) => segmentoFromTipoPessoa2(r.tipo_pessoa2) === segmento);
-
-    const vendas: VendaContrato[] = rowsFiltradas.map((r) => {
+    let vendas: VendaContrato[] = (rows as any[]).map((r) => {
       const cancelado = Boolean(r.cancelado);
       const congeladaBase = Boolean(r.congelado);
       const pago = r.pago === null ? null : Boolean(r.pago);
@@ -197,6 +337,14 @@ export async function getVendasData(
         paga,
       };
     });
+
+    if (segmento !== 'todos') vendas = vendas.filter((v) => v.segmento === segmento);
+    if (filtros.squad) vendas = vendas.filter((v) => v.squadNome === filtros.squad);
+    if (filtros.treinador) vendas = vendas.filter((v) => v.treinadorNome === filtros.treinador);
+    if (filtros.tipo && filtros.tipo !== 'todos') {
+      vendas = vendas.filter((v) => v.segmento === 'imoveis' && v.lancamento === (filtros.tipo === 'lancamento'));
+    }
+    if (filtros.status) vendas = vendas.filter((v) => v.status === filtros.status);
 
     const diaMap = new Map<string, { qtdVendas: number; valor: number }>();
     const mesMap = new Map<string, { qtdVendas: number; valor: number }>();
@@ -276,6 +424,20 @@ export async function getVendasData(
     const valorAtivas = vendas.filter((v) => v.status === 'ativa').reduce((s, v) => s + v.valor, 0);
     const valores = vendas.map((v) => v.valor);
 
+    // Usados vs lançamento: só faz sentido dentro de imóveis, calculado sobre o conjunto já filtrado.
+    const imoveisVendas = vendas.filter((v) => v.segmento === 'imoveis');
+    const usadosVendas = imoveisVendas.filter((v) => !v.lancamento);
+    const lancamentoVendas = imoveisVendas.filter((v) => v.lancamento);
+
+    const sequenciaVendedores = calcularSequenciaVendedores(
+      vendas,
+      vendedoresAtivosRows as VendedorAtivoRow[],
+      dataInicial,
+      dataFinal,
+      filtros.squad,
+      filtros.treinador
+    );
+
     const data: VendasData = {
       generatedAt: new Date().toISOString(),
       periodo: { dataInicial, dataFinal, segmento },
@@ -291,15 +453,36 @@ export async function getVendasData(
         valorAtivas,
         maiorVenda: valores.length ? Math.max(...valores) : 0,
         menorVenda: valores.length ? Math.min(...valores) : 0,
+        vendasUsados: usadosVendas.length,
+        valorUsados: usadosVendas.reduce((s, v) => s + v.valor, 0),
+        vendasLancamento: lancamentoVendas.length,
+        valorLancamento: lancamentoVendas.reduce((s, v) => s + v.valor, 0),
       },
       seriePorDia,
       seriePorMes,
       rankingVendedores,
       rankingSquads,
+      sequenciaVendedores,
       vendas,
     };
 
     return data;
+  } finally {
+    await connection.end();
+  }
+}
+
+export async function getFiltrosVendas(): Promise<FiltrosVendas> {
+  const connection = await getDbConnection();
+  try {
+    const [rows] = await connection.query(QUERY_FILTROS);
+    const squads = new Set<string>();
+    const treinadores = new Set<string>();
+    for (const r of rows as any[]) {
+      if (r.squad) squads.add(r.squad);
+      if (r.treinador) treinadores.add(r.treinador);
+    }
+    return { squads: [...squads].sort(), treinadores: [...treinadores].sort() };
   } finally {
     await connection.end();
   }

@@ -4,13 +4,15 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import axios from 'axios';
 import {
   Loader2, RefreshCw, AlertCircle, Users, TrendingUp, Wallet, Snowflake, XCircle,
-  Download, X, Search, ChevronUp, ChevronDown, ChevronsUpDown, ShoppingCart,
-  Maximize2, Minimize2, LayoutGrid, Home, Car,
+  X, Search, ChevronUp, ChevronDown, ChevronsUpDown, ShoppingCart,
+  Minimize2, LayoutGrid, Home, Car, ListFilter, Clock, Building2, Sparkles,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList,
 } from 'recharts';
-import type { VendasData, VendaContrato, RankingVendedor, Segmento } from '@/lib/vendas';
+import type {
+  VendasData, VendaContrato, RankingVendedor, Segmento, SequenciaVendedor, StatusVenda, TipoContrato, FiltrosVendas,
+} from '@/lib/vendas';
 import { Select } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { SegmentTabs } from '@/components/ui/SegmentTabs';
@@ -224,6 +226,12 @@ export default function VendasPage() {
   const [granularidade, setGranularidade] = useState<Granularidade>('dia');
   const [segmento, setSegmento] = useState<SegmentoFiltro>('todos');
 
+  const [squadFiltro, setSquadFiltro] = useState('');
+  const [treinadorFiltro, setTreinadorFiltro] = useState('');
+  const [statusFiltro, setStatusFiltro] = useState<StatusVenda | ''>('');
+  const [tipoFiltro, setTipoFiltro] = useState<TipoContrato>('todos');
+  const [filtrosOpcoes, setFiltrosOpcoes] = useState<FiltrosVendas | null>(null);
+
   const [dados, setDados] = useState<VendasData | null>(null);
   const [loading, setLoading] = useState(true);
   const [reloading, setReloading] = useState(false);
@@ -233,6 +241,7 @@ export default function VendasPage() {
   const [sortCol, setSortCol] = useState<SortCol>('vendas');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [modalVendedor, setModalVendedor] = useState<RankingVendedor | null>(null);
+  const [buscaSequencia, setBuscaSequencia] = useState('');
 
   const [apresentacao, setApresentacao] = useState(false);
   const [slideAtual, setSlideAtual] = useState(0);
@@ -248,10 +257,19 @@ export default function VendasPage() {
     setEmbutido(window.self !== window.top);
   }, []);
 
-  const fetchDados = useCallback(async (di: string, df: string, seg: SegmentoFiltro) => {
+  const fetchDados = useCallback(async (
+    di: string, df: string, seg: SegmentoFiltro,
+    squad: string, treinador: string, status: StatusVenda | '', tipo: TipoContrato
+  ) => {
     setError(null);
     try {
-      const res = await axios.get('/api/vendas', { params: { dataInicial: di, dataFinal: df, segmento: seg } });
+      const res = await axios.get('/api/vendas', {
+        params: {
+          dataInicial: di, dataFinal: df, segmento: seg,
+          squad: squad || undefined, treinador: treinador || undefined,
+          status: status || undefined, tipo: seg === 'imoveis' ? tipo : undefined,
+        },
+      });
       setDados(res.data);
     } catch (err: any) {
       setError(err.response?.data?.error || err.message);
@@ -262,10 +280,14 @@ export default function VendasPage() {
   }, []);
 
   useEffect(() => {
+    axios.get('/api/vendas/filtros').then((res) => setFiltrosOpcoes(res.data)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     setReloading(true);
-    fetchDados(dataInicial, dataFinal, segmento);
+    fetchDados(dataInicial, dataFinal, segmento, squadFiltro, treinadorFiltro, statusFiltro, tipoFiltro);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataInicial, dataFinal, segmento]);
+  }, [dataInicial, dataFinal, segmento, squadFiltro, treinadorFiltro, statusFiltro, tipoFiltro]);
 
   // Modo apresentação: acompanha o estado de fullscreen (ex.: usuário aperta Esc) e mantém os dados atualizados sozinho.
   useEffect(() => {
@@ -279,10 +301,10 @@ export default function VendasPage() {
   useEffect(() => {
     if (!apresentacao) return;
     const id = setInterval(() => {
-      fetchDados(dataInicial, dataFinal, segmento);
+      fetchDados(dataInicial, dataFinal, segmento, squadFiltro, treinadorFiltro, statusFiltro, tipoFiltro);
     }, 2 * 60 * 1000);
     return () => clearInterval(id);
-  }, [apresentacao, dataInicial, dataFinal, segmento, fetchDados]);
+  }, [apresentacao, dataInicial, dataFinal, segmento, squadFiltro, treinadorFiltro, statusFiltro, tipoFiltro, fetchDados]);
 
   // Troca automática de slide (KPIs/evolução → squads → ranking por segmento) a cada 10s.
   // Reinicia a contagem (slideEpoch) sempre que a tela /apresentacao avisa que este relatório
@@ -434,22 +456,15 @@ export default function VendasPage() {
     });
   }, [dados, busca, sortCol, sortDir]);
 
-  function exportarCsv() {
-    if (!dados) return;
-    const header = ['Vendedor', 'Squad', 'Treinador', 'Vendas', 'Ativas', 'Pagas', 'Congeladas', 'Canceladas', 'Valor Total', 'Valor Ativas', 'Ticket Médio'];
-    const linhas = vendedoresFiltrados.map((v) => [
-      v.nome, v.squadNome ?? '', v.treinadorNome ?? '', v.vendas, v.ativas, v.pagas, v.congeladas, v.canceladas,
-      v.valorTotal.toFixed(2), v.valorAtivas.toFixed(2), v.ticketMedio.toFixed(2),
-    ]);
-    const csv = [header, ...linhas].map((l) => l.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\n');
-    const blob = new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `relatorio-vendas-${dataInicial}-a-${dataFinal}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
+  const sequenciaFiltrada = useMemo(() => {
+    if (!dados) return [] as SequenciaVendedor[];
+    const termo = buscaSequencia.trim().toLowerCase();
+    if (!termo) return dados.sequenciaVendedores;
+    return dados.sequenciaVendedores.filter((v) =>
+      v.nome.toLowerCase().includes(termo) ||
+      (v.squadNome ?? '').toLowerCase().includes(termo)
+    );
+  }, [dados, buscaSequencia]);
 
   const updatedAt = dados?.generatedAt
     ? new Date(dados.generatedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
@@ -470,7 +485,7 @@ export default function VendasPage() {
         <AlertCircle size={40} className="text-destructive" />
         <p className="font-semibold text-foreground">Falha ao carregar dados</p>
         <p className="text-sm text-destructive">{error}</p>
-        <button onClick={() => { setLoading(true); fetchDados(dataInicial, dataFinal, segmento); }}
+        <button onClick={() => { setLoading(true); fetchDados(dataInicial, dataFinal, segmento, squadFiltro, treinadorFiltro, statusFiltro, tipoFiltro); }}
           className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">
           <RefreshCw size={14} /> Tentar novamente
         </button>
@@ -522,21 +537,69 @@ export default function VendasPage() {
                 <DatePicker value={dataFinal} onChange={setDataFinal} placeholder="Data final" minDate={dataInicial} />
               </>
             )}
-            <button onClick={exportarCsv}
-              className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
-              <Download size={14} /> Exportar CSV
-            </button>
-            <button onClick={() => { setReloading(true); fetchDados(dataInicial, dataFinal, segmento); }}
-              className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
-              <RefreshCw size={14} /> Atualizar
-            </button>
-            <button onClick={toggleApresentacao}
-              className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
-              <Maximize2 size={14} /> Modo apresentação
-            </button>
           </div>
         )}
       </div>
+
+      {/* Filtros de squad/treinador/status/tipo (modo normal) */}
+      {!apresentacao && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mr-1">
+            <ListFilter size={13} /> Filtros:
+          </span>
+          <Select
+            value={squadFiltro}
+            onChange={setSquadFiltro}
+            className="min-w-[160px]"
+            placeholder="Todos os squads"
+            options={[
+              { value: '', label: 'Todos os squads' },
+              ...(filtrosOpcoes?.squads ?? []).map((s) => ({ value: s, label: s })),
+            ]}
+          />
+          <Select
+            value={treinadorFiltro}
+            onChange={setTreinadorFiltro}
+            className="min-w-[180px]"
+            placeholder="Todos os treinadores"
+            options={[
+              { value: '', label: 'Todos os treinadores' },
+              ...(filtrosOpcoes?.treinadores ?? []).map((t) => ({ value: t, label: t })),
+            ]}
+          />
+          <Select
+            value={statusFiltro}
+            onChange={(v) => setStatusFiltro(v as StatusVenda | '')}
+            className="min-w-[150px]"
+            placeholder="Todos os status"
+            options={[
+              { value: '', label: 'Todos os status' },
+              { value: 'ativa', label: 'Ativa' },
+              { value: 'congelada', label: 'Congelada' },
+              { value: 'cancelada', label: 'Cancelada' },
+            ]}
+          />
+          {segmento === 'imoveis' && (
+            <Select
+              value={tipoFiltro}
+              onChange={(v) => setTipoFiltro(v as TipoContrato)}
+              className="min-w-[140px]"
+              options={[
+                { value: 'todos', label: 'Usados e lançamento' },
+                { value: 'usados', label: 'Usados' },
+                { value: 'lancamento', label: 'Lançamento' },
+              ]}
+            />
+          )}
+          {(squadFiltro || treinadorFiltro || statusFiltro || tipoFiltro !== 'todos') && (
+            <button
+              onClick={() => { setSquadFiltro(''); setTreinadorFiltro(''); setStatusFiltro(''); setTipoFiltro('todos'); }}
+              className="flex items-center gap-1 px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
+              <X size={12} /> Limpar filtros
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Indicador de slides (modo apresentação) */}
       {apresentacao && (
@@ -564,6 +627,26 @@ export default function VendasPage() {
               sub="no período selecionado"
               icon={dados.kpis.canceladas > 0 ? XCircle : Snowflake} color="#CA3500" />
           </div>
+
+          {(dados.kpis.vendasUsados > 0 || dados.kpis.vendasLancamento > 0) && (
+            <div className={`rounded-lg border border-border ${apresentacao ? 'p-8 shrink-0' : 'p-5'}`}>
+              <h2 className={`font-semibold flex items-center gap-2 mb-4 ${apresentacao ? 'text-lg' : 'text-sm'}`}>
+                <Building2 size={apresentacao ? 20 : 16} className="text-primary" /> Usados vs Lançamento (imóveis)
+              </h2>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className={`font-semibold text-muted-foreground uppercase tracking-wider ${apresentacao ? 'text-sm' : 'text-[11px]'}`}>Usados</p>
+                  <p className={`font-bold mt-1 tabular-nums ${apresentacao ? 'text-3xl' : 'text-xl'}`}>{dados.kpis.vendasUsados.toLocaleString('pt-BR')}</p>
+                  <p className={`text-muted-foreground mt-0.5 ${apresentacao ? 'text-base' : 'text-xs'}`}>{fmtMoeda(dados.kpis.valorUsados)}</p>
+                </div>
+                <div>
+                  <p className={`font-semibold text-muted-foreground uppercase tracking-wider ${apresentacao ? 'text-sm' : 'text-[11px]'}`}>Lançamento</p>
+                  <p className={`font-bold mt-1 tabular-nums ${apresentacao ? 'text-3xl' : 'text-xl'}`}>{dados.kpis.vendasLancamento.toLocaleString('pt-BR')}</p>
+                  <p className={`text-muted-foreground mt-0.5 ${apresentacao ? 'text-base' : 'text-xs'}`}>{fmtMoeda(dados.kpis.valorLancamento)}</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className={`rounded-lg border border-border ${apresentacao ? 'p-8 flex-1 min-h-0 flex flex-col' : 'p-5'}`}>
             <div className={`flex items-center justify-between mb-4 ${apresentacao ? 'shrink-0' : ''}`}>
@@ -746,6 +829,60 @@ export default function VendasPage() {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Sequência de vendas (apenas no modo normal) */}
+      {!apresentacao && sequenciaFiltrada.length > 0 && (
+        <div className="rounded-lg border border-border">
+          <div className="px-5 py-4 border-b border-border flex flex-wrap items-center gap-3">
+            <h2 className="text-sm font-semibold flex items-center gap-2 mr-auto">
+              <Clock size={15} className="text-primary" /> Sequência de vendas
+            </h2>
+            <div className="relative flex-1 min-w-[220px] max-w-xs">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={buscaSequencia}
+                onChange={(e) => setBuscaSequencia(e.target.value)}
+                placeholder="Buscar por vendedor ou squad…"
+                className="w-full pl-8 pr-3 py-2 text-sm border border-border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {sequenciaFiltrada.length} vendedor(es) · {sequenciaFiltrada[0]?.diasUteisNoPeriodo ?? 0} dia(s) útil(eis) no período
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[11px] text-muted-foreground uppercase tracking-wider border-b border-border">
+                  <th className="px-5 py-3 font-semibold">Vendedor</th>
+                  <th className="px-4 py-3 font-semibold text-right">Dias úteis sem venda</th>
+                  <th className="px-4 py-3 font-semibold text-center">Vendeu todo dia</th>
+                  <th className="px-5 py-3 font-semibold text-right">Última venda</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {sequenciaFiltrada.map((v) => (
+                  <tr key={v.idVendedor} className="hover:bg-muted/50 transition-colors">
+                    <td className="px-5 py-3">
+                      <div className="font-medium">{v.nome}</div>
+                      <div className="text-xs text-muted-foreground">{v.squadNome ?? 'Sem squad'}</div>
+                    </td>
+                    <td className={`px-4 py-3 text-right tabular-nums font-semibold text-xs ${v.diasSemVenda > 0 ? 'text-destructive' : ''}`}>
+                      {v.diasSemVenda}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {v.vendeuTodoDia
+                        ? <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-success-bg text-success"><Sparkles size={10} /> Sim</span>
+                        : <span className="text-xs text-muted-foreground">—</span>}
+                    </td>
+                    <td className="px-5 py-3 text-right text-xs text-muted-foreground tabular-nums">{v.ultimaVenda ? fmtData(v.ultimaVenda) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

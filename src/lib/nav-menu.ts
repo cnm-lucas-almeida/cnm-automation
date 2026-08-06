@@ -46,6 +46,8 @@ export const menus: NavGroup[] = [
       { label: "Verificação NFS-e", href: "/nfse" },
       { label: "Inadimplência", href: "/inadimplencia" },
       { label: "Inside Sales", href: "/inside-sales" },
+      { label: "IS 30/60/90", href: "/inside-sales-306090" },
+      { label: "Vendas Dia a Dia", href: "/vendas-dia-a-dia" },
     ],
   },
   {
