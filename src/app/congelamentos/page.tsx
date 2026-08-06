@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import {
   Loader2, RefreshCw, AlertCircle, TrendingUp, Wallet, Package, Clock, Download, X, Search,
-  Home, Car, LayoutGrid, DollarSign, Info, AlertTriangle, Unlock, Snowflake, Repeat, XCircle,
+  Home, Car, LayoutGrid, DollarSign, Info, AlertTriangle, Unlock, Snowflake, Repeat, XCircle, Activity,
 } from 'lucide-react';
 import {
   ComposedChart, Bar, Line, BarChart, PieChart, Pie, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -18,12 +18,14 @@ import { DateRangePicker } from '@/components/ui/DateRangePicker';
 import { SegmentTabs } from '@/components/ui/SegmentTabs';
 import { ComparativoCell } from '@/components/ui/ComparativoCell';
 import { formatCurrencyBRL, formatNumberBR, formatPercent } from '@/lib/format';
+import { SaudeDiaria } from './SaudeDiaria';
 
-type Aba = 'congelamentos' | 'descongelamentos';
+type Aba = 'congelamentos' | 'descongelamentos' | 'saude';
 
 const ABA_TABS = [
   { value: 'congelamentos' as const, label: 'Congelamentos', icon: Snowflake },
   { value: 'descongelamentos' as const, label: 'Descongelamentos', icon: Unlock },
+  { value: 'saude' as const, label: 'Saúde diária', icon: Activity },
 ];
 
 const VERTICAL_TABS = [
@@ -330,6 +332,10 @@ export default function CongelamentosPage() {
   }, []);
 
   const refazerFetch = useCallback(() => {
+    if (aba === 'saude') {
+      setReloading(false);
+      return;
+    }
     setReloading(true);
     const promessa = aba === 'congelamentos'
       ? fetchCongelamentos(dataInicial, dataFinal, uf, cidade, vertical, motivo)
@@ -424,6 +430,21 @@ export default function CongelamentosPage() {
     a.download = nomeArquivo;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  if (aba === 'saude') {
+    return (
+      <div className="mx-auto space-y-5">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Saúde diária</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">Acompanhamento do descongelamento automático</p>
+          </div>
+          <SegmentTabs value={aba} onChange={(v) => setAba(v as Aba)} options={ABA_TABS} />
+        </div>
+        <SaudeDiaria />
+      </div>
+    );
   }
 
   const dadosAtivos = aba === 'congelamentos' ? dadosCongelamentos : dadosDescongelamentos;
