@@ -61,6 +61,13 @@ export function SaudeDiaria() {
 
   return (
     <div className="space-y-5">
+      <div className="flex justify-end">
+        <button onClick={carregar} disabled={loading}
+          className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50">
+          {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Atualizar
+        </button>
+      </div>
+
       <div className={`rounded-lg border p-5 flex items-center gap-4 ${saudavel ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-destructive/40 bg-destructive/5'}`}>
         {saudavel ? <CheckCircle2 size={28} className="text-emerald-500 flex-shrink-0" /> : <AlertTriangle size={28} className="text-destructive flex-shrink-0" />}
         <div>
