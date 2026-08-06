@@ -21,7 +21,7 @@ function ListaEventos({ eventos, tipo }: { eventos: EventoSaude[]; tipo: 'congel
   return (
     <div className="divide-y divide-border">
       {eventos.map((e) => (
-        <div key={`${e.idCliente}-${e.hora}`} className="px-5 py-3 flex items-start gap-3 text-sm">
+        <div key={e.id} className="px-5 py-3 flex items-start gap-3 text-sm">
           <span className="w-11 text-muted-foreground tabular-nums flex-shrink-0 pt-0.5">{e.hora}</span>
           <div className="min-w-0 flex-1">
             <p className="font-medium truncate">{e.cliente || `Cliente #${e.idCliente}`}</p>

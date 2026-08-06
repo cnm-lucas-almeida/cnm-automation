@@ -685,6 +685,7 @@ export async function getDescongelamentosData(
 }
 
 export type EventoSaude = {
+  id: number;
   idCliente: number;
   cliente: string | null;
   hora: string;
@@ -707,17 +708,6 @@ export type SaudeDiaria = {
   alertas: { manualHoje: boolean; backlog: boolean };
 };
 
-function dedupPorCliente(rows: any[], map: (r: any) => EventoSaude): EventoSaude[] {
-  const vistos = new Set<number>();
-  const out: EventoSaude[] = [];
-  for (const r of rows) {
-    if (vistos.has(r.id_cliente)) continue;
-    vistos.add(r.id_cliente);
-    out.push(map(r));
-  }
-  return out;
-}
-
 function contaOrigem(lista: EventoSaude[]): { automatico: number; manual: number; total: number } {
   const automatico = lista.filter((e) => e.origem === 'automatico').length;
   const manual = lista.filter((e) => e.origem === 'manual').length;
@@ -728,7 +718,8 @@ export async function getSaudeDiaria(): Promise<SaudeDiaria> {
   const connection = await getDbConnection();
   try {
     const [thawRows] = await connection.query(`
-      SELECT cc.id_cliente,
+      SELECT cc.id,
+        cc.id_cliente,
         COALESCE(cc.nome_fantasia_congelamento, cc.nome_cliente_congelamento) cliente,
         TIME(cc.data_descongelamento) hora,
         cc.id_usuario_descongelou uid,
@@ -743,7 +734,8 @@ export async function getSaudeDiaria(): Promise<SaudeDiaria> {
       WHERE cc.deleted = 0 AND DATE(cc.data_descongelamento) = CURDATE()
       ORDER BY cc.data_descongelamento DESC
     `);
-    const descongeladosLista = dedupPorCliente(thawRows as any[], (r) => ({
+    const descongeladosLista: EventoSaude[] = (thawRows as any[]).map((r) => ({
+      id: r.id,
       idCliente: r.id_cliente,
       cliente: r.cliente,
       hora: String(r.hora ?? '').slice(0, 5),
@@ -756,7 +748,8 @@ export async function getSaudeDiaria(): Promise<SaudeDiaria> {
     }));
 
     const [freezeDetailRows] = await connection.query(`
-      SELECT cc.id_cliente,
+      SELECT cc.id,
+        cc.id_cliente,
         COALESCE(cc.nome_fantasia_congelamento, cc.nome_cliente_congelamento) cliente,
         TIME(cc.data_congelamento) hora,
         cc.id_usuario_congelou uid,
@@ -770,7 +763,8 @@ export async function getSaudeDiaria(): Promise<SaudeDiaria> {
       WHERE cc.deleted = 0 AND DATE(cc.data_congelamento) = CURDATE()
       ORDER BY cc.data_congelamento DESC
     `);
-    const congeladosLista = dedupPorCliente(freezeDetailRows as any[], (r) => ({
+    const congeladosLista: EventoSaude[] = (freezeDetailRows as any[]).map((r) => ({
+      id: r.id,
       idCliente: r.id_cliente,
       cliente: r.cliente,
       hora: String(r.hora ?? '').slice(0, 5),
@@ -798,18 +792,19 @@ export async function getSaudeDiaria(): Promise<SaudeDiaria> {
     const backlog = toNum((backlogRows as any[])[0]?.total);
 
     const [trendRows] = await connection.query(`
-      SELECT DATE(data_descongelamento) dia,
-        COUNT(DISTINCT CASE WHEN id_usuario_descongelou IS NULL THEN id_cliente END) auto,
-        COUNT(DISTINCT CASE WHEN id_usuario_descongelou IS NOT NULL THEN id_cliente END) manual
+      SELECT DATE_FORMAT(data_descongelamento, '%Y-%m-%d') dia,
+        COUNT(CASE WHEN id_usuario_descongelou IS NULL THEN 1 END) auto,
+        COUNT(CASE WHEN id_usuario_descongelou IS NOT NULL THEN 1 END) manual
       FROM tb_cliente_congelamento
       WHERE deleted = 0 AND data_descongelamento >= (CURDATE() - INTERVAL 13 DAY)
       GROUP BY dia
     `);
     const trendMap = new Map<string, { auto: number; manual: number }>();
     for (const r of trendRows as any[]) {
-      trendMap.set(diaKey(r.dia), { auto: toNum(r.auto), manual: toNum(r.manual) });
+      trendMap.set(String(r.dia), { auto: toNum(r.auto), manual: toNum(r.manual) });
     }
-    const hojeKey = diaKey(new Date());
+    const [hojeRows] = await connection.query(`SELECT CAST(CURDATE() AS CHAR) hoje`);
+    const hojeKey = String((hojeRows as any[])[0]?.hoje);
     const tendencia = Array.from({ length: 14 }, (_, i) => {
       const dia = somaDias(hojeKey, i - 13);
       const v = trendMap.get(dia) ?? { auto: 0, manual: 0 };
