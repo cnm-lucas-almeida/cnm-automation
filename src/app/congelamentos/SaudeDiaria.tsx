@@ -15,12 +15,15 @@ function verticalLabel(v: string | null): string {
 }
 
 function ListaEventos({ eventos, tipo }: { eventos: EventoSaude[]; tipo: 'congelou' | 'descongelou' }) {
+  const [visiveis, setVisiveis] = useState(10);
+
   if (eventos.length === 0) {
     return <p className="px-5 py-6 text-sm text-muted-foreground text-center">Nada hoje.</p>;
   }
+  const restantes = eventos.length - visiveis;
   return (
     <div className="divide-y divide-border">
-      {eventos.map((e) => (
+      {eventos.slice(0, visiveis).map((e) => (
         <div key={e.id} className="px-5 py-3 flex items-start gap-3 text-sm">
           <span className="w-11 text-muted-foreground tabular-nums flex-shrink-0 pt-0.5">{e.hora}</span>
           <div className="min-w-0 flex-1">
@@ -44,6 +47,20 @@ function ListaEventos({ eventos, tipo }: { eventos: EventoSaude[]; tipo: 'congel
           </div>
         </div>
       ))}
+      {(restantes > 0 || visiveis > 10) && (
+        <div className="px-5 py-3 flex items-center gap-4 text-sm">
+          {restantes > 0 && (
+            <button onClick={() => setVisiveis((v) => v + 10)} className="text-primary font-medium hover:underline">
+              Ver mais {Math.min(10, restantes)} <span className="text-muted-foreground">(+{restantes})</span>
+            </button>
+          )}
+          {visiveis > 10 && (
+            <button onClick={() => setVisiveis(10)} className="text-muted-foreground hover:underline ml-auto">
+              Ver menos
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
