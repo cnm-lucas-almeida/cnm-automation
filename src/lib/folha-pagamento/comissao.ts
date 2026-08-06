@@ -9,17 +9,17 @@ import { normalizarNome } from './unimed';
 // o fechamento continuam 100% em SQL/MySQL, nas mesmas tabelas que o admin
 // PHP usa. Schema e regras confirmados via DESCRIBE + leitura do model real.
 
-const PERFIL_VENDEDOR = 0;
-const PERFIL_ATENDENTE = 3;
+export const PERFIL_VENDEDOR = 0;
+export const PERFIL_ATENDENTE = 3;
 
-type Conexao = Awaited<ReturnType<typeof getDbConnection>>;
+export type Conexao = Awaited<ReturnType<typeof getDbConnection>>;
 
-interface FaixaComissao {
+export interface FaixaComissao {
   quantidade: string | number;
   comissao: number; // fração, ex.: 0.15 = 15%
 }
 
-interface Vendedor {
+export interface Vendedor {
   id: number;
   perfil: number;
   comissaoPercentual: number;
@@ -85,7 +85,7 @@ function linhaMaisAtual(a: LinhaVendedorRaw, b: LinhaVendedorRaw): LinhaVendedor
 // pode ter CPF vazio na linha nova mesmo já tendo CPF preenchido numa linha
 // antiga do mesmo grupo — usamos o CPF de qualquer linha do grupo, aplicado
 // à linha mais atual escolhida por linhaMaisAtual.
-async function buscarTodosVendedoresAtivos(conn: Conexao) {
+export async function buscarTodosVendedoresAtivos(conn: Conexao) {
   const [rows] = await conn.query(
     `SELECT id, documento, nome, perfil, comissao_percentual, comissao_ativo, faixas_comissao, data_fim
      FROM tb_vendedor
@@ -136,7 +136,7 @@ function encontrarVendedor(
   return { vendedor: null, matchPorNome: false };
 }
 
-async function buscarComissaoFechada(conn: Conexao, idVendedor: number, ano: number, mes: number): Promise<number | null> {
+export async function buscarComissaoFechada(conn: Conexao, idVendedor: number, ano: number, mes: number): Promise<number | null> {
   const [rows] = await conn.query(
     `SELECT COALESCE(SUM(cd.valor_base_comissao * cf.comissao_vendedor_momento), 0) AS total,
             COUNT(*) AS qtd
@@ -161,7 +161,7 @@ async function buscarComissaoFechada(conn: Conexao, idVendedor: number, ano: num
 // valor_mensalidade_original − desconto_adimplencia_original, não
 // valor_mensalidade (que pode ter sido corrigido depois da venda — validado:
 // 17 de 1365 contratos de um mês real divergem entre os dois campos).
-async function buscarVendasElegiveis(conn: Conexao, idVendedor: number, ano: number, mes: number, perfil: number): Promise<number[]> {
+export async function buscarVendasElegiveis(conn: Conexao, idVendedor: number, ano: number, mes: number, perfil: number): Promise<number[]> {
   const filtroIndicacao = perfil === PERFIL_ATENDENTE ? 'AND fc.id_cliente_indicacao IS NOT NULL' : '';
   const [rows] = await conn.query(
     `SELECT (fc.valor_mensalidade_original - COALESCE(fc.desconto_adimplencia_original, 0)) AS valor_base
@@ -190,7 +190,7 @@ async function buscarVendasElegiveis(conn: Conexao, idVendedor: number, ano: num
 // mensalidade vinculada ao aditivo — não o mês em que o aditivo foi criado
 // (validado byte a byte contra o admin: caso real com aditivo criado em 01/07
 // mas pago em 27/07 só contou na comissão de julho por causa dessa regra).
-async function buscarAditivosElegiveis(conn: Conexao, idVendedor: number, ano: number, mes: number): Promise<number[]> {
+export async function buscarAditivosElegiveis(conn: Conexao, idVendedor: number, ano: number, mes: number): Promise<number[]> {
   // Importante: GROUP BY + HAVING num único nível, sem embrulhar em subquery
   // com WHERE externo — testado e confirmado que a versão aninhada (subquery
   // "AS p" + WHERE fora) devolve 0 linhas mesmo com dados válidos (MySQL não
@@ -242,7 +242,7 @@ async function buscarAditivosElegiveis(conn: Conexao, idVendedor: number, ano: n
 // batendo exatamente com o admin: R$ 28.249,00 base × 20% = R$ 5.649,80). Se
 // nenhuma faixa cobrir o total (caso não previsto no legado), mantém o
 // percentual base do vendedor.
-function percentualPorFaixa(faixas: Record<string, FaixaComissao> | null, totalVendas: number, percentualPadrao: number): number {
+export function percentualPorFaixa(faixas: Record<string, FaixaComissao> | null, totalVendas: number, percentualPadrao: number): number {
   if (!faixas) return percentualPadrao;
   const ordenadas = Object.values(faixas).sort((a, b) => Number(a.quantidade) - Number(b.quantidade));
   for (const faixa of ordenadas) {
@@ -259,7 +259,7 @@ function percentualPorFaixa(faixas: Record<string, FaixaComissao> | null, totalV
 // (ver armadilhas no levantamento). A faixa de percentual é decidida só pela
 // quantidade de vendas (application/models/vendedor_model.php:699) — aditivos
 // não contam pra escolha da faixa, só recebem o mesmo percentual depois.
-function calcularAberto(vendas: number[], aditivos: number[], vendedor: Vendedor): number {
+export function calcularAberto(vendas: number[], aditivos: number[], vendedor: Vendedor): number {
   const percentual = percentualPorFaixa(vendedor.faixasComissao, vendas.length, vendedor.comissaoPercentual);
   const base = [...vendas, ...aditivos].reduce((soma, valor) => soma + valor, 0);
   return Math.round(base * percentual * 100) / 100;

@@ -114,7 +114,7 @@ const QUERY = `
     cl.id AS id_cliente,
     cl.nome_fantasia,
     cl.tipo_pessoa2,
-    cl.congelado,
+    (cc.id IS NOT NULL AND cc.data_descongelamento IS NULL) AS congelado,
     fc.data_contrato,
     fc.data_inicio_veiculacao,
     fc.valor_mensalidade_original AS valor,
@@ -141,6 +141,20 @@ const QUERY = `
   LEFT JOIN tb_vendedor_grupo vg ON vg.id_vendedor = v.id AND vg.deleted = 0 AND vg.perfil = 4
     AND fc.data_contrato >= vg.data_inicio AND (vg.data_fim IS NULL OR fc.data_contrato <= vg.data_fim)
   LEFT JOIN tb_vendedor v2 ON v2.id = vg.id_vendedor_pai AND v2.deleted = 0
+  -- Fonte de verdade de congelamento/descongelamento é tb_cliente_congelamento (não tb_cliente.congelado,
+  -- que é só a foto atual do cliente e diverge do que /congelamentos considera "ainda congelado").
+  -- Pega o registro MAIS RECENTE deste contrato específico (nunca "qualquer aberto do cliente": ~800
+  -- contratos têm congelamentos antigos nunca fechados quando o cliente recongelou depois, e cliente
+  -- pode ter vários contratos ao longo do tempo — misturar isso reabre congelamento de contrato antigo
+  -- não relacionado). "Ainda congelado" = o mais recente não tem data_descongelamento.
+  LEFT JOIN tb_cliente_congelamento cc ON cc.id = (
+    SELECT cci.id
+    FROM tb_cliente_congelamento cci
+    WHERE cci.id_contrato = fc.id
+      AND cci.deleted = 0
+    ORDER BY cci.id DESC
+    LIMIT 1
+  )
   LEFT JOIN tb_financeiro_mensalidade fm ON fm.id = (
     SELECT fmi.id
     FROM tb_financeiro_mensalidade fmi

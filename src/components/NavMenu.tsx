@@ -31,6 +31,7 @@ import {
   Wallet,
   Target,
   CalendarDays,
+  Percent,
   type LucideIcon,
 } from "lucide-react";
 import { isSubmenu, type NavGroup, type NavLink as NavLinkType, type NavSubmenu } from "@/lib/nav-menu";
@@ -65,6 +66,7 @@ const ICONS: Record<string, LucideIcon> = {
   "DRE": Landmark,
   "Projeção": TrendingUp,
   "Quadro Comercial": Users2,
+  "Comissões": Percent,
   "Investimento em Mídia": Megaphone,
 };
 

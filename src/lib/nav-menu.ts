@@ -25,6 +25,7 @@ export const menus: NavGroup[] = [
       { label: "DRE", href: "/financeiro/dre" },
       { label: "Projeção", href: "/financeiro/projecao" },
       { label: "Quadro Comercial", href: "/financeiro/quadro-comercial" },
+      { label: "Comissões", href: "/comissoes" },
     ],
   },
   {
