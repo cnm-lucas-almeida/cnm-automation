@@ -26,6 +26,7 @@ export async function createSession(userId: number): Promise<void> {
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     expires: expiresAt,
+    maxAge: SESSION_DURATION_MS / 1000,
     path: '/',
   });
 }

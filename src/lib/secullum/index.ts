@@ -349,15 +349,6 @@ export function parseCalcularLinhas(resp: CalcularResponse): LinhaCalculo[] {
   });
 }
 
-function hhmmParaMinutos(valor: string | null): number {
-  if (!valor) return 0;
-  const negativo = valor.startsWith('-');
-  const limpo = negativo ? valor.slice(1) : valor;
-  const [h, m] = limpo.split(':').map(Number);
-  if (Number.isNaN(h) || Number.isNaN(m)) return 0;
-  return (negativo ? -1 : 1) * (h * 60 + m);
-}
-
 export function minutosParaHHMM(minutos: number): string {
   const negativo = minutos < 0;
   const abs = Math.round(Math.abs(minutos));
@@ -366,14 +357,11 @@ export function minutosParaHHMM(minutos: number): string {
   return `${negativo ? '-' : ''}${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
-// ── Banco de horas — Copa do Mundo (folga em 29/06) ───────────────────────────
+// ── Banco de horas ────────────────────────────────────────────────────────────
 //
-// No dia 29/06 a empresa liberou os colaboradores durante o jogo do Brasil, mas
-// o mês de junho fechou como se o dia tivesse sido trabalhado integralmente (8h).
-// As horas não trabalhadas naquele dia viraram uma dívida da empresa com o
-// colaborador, a ser paga em folha em julho — descontada pelas horas extras e
-// voltando a crescer com eventuais atrasos, ambos contados a partir de 01/07
-// (o fechamento de junho não entra na conta).
+// Saldo do período = soma das diferenças diárias entre o horário batido e o
+// horário esperado da escala. Diferença positiva vira extra, negativa vira
+// atraso, e o saldo é extras - atrasos (negativo = colaborador está devendo).
 //
 // Calculado a partir do /Batidas (não do /Calcular, que tem limite de 100 req/h
 // por banco e travaria um relatório rodado para todos os colaboradores) —
@@ -382,11 +370,9 @@ export function minutosParaHHMM(minutos: number): string {
 // do Art. 58 §1º da CLT, do mesmo jeito que o /Calcular oficial já faz. Validado
 // batendo os dois métodos ponta a ponta para o mesmo colaborador e período.
 
-const COPA_DATA = '2026-06-29';
-const COPA_COMPENSACAO_INICIO = '2026-07-01';
 const TOLERANCIA_CLT_MIN = 10;
 
-export interface DiaDetalheCopa {
+export interface DiaDetalheBanco {
   data: string; // YYYY-MM-DD
   trabalhadoMin: number;
   cargaMin: number;
@@ -395,16 +381,14 @@ export interface DiaDetalheCopa {
   motivo: string | null; // ex.: "Atestado médico" — só preenchido quando tipo === 'justificado'
 }
 
-export interface BancoHorasCopa {
-  devidoMin: number; // quanto a empresa deve pelo dia 29/06
-  extrasMin: number; // horas trabalhadas além da escala, acumuladas desde 01/07
-  atrasosMin: number; // horas abaixo da escala, acumuladas desde 01/07
-  compensadoMin: number; // extrasMin - atrasosMin
-  faltaPagarMin: number; // devidoMin - compensadoMin
-  diaCopaEncontrado: boolean;
-  // Detalhe dia a dia desde 01/07, usado pra explicar de onde vieram os
-  // valores de extras/atrasos acumulados (tela de "detalhes" por colaborador).
-  diasDetalhe: DiaDetalheCopa[];
+export interface BancoHoras {
+  extrasMin: number; // horas trabalhadas além da escala no período
+  atrasosMin: number; // horas abaixo da escala no período
+  saldoMin: number; // extrasMin - atrasosMin (negativo = devendo)
+  temRegistro: boolean; // false quando não há nenhuma batida no período
+  // Detalhe dia a dia, usado pra explicar de onde vieram os valores de
+  // extras/atrasos acumulados (tela de "detalhes" por colaborador).
+  diasDetalhe: DiaDetalheBanco[];
 }
 
 // Em dias com status administrativo (atestado médico, abono, declaração, férias
@@ -469,14 +453,10 @@ export function calcularCargaEsperadaMin(batida: Batida): number {
   return totalMinutos;
 }
 
-export async function calcularBancoHorasCopa(cpf: string, dataFim: string): Promise<BancoHorasCopa> {
-  const batidas = await getBatidas(cpf, COPA_DATA, dataFim);
-
-  let devidoMin = 0;
-  let diaCopaEncontrado = false;
+export function calcularBancoHorasDeBatidas(batidas: Batida[]): BancoHoras {
   let extrasMin = 0;
   let atrasosMin = 0;
-  const diasDetalhe: DiaDetalheCopa[] = [];
+  const diasDetalhe: DiaDetalheBanco[] = [];
 
   for (const batida of batidas) {
     const dia = batida.Data.split('T')[0];
@@ -486,40 +466,43 @@ export async function calcularBancoHorasCopa(cpf: string, dataFim: string): Prom
     const cargaMin = calcularCargaEsperadaMin(batida);
     const diffMin = trabalhadoMin - cargaMin;
 
-    if (dia === COPA_DATA) {
-      devidoMin = pulaDia ? 0 : Math.max(0, -diffMin);
-      diaCopaEncontrado = true;
-    } else if (dia >= COPA_COMPENSACAO_INICIO) {
-      let tipo: DiaDetalheCopa['tipo'] = 'neutro';
-      // Dia justificado (atestado, abono etc.) não é déficit real — não soma em
-      // atrasosMin nem mostra a diferença de horas, senão parece que a pessoa
-      // ficou devendo o dia inteiro quando na verdade estava, por exemplo, de
-      // atestado médico.
-      let diffExibido = diffMin;
-      if (motivo !== null) {
-        tipo = 'justificado';
-        diffExibido = 0;
-      } else {
-        const contaNoSaldo = !pulaDia && Math.abs(diffMin) > TOLERANCIA_CLT_MIN;
-        if (contaNoSaldo) {
-          if (diffMin > 0) {
-            extrasMin += diffMin;
-            tipo = 'extra';
-          } else {
-            atrasosMin += -diffMin;
-            tipo = 'atraso';
-          }
+    let tipo: DiaDetalheBanco['tipo'] = 'neutro';
+    // Dia justificado (atestado, abono etc.) não é déficit real — não soma em
+    // atrasosMin nem mostra a diferença de horas, senão parece que a pessoa
+    // ficou devendo o dia inteiro quando na verdade estava, por exemplo, de
+    // atestado médico.
+    let diffExibido = diffMin;
+    if (motivo !== null) {
+      tipo = 'justificado';
+      diffExibido = 0;
+    } else {
+      const contaNoSaldo = !pulaDia && Math.abs(diffMin) > TOLERANCIA_CLT_MIN;
+      if (contaNoSaldo) {
+        if (diffMin > 0) {
+          extrasMin += diffMin;
+          tipo = 'extra';
+        } else {
+          atrasosMin += -diffMin;
+          tipo = 'atraso';
         }
       }
-      diasDetalhe.push({ data: dia, trabalhadoMin, cargaMin, diffMin: diffExibido, tipo, motivo });
     }
+    diasDetalhe.push({ data: dia, trabalhadoMin, cargaMin, diffMin: diffExibido, tipo, motivo });
   }
 
-  const compensadoMin = extrasMin - atrasosMin;
-  // Sem dívida da Copa (colaborador não saiu mais cedo em 29/06), não há o que
-  // "faltar pagar" — mesmo que a pessoa tenha atrasos de julho sem relação
-  // nenhuma com a Copa, isso é banco de horas normal, não vira dívida da Copa.
-  const faltaPagarMin = devidoMin > 0 ? devidoMin - compensadoMin : 0;
+  return {
+    extrasMin,
+    atrasosMin,
+    saldoMin: extrasMin - atrasosMin,
+    temRegistro: diasDetalhe.length > 0,
+    diasDetalhe,
+  };
+}
 
-  return { devidoMin, extrasMin, atrasosMin, compensadoMin, faltaPagarMin, diaCopaEncontrado, diasDetalhe };
+export async function calcularBancoHoras(
+  cpf: string,
+  dataInicio: string,
+  dataFim: string
+): Promise<BancoHoras> {
+  return calcularBancoHorasDeBatidas(await getBatidas(cpf, dataInicio, dataFim));
 }

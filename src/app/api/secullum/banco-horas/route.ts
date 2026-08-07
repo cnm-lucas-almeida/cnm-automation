@@ -1,4 +1,4 @@
-import { calcularBancoHorasCopa, type BancoHorasCopa } from '@/lib/secullum';
+import { calcularBancoHoras, type BancoHoras } from '@/lib/secullum';
 import { listarColaboradores } from '@/lib/convenia';
 
 const DELAY_MS = 150;
@@ -14,13 +14,22 @@ function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function iso(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 // Usa D-1 por padrão: o dia corrente ainda está em aberto no Secullum (turno não
-// fechado), o que faz o /Calcular contar as horas restantes do dia como "atraso".
+// fechado), o que faria as horas restantes do dia contarem como "atraso".
 function dataD1Padrao(): string {
   const d = new Date();
   d.setDate(d.getDate() - 1);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return iso(d);
+}
+
+function inicioMesPadrao(): string {
+  const d = new Date();
+  return iso(new Date(d.getFullYear(), d.getMonth(), 1));
 }
 
 interface ResultadoColaborador {
@@ -28,22 +37,23 @@ interface ResultadoColaborador {
   cpf: string;
   cargo: string | null;
   departamento: string | null;
-  status: 'pendente' | 'quitado' | 'sem_registro' | 'erro';
-  banco?: BancoHorasCopa;
+  status: 'ok' | 'sem_registro' | 'erro';
+  banco?: BancoHoras;
   erro?: string;
   rateLimited?: boolean;
 }
 
 async function calcularResultado(
   col: { nome: string; cpf: string; cargo: string | null; departamento: string | null },
+  dataInicio: string,
   dataFim: string
 ): Promise<ResultadoColaborador> {
   try {
-    const banco = await calcularBancoHorasCopa(col.cpf, dataFim);
-    if (!banco.diaCopaEncontrado) {
+    const banco = await calcularBancoHoras(col.cpf, dataInicio, dataFim);
+    if (!banco.temRegistro) {
       return { ...col, status: 'sem_registro' };
     }
-    return { ...col, status: banco.faltaPagarMin > 0 ? 'pendente' : 'quitado', banco };
+    return { ...col, status: 'ok', banco };
   } catch (err: any) {
     const status = err?.response?.status;
     const detalhe = err?.response?.data ? JSON.stringify(err.response.data) : err.message;
@@ -54,6 +64,7 @@ async function calcularResultado(
 // Consulta avulsa (usada para retry de um único colaborador sem refazer o lote inteiro).
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
+  const dataInicio = searchParams.get('dataInicio') || inicioMesPadrao();
   const dataFim = searchParams.get('dataFim') || dataD1Padrao();
   const cpf = searchParams.get('cpf');
 
@@ -73,6 +84,7 @@ export async function GET(request: Request) {
     }
     const resultado = await calcularResultado(
       { nome: col.nome, cpf: col.cpf!, cargo: col.cargo, departamento: col.departamento },
+      dataInicio,
       dataFim
     );
     return Response.json(resultado);
@@ -94,7 +106,7 @@ export async function GET(request: Request) {
       const send = (obj: unknown) => controller.enqueue(encoder.encode(JSON.stringify(obj) + '\n'));
 
       try {
-        send({ type: 'total', dataFim, total: colaboradores.length });
+        send({ type: 'total', dataInicio, dataFim, total: colaboradores.length });
 
         const resultados: ResultadoColaborador[] = [];
         let processed = 0;
@@ -107,6 +119,7 @@ export async function GET(request: Request) {
               await delay(idx * DELAY_MS);
               return calcularResultado(
                 { nome: col.nome, cpf: col.cpf!, cargo: col.cargo, departamento: col.departamento },
+                dataInicio,
                 dataFim
               );
             })
@@ -125,11 +138,12 @@ export async function GET(request: Request) {
 
         send({
           type: 'done',
+          dataInicio,
           dataFim,
           resumo: {
             totalColaboradores: resultados.length,
-            totalPendentes: resultados.filter((r) => r.status === 'pendente').length,
-            totalQuitados: resultados.filter((r) => r.status === 'quitado').length,
+            totalDevendo: resultados.filter((r) => r.banco && r.banco.saldoMin < 0).length,
+            totalPositivos: resultados.filter((r) => r.banco && r.banco.saldoMin > 0).length,
             totalSemRegistro: resultados.filter((r) => r.status === 'sem_registro').length,
             totalErros: resultados.filter((r) => r.status === 'erro').length,
             totalRateLimited: resultados.filter((r) => r.rateLimited).length,
