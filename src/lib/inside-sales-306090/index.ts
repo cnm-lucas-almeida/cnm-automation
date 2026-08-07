@@ -1,6 +1,6 @@
 import { getDbConnection } from '@/lib/db';
 import { listarColaboradores } from '@/lib/convenia';
-import { buscarDadosAdmin, normalizarNome, GESTOR_NOME, segmentoFromDepartamento } from '@/lib/inside-sales';
+import { buscarDadosAdmin, normalizarNome, GESTOR_NOME, segmentoFromDepartamento, type Segmento } from '@/lib/inside-sales';
 
 const CACHE_TTL = 15 * 60 * 1000;
 const CYCLE_DURATION_DAYS = 30;
@@ -28,6 +28,7 @@ export type CicloPerformance = {
 
 export type InsideSales306090Row = {
   nome: string;
+  segmento: Segmento | null;
   cargo: string | null;
   squad: string | null;
   supervisor: string | null;
@@ -151,7 +152,7 @@ export async function getInsideSales306090Data(forceRefresh = false): Promise<In
       c.gestorNome === GESTOR_NOME &&
       c.cargo &&
       /vendedor/i.test(c.cargo) &&
-      segmentoFromDepartamento(c.departamento) === 'imoveis' &&
+      segmentoFromDepartamento(c.departamento) != null &&
       c.dataAdmissao
   );
 
@@ -211,6 +212,7 @@ export async function getInsideSales306090Data(forceRefresh = false): Promise<In
 
     linhas.push({
       nome: c.nome,
+      segmento: segmentoFromDepartamento(c.departamento),
       cargo: c.cargo,
       squad: limparSquad(admin.squadNome),
       supervisor: admin.supervisorNome,

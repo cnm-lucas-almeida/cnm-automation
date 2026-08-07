@@ -49,7 +49,7 @@ const ICONS: Record<string, LucideIcon> = {
   "Movimentações de Aditivo": ArrowUpDown,
   "Verificação NFS-e": FileCheck2,
   "Inadimplência": TrendingDown,
-  "Inside Sales": PhoneCall,
+  "Painel mensal": PhoneCall,
   "IS 30/60/90": Target,
   "Vendas Dia a Dia": CalendarDays,
   "Modo Apresentação": Presentation,

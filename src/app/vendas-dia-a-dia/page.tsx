@@ -5,10 +5,24 @@ import { createPortal } from 'react-dom';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
 import {
-  Loader2, RefreshCw, AlertCircle, CalendarDays, Search, ChevronLeft, ChevronRight, Info, FileSpreadsheet,
+  Loader2, RefreshCw, AlertCircle, CalendarDays, Search, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Info, FileSpreadsheet,
+  LayoutGrid, Home, Car,
 } from 'lucide-react';
 import type { VendasDiaADiaData, VendasDiaADiaRow } from '@/lib/vendas-dia-a-dia';
+import type { Segmento } from '@/lib/inside-sales';
 import { Select } from '@/components/ui/Select';
+import { SegmentTabs } from '@/components/ui/SegmentTabs';
+import { FilterPopover } from '@/components/ui/FilterPopover';
+
+const SEGMENTO_TABS = [
+  { value: 'todos' as const, label: 'Geral', icon: LayoutGrid },
+  { value: 'imoveis' as const, label: 'Imóveis', icon: Home },
+  { value: 'veiculos' as const, label: 'Veículos', icon: Car },
+];
+
+type Aba = 'todos' | Segmento;
+type SortCol = 'nome' | 'squad' | 'totalMes' | 'totalAtivas' | 'diasZerados' | 'congelados' | 'cancelados';
+type SortDir = 'asc' | 'desc';
 
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
@@ -35,6 +49,26 @@ function fmtDiaCurto(iso: string): string {
   return `${DOW[dow]} ${d}`;
 }
 
+function SortTh({
+  col, current, dir, onSort, children, className,
+}: {
+  col: SortCol; current: SortCol; dir: SortDir;
+  onSort: (col: SortCol) => void; children: React.ReactNode; className?: string;
+}) {
+  const active = current === col;
+  return (
+    <th onClick={() => onSort(col)}
+      className={`py-3 font-semibold cursor-pointer select-none hover:text-foreground transition-colors ${className ?? 'px-4'}`}>
+      <span className="inline-flex items-center gap-1">
+        {children}
+        {active
+          ? dir === 'asc' ? <ChevronUp size={11} className="text-primary" /> : <ChevronDown size={11} className="text-primary" />
+          : <ChevronsUpDown size={11} className="opacity-30" />}
+      </span>
+    </th>
+  );
+}
+
 function DiaCell({ dia, hoje }: { dia: { data: string; total: number; ativas: number } | undefined; hoje: string }) {
   if (!dia) return <td className="px-2 py-3 text-center text-xs text-muted-foreground/40">—</td>;
   if (dia.data > hoje) return <td className="px-2 py-3 text-center text-xs text-muted-foreground/40">·</td>;
@@ -48,7 +82,7 @@ function DiaCell({ dia, hoje }: { dia: { data: string; total: number; ativas: nu
 }
 
 const DESCRICOES: Record<string, string> = {
-  nome: 'Mesma população do relatório IS 30/60/90: Convenia, gestor Jackson Savi Alberti, cargo contendo "Vendedor", departamento Imóveis.',
+  nome: 'Mesma população do relatório IS 30/60/90: Convenia, gestor Jackson Savi Alberti, cargo contendo "Vendedor", departamento Imóveis ou Veículos.',
   dia: 'Quantidade de vendas (tb_financeiro_contrato) no dia, não cancelada. "·" = dia futuro, ainda sem dados. Verde = todas ativas; âmbar = alguma cancelada/congelada depois.',
   totalMes: 'Soma de todas as vendas do mês (bruto, inclui as que foram canceladas depois).',
   totalAtivas: 'Soma das vendas do mês que continuam ativas (não canceladas, não congeladas).',
@@ -117,6 +151,7 @@ function exportarExcel(dados: VendasDiaADiaData, linhas: VendasDiaADiaRow[]) {
 }
 
 export default function VendasDiaADiaPage() {
+  const [aba, setAba] = useState<Aba>('todos');
   const [competencia, setCompetencia] = useState(competenciaAtual());
   const [dados, setDados] = useState<VendasDiaADiaData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -126,6 +161,8 @@ export default function VendasDiaADiaPage() {
   const [busca, setBusca] = useState('');
   const [squadFiltro, setSquadFiltro] = useState('todos');
   const [supervisorFiltro, setSupervisorFiltro] = useState('todos');
+  const [sortCol, setSortCol] = useState<SortCol>('nome');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
 
   const fetchDados = useCallback(async (comp: string, forceRefresh = false) => {
     setError(null);
@@ -148,15 +185,44 @@ export default function VendasDiaADiaPage() {
 
   const hoje = new Date().toISOString().slice(0, 10);
 
-  const linhasFiltradas = useMemo(() => {
+  function toggleSort(col: SortCol) {
+    if (sortCol === col) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortCol(col); setSortDir(col === 'nome' || col === 'squad' ? 'asc' : 'desc'); }
+  }
+
+  const linhasPorSegmento = useMemo(() => {
     if (!dados) return [];
-    let lista = dados.linhas;
+    return aba === 'todos' ? dados.linhas : dados.linhas.filter((l) => l.segmento === aba);
+  }, [dados, aba]);
+
+  const squadsDisponiveis = useMemo(() => {
+    const nomes = new Set(linhasPorSegmento.map((l) => l.squad).filter((s): s is string => Boolean(s)));
+    return [...nomes].sort((a, b) => a.localeCompare(b));
+  }, [linhasPorSegmento]);
+
+  const supervisoresDisponiveis = useMemo(() => {
+    const nomes = new Set(linhasPorSegmento.map((l) => l.supervisor).filter((s): s is string => Boolean(s)));
+    return [...nomes].sort((a, b) => a.localeCompare(b));
+  }, [linhasPorSegmento]);
+
+  const linhasFiltradas = useMemo(() => {
+    let lista = linhasPorSegmento;
     if (squadFiltro !== 'todos') lista = lista.filter((l) => l.squad === squadFiltro);
     if (supervisorFiltro !== 'todos') lista = lista.filter((l) => l.supervisor === supervisorFiltro);
     const termo = busca.trim().toLowerCase();
     if (termo) lista = lista.filter((l) => l.nome.toLowerCase().includes(termo) || (l.squad ?? '').toLowerCase().includes(termo));
-    return lista;
-  }, [dados, squadFiltro, supervisorFiltro, busca]);
+    return [...lista].sort((a, b) => {
+      let v = 0;
+      if (sortCol === 'nome') v = a.nome.localeCompare(b.nome);
+      else if (sortCol === 'squad') v = (a.squad ?? '').localeCompare(b.squad ?? '');
+      else if (sortCol === 'totalMes') v = a.totalMes - b.totalMes;
+      else if (sortCol === 'totalAtivas') v = a.totalAtivas - b.totalAtivas;
+      else if (sortCol === 'diasZerados') v = a.diasZerados - b.diasZerados;
+      else if (sortCol === 'congelados') v = a.congelados - b.congelados;
+      else v = a.cancelados - b.cancelados;
+      return sortDir === 'asc' ? v : -v;
+    });
+  }, [linhasPorSegmento, squadFiltro, supervisorFiltro, busca, sortCol, sortDir]);
 
   const updatedAt = dados?.generatedAt
     ? new Date(dados.generatedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
@@ -200,6 +266,28 @@ export default function VendasDiaADiaPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <SegmentTabs
+            value={aba}
+            onChange={(v) => { setAba(v); setSquadFiltro('todos'); setSupervisorFiltro('todos'); }}
+            options={SEGMENTO_TABS}
+          />
+          <FilterPopover
+            activeCount={(squadFiltro !== 'todos' ? 1 : 0) + (supervisorFiltro !== 'todos' ? 1 : 0)}
+            onClear={() => { setSquadFiltro('todos'); setSupervisorFiltro('todos'); }}
+          >
+            <Select
+              value={squadFiltro}
+              onChange={setSquadFiltro}
+              className="w-full"
+              options={[{ value: 'todos', label: 'Todos os squads' }, ...squadsDisponiveis.map((s) => ({ value: s, label: s }))]}
+            />
+            <Select
+              value={supervisorFiltro}
+              onChange={setSupervisorFiltro}
+              className="w-full"
+              options={[{ value: 'todos', label: 'Todos os supervisores' }, ...supervisoresDisponiveis.map((s) => ({ value: s, label: s }))]}
+            />
+          </FilterPopover>
           <div className="flex items-center gap-1 border border-border rounded-lg px-2 py-1.5">
             <button onClick={() => setCompetencia((c) => deslocarCompetencia(c, -1))} className="p-1 rounded hover:bg-muted text-muted-foreground">
               <ChevronLeft size={16} />
@@ -226,18 +314,6 @@ export default function VendasDiaADiaPage() {
           <h2 className="text-sm font-semibold flex items-center gap-2 mr-auto">
             <CalendarDays size={15} className="text-primary" /> Vendas por dia útil
           </h2>
-          <Select
-            value={squadFiltro}
-            onChange={setSquadFiltro}
-            className="min-w-[170px]"
-            options={[{ value: 'todos', label: 'Todos os squads' }, ...dados.squads.map((s) => ({ value: s, label: s }))]}
-          />
-          <Select
-            value={supervisorFiltro}
-            onChange={setSupervisorFiltro}
-            className="min-w-[200px]"
-            options={[{ value: 'todos', label: 'Todos os supervisores' }, ...dados.supervisores.map((s) => ({ value: s, label: s }))]}
-          />
           <div className="relative flex-1 min-w-[220px] max-w-xs">
             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
@@ -257,18 +333,18 @@ export default function VendasDiaADiaPage() {
             <table className="text-sm border-collapse" style={{ minWidth: `${560 + dados.diasUteis.length * 40}px` }}>
               <thead>
                 <tr className="text-left text-[11px] text-muted-foreground uppercase tracking-wider border-b border-border">
-                  <th className="sticky left-0 z-20 bg-card px-5 py-3 font-semibold w-[200px] min-w-[200px]"><HeaderLabel label="IS" info={DESCRICOES.nome} /></th>
-                  <th className="sticky left-[200px] z-20 bg-card px-3 py-3 font-semibold w-[150px] min-w-[150px]">Squad</th>
+                  <SortTh col="nome" current={sortCol} dir={sortDir} onSort={toggleSort} className="sticky left-0 z-20 bg-card px-5 w-[200px] min-w-[200px]"><HeaderLabel label="IS" info={DESCRICOES.nome} /></SortTh>
+                  <SortTh col="squad" current={sortCol} dir={sortDir} onSort={toggleSort} className="sticky left-[200px] z-20 bg-card px-3 w-[150px] min-w-[150px]">Squad</SortTh>
                   {dados.semanas.map((semana, i) => (
                     <th key={i} colSpan={semana.dias.length} className="px-2 py-1 font-semibold text-center border-l border-border text-[10px]">
                       Semana {i + 1}
                     </th>
                   ))}
-                  <th className="px-3 py-3 font-semibold text-right border-l border-border"><HeaderLabel label="Total" info={DESCRICOES.totalMes} /></th>
-                  <th className="px-3 py-3 font-semibold text-right"><HeaderLabel label="Ativas" info={DESCRICOES.totalAtivas} /></th>
-                  <th className="px-3 py-3 font-semibold text-right"><HeaderLabel label="Zerados" info={DESCRICOES.diasZerados} /></th>
-                  <th className="px-3 py-3 font-semibold text-right"><HeaderLabel label="Congel." info={DESCRICOES.congelados} /></th>
-                  <th className="px-3 py-3 font-semibold text-right"><HeaderLabel label="Cancel." info={DESCRICOES.cancelados} /></th>
+                  <SortTh col="totalMes" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-3 text-right border-l border-border"><HeaderLabel label="Total" info={DESCRICOES.totalMes} /></SortTh>
+                  <SortTh col="totalAtivas" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-3 text-right"><HeaderLabel label="Ativas" info={DESCRICOES.totalAtivas} /></SortTh>
+                  <SortTh col="diasZerados" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-3 text-right"><HeaderLabel label="Zerados" info={DESCRICOES.diasZerados} /></SortTh>
+                  <SortTh col="congelados" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-3 text-right"><HeaderLabel label="Congel." info={DESCRICOES.congelados} /></SortTh>
+                  <SortTh col="cancelados" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-3 text-right"><HeaderLabel label="Cancel." info={DESCRICOES.cancelados} /></SortTh>
                 </tr>
                 <tr className="text-left text-[10px] text-muted-foreground border-b border-border">
                   <th className="sticky left-0 z-20 bg-card px-5"></th>

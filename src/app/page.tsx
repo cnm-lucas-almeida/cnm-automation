@@ -116,7 +116,7 @@ const groups: CardGroup[] = [
       },
       {
         key: "inside-sales",
-        name: "Inside Sales",
+        name: "Painel mensal",
         description: "Desempenho e indicadores da equipe de Inside Sales.",
         href: "/inside-sales",
         icon: PhoneCall,

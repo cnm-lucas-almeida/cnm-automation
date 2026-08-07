@@ -11,6 +11,7 @@ import type { InsideSalesData, InsideSalesRow, Segmento } from '@/lib/inside-sal
 import { Select } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { SegmentTabs } from '@/components/ui/SegmentTabs';
+import { FilterPopover } from '@/components/ui/FilterPopover';
 
 const SEGMENTO_TABS = [
   { value: 'todos' as const, label: 'Geral', icon: LayoutGrid },
@@ -19,10 +20,10 @@ const SEGMENTO_TABS = [
 ];
 
 type SortCol =
-  | 'nome' | 'qtdPvAtiva' | 'bases' | 'baseMeta' | 'metaQtdPvAtiva'
-  | 'financeiroTotal' | 'financeiroPercentual'
+  | 'nome' | 'squad' | 'ciclo' | 'qtdPvAtiva' | 'bases' | 'baseMeta' | 'metaQtdPvAtiva'
+  | 'metaFinanceiro' | 'financeiroTotal' | 'faltaMetaFinanceiro' | 'financeiroPercentual'
   | 'percentualMetaDiariaBatida' | 'mediaPvPorDia' | 'ticketMedioPorPlano'
-  | 'estoqueTotal' | 'estoqueTotalPercentual' | 'percentualMetaEstoqueDiariaBatida';
+  | 'metaEstoqueTotal' | 'estoqueTotal' | 'faltaMetaEstoqueTotal' | 'estoqueTotalPercentual' | 'percentualMetaEstoqueDiariaBatida';
 type SortDir = 'asc' | 'desc';
 type Preset = 'este_mes' | 'mes_passado' | 'personalizado';
 type Aba = 'todos' | Segmento;
@@ -167,6 +168,7 @@ export default function InsideSalesPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [busca, setBusca] = useState('');
+  const [squadFiltro, setSquadFiltro] = useState<string>('todos');
   const [supervisorFiltro, setSupervisorFiltro] = useState<string>('todos');
   const [sortCol, setSortCol] = useState<SortCol>('nome');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
@@ -209,6 +211,11 @@ export default function InsideSalesPage() {
     return aba === 'todos' ? dados.linhas : dados.linhas.filter((l) => l.segmento === aba);
   }, [dados, aba]);
 
+  const squadsDisponiveis = useMemo(() => {
+    const nomes = new Set(linhasPorSegmento.map((l) => l.squad).filter((s): s is string => Boolean(s)));
+    return [...nomes].sort((a, b) => a.localeCompare(b));
+  }, [linhasPorSegmento]);
+
   const supervisoresDisponiveis = useMemo(() => {
     const nomes = new Set(linhasPorSegmento.map((l) => l.supervisor).filter((s): s is string => Boolean(s)));
     return [...nomes].sort((a, b) => a.localeCompare(b));
@@ -216,6 +223,7 @@ export default function InsideSalesPage() {
 
   const linhasFiltradas = useMemo(() => {
     let lista = linhasPorSegmento;
+    if (squadFiltro !== 'todos') lista = lista.filter((l) => l.squad === squadFiltro);
     if (supervisorFiltro !== 'todos') lista = lista.filter((l) => l.supervisor === supervisorFiltro);
     const termo = busca.trim().toLowerCase();
     if (termo) {
@@ -227,21 +235,27 @@ export default function InsideSalesPage() {
     return [...lista].sort((a, b) => {
       let v = 0;
       if (sortCol === 'nome') v = a.nome.localeCompare(b.nome);
+      else if (sortCol === 'squad') v = (a.squad ?? '').localeCompare(b.squad ?? '');
+      else if (sortCol === 'ciclo') v = a.ciclo.localeCompare(b.ciclo);
       else if (sortCol === 'qtdPvAtiva') v = (a.qtdPvAtiva ?? -1) - (b.qtdPvAtiva ?? -1);
       else if (sortCol === 'bases') v = (a.bases ?? -1) - (b.bases ?? -1);
       else if (sortCol === 'baseMeta') v = (a.baseMeta ?? -1) - (b.baseMeta ?? -1);
       else if (sortCol === 'metaQtdPvAtiva') v = (a.metaQtdPvAtiva ?? -1) - (b.metaQtdPvAtiva ?? -1);
+      else if (sortCol === 'metaFinanceiro') v = (a.metaFinanceiro ?? -1) - (b.metaFinanceiro ?? -1);
       else if (sortCol === 'financeiroTotal') v = (a.financeiroTotal ?? -1) - (b.financeiroTotal ?? -1);
+      else if (sortCol === 'faltaMetaFinanceiro') v = (a.faltaMetaFinanceiro ?? -1) - (b.faltaMetaFinanceiro ?? -1);
       else if (sortCol === 'financeiroPercentual') v = (a.financeiroPercentual ?? -1) - (b.financeiroPercentual ?? -1);
       else if (sortCol === 'percentualMetaDiariaBatida') v = a.percentualMetaDiariaBatida - b.percentualMetaDiariaBatida;
       else if (sortCol === 'mediaPvPorDia') v = (a.mediaPvPorDia ?? -1) - (b.mediaPvPorDia ?? -1);
       else if (sortCol === 'ticketMedioPorPlano') v = a.ticketMedioPorPlano - b.ticketMedioPorPlano;
+      else if (sortCol === 'metaEstoqueTotal') v = (a.metaEstoqueTotal ?? -1) - (b.metaEstoqueTotal ?? -1);
       else if (sortCol === 'estoqueTotal') v = (a.estoqueTotal ?? -1) - (b.estoqueTotal ?? -1);
+      else if (sortCol === 'faltaMetaEstoqueTotal') v = (a.faltaMetaEstoqueTotal ?? -1) - (b.faltaMetaEstoqueTotal ?? -1);
       else if (sortCol === 'estoqueTotalPercentual') v = (a.estoqueTotalPercentual ?? -1) - (b.estoqueTotalPercentual ?? -1);
       else v = a.percentualMetaEstoqueDiariaBatida - b.percentualMetaEstoqueDiariaBatida;
       return sortDir === 'asc' ? v : -v;
     });
-  }, [linhasPorSegmento, supervisorFiltro, busca, sortCol, sortDir]);
+  }, [linhasPorSegmento, squadFiltro, supervisorFiltro, busca, sortCol, sortDir]);
 
   const updatedAt = dados?.generatedAt
     ? new Date(dados.generatedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
@@ -278,7 +292,7 @@ export default function InsideSalesPage() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Métricas de Inside Sales</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Painel mensal</h1>
           <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2">
             {updatedAt && <span>Atualizado às {updatedAt}</span>}
             {reloading && <Loader2 size={12} className="animate-spin text-primary" />}
@@ -288,9 +302,32 @@ export default function InsideSalesPage() {
         <div className="flex flex-wrap items-center gap-2">
           <SegmentTabs
             value={aba}
-            onChange={(v) => { setAba(v); setSupervisorFiltro('todos'); }}
+            onChange={(v) => { setAba(v); setSquadFiltro('todos'); setSupervisorFiltro('todos'); }}
             options={SEGMENTO_TABS}
           />
+          <FilterPopover
+            activeCount={(squadFiltro !== 'todos' ? 1 : 0) + (supervisorFiltro !== 'todos' ? 1 : 0)}
+            onClear={() => { setSquadFiltro('todos'); setSupervisorFiltro('todos'); }}
+          >
+            <Select
+              value={squadFiltro}
+              onChange={setSquadFiltro}
+              className="w-full"
+              options={[
+                { value: 'todos', label: 'Todos os squads' },
+                ...squadsDisponiveis.map((s) => ({ value: s, label: s })),
+              ]}
+            />
+            <Select
+              value={supervisorFiltro}
+              onChange={setSupervisorFiltro}
+              className="w-full"
+              options={[
+                { value: 'todos', label: 'Todos os supervisores' },
+                ...supervisoresDisponiveis.map((s) => ({ value: s, label: s })),
+              ]}
+            />
+          </FilterPopover>
           <Select
             value={preset}
             onChange={(v) => aplicarPreset(v as Preset)}
@@ -321,15 +358,6 @@ export default function InsideSalesPage() {
           <h2 className="text-sm font-semibold flex items-center gap-2 mr-auto">
             <Users size={15} className="text-primary" /> Inside Sales
           </h2>
-          <Select
-            value={supervisorFiltro}
-            onChange={setSupervisorFiltro}
-            className="min-w-[200px]"
-            options={[
-              { value: 'todos', label: 'Todos os supervisores' },
-              ...supervisoresDisponiveis.map((s) => ({ value: s, label: s })),
-            ]}
-          />
           <div className="relative flex-1 min-w-[220px] max-w-xs">
             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
@@ -350,22 +378,22 @@ export default function InsideSalesPage() {
               <thead>
                 <tr className="text-left text-[11px] text-muted-foreground uppercase tracking-wider border-b border-border">
                   <SortTh col="nome" current={sortCol} dir={sortDir} onSort={toggleSort} className="sticky left-0 z-20 bg-card px-5 w-[220px] min-w-[220px]"><HeaderLabel label="IS" info={DESCRICOES.nome} /></SortTh>
-                  <th className="sticky left-[220px] z-20 bg-card px-4 py-3 font-semibold w-[200px] min-w-[200px]"><HeaderLabel label="Squad" info={DESCRICOES.squad} /></th>
-                  <th className="px-4 py-3 font-semibold text-center"><HeaderLabel label="Ciclo" info={DESCRICOES.ciclo} /></th>
+                  <SortTh col="squad" current={sortCol} dir={sortDir} onSort={toggleSort} className="sticky left-[220px] z-20 bg-card px-4 w-[200px] min-w-[200px]"><HeaderLabel label="Squad" info={DESCRICOES.squad} /></SortTh>
+                  <SortTh col="ciclo" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-center"><HeaderLabel label="Ciclo" info={DESCRICOES.ciclo} /></SortTh>
                   <SortTh col="qtdPvAtiva" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right"><HeaderLabel label="Qtd PV ativa" info={DESCRICOES.qtdPvAtiva} /></SortTh>
                   <SortTh col="mediaPvPorDia" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right"><HeaderLabel label="Média PV/dia" info={DESCRICOES.mediaPvPorDia} /></SortTh>
                   <SortTh col="bases" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right"><HeaderLabel label="Bases" info={DESCRICOES.bases} /></SortTh>
                   <SortTh col="baseMeta" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right"><HeaderLabel label="Base/Meta" info={DESCRICOES.baseMeta} /></SortTh>
                   <SortTh col="metaQtdPvAtiva" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right"><HeaderLabel label="Meta Qtd PV ativa" info={DESCRICOES.metaQtdPvAtiva} /></SortTh>
-                  <th className="px-4 py-3 font-semibold text-right"><HeaderLabel label="Meta financeiro" info={DESCRICOES.metaFinanceiro} /></th>
+                  <SortTh col="metaFinanceiro" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right"><HeaderLabel label="Meta financeiro" info={DESCRICOES.metaFinanceiro} /></SortTh>
                   <SortTh col="financeiroTotal" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right"><HeaderLabel label="Financeiro total" info={DESCRICOES.financeiroTotal} /></SortTh>
-                  <th className="px-4 py-3 font-semibold text-right"><HeaderLabel label="Falta meta financeiro" info={DESCRICOES.faltaMetaFinanceiro} /></th>
+                  <SortTh col="faltaMetaFinanceiro" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right"><HeaderLabel label="Falta meta financeiro" info={DESCRICOES.faltaMetaFinanceiro} /></SortTh>
                   <SortTh col="financeiroPercentual" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right"><HeaderLabel label="Financeiro %" info={DESCRICOES.financeiroPercentual} /></SortTh>
                   <SortTh col="percentualMetaDiariaBatida" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right"><HeaderLabel label="% Meta diária batida" info={DESCRICOES.percentualMetaDiariaBatida} /></SortTh>
                   <SortTh col="ticketMedioPorPlano" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right"><HeaderLabel label="Ticket médio / plano" info={DESCRICOES.ticketMedioPorPlano} /></SortTh>
-                  <th className="px-4 py-3 font-semibold text-right"><HeaderLabel label="Meta estoque total" info={DESCRICOES.metaEstoqueTotal} /></th>
+                  <SortTh col="metaEstoqueTotal" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right"><HeaderLabel label="Meta estoque total" info={DESCRICOES.metaEstoqueTotal} /></SortTh>
                   <SortTh col="estoqueTotal" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right"><HeaderLabel label="Estoque total" info={DESCRICOES.estoqueTotal} /></SortTh>
-                  <th className="px-4 py-3 font-semibold text-right"><HeaderLabel label="Falta meta estoque total" info={DESCRICOES.faltaMetaEstoqueTotal} /></th>
+                  <SortTh col="faltaMetaEstoqueTotal" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right"><HeaderLabel label="Falta meta estoque total" info={DESCRICOES.faltaMetaEstoqueTotal} /></SortTh>
                   <SortTh col="estoqueTotalPercentual" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right"><HeaderLabel label="Estoque total %" info={DESCRICOES.estoqueTotalPercentual} /></SortTh>
                   <SortTh col="percentualMetaEstoqueDiariaBatida" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-5 text-right"><HeaderLabel label="% Meta estoque diária batida" info={DESCRICOES.percentualMetaEstoqueDiariaBatida} /></SortTh>
                 </tr>

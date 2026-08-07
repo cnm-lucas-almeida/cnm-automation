@@ -1,6 +1,6 @@
 import { getDbConnection } from '@/lib/db';
 import { listarColaboradores } from '@/lib/convenia';
-import { buscarDadosAdmin, normalizarNome, GESTOR_NOME, segmentoFromDepartamento } from '@/lib/inside-sales';
+import { buscarDadosAdmin, normalizarNome, GESTOR_NOME, segmentoFromDepartamento, type Segmento } from '@/lib/inside-sales';
 
 const CACHE_TTL = 15 * 60 * 1000;
 
@@ -8,6 +8,7 @@ export type DiaVendas = { data: string; total: number; ativas: number };
 
 export type VendasDiaADiaRow = {
   nome: string;
+  segmento: Segmento | null;
   squad: string | null;
   supervisor: string | null;
   porDia: DiaVendas[];
@@ -133,14 +134,14 @@ export async function getVendasDiaADiaData(competencia: string, forceRefresh = f
   const hoje = hojeIso();
 
   const colaboradores = await listarColaboradores(forceRefresh);
-  // Mesma população do relatório IS 30/60/90 — mesmo time (gestor Jackson, cargo Vendedor, Imóveis).
+  // Mesma população do relatório IS 30/60/90 — mesmo time (gestor Jackson, cargo Vendedor).
   const elegiveis = colaboradores.filter(
     (c) =>
       c.status !== 'Desligado' &&
       c.gestorNome === GESTOR_NOME &&
       c.cargo &&
       /vendedor/i.test(c.cargo) &&
-      segmentoFromDepartamento(c.departamento) === 'imoveis'
+      segmentoFromDepartamento(c.departamento) != null
   );
 
   const { porCpf, porNome } = await buscarDadosAdmin(elegiveis.map((c) => ({ cpf: c.cpf, nome: c.nome })));
@@ -175,6 +176,7 @@ export async function getVendasDiaADiaData(competencia: string, forceRefresh = f
 
     linhas.push({
       nome: c.nome,
+      segmento: segmentoFromDepartamento(c.departamento),
       squad: limparSquad(admin.squadNome),
       supervisor: admin.supervisorNome,
       porDia,

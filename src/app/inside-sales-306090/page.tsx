@@ -6,13 +6,28 @@ import axios from 'axios';
 import * as XLSX from 'xlsx';
 import {
   Loader2, RefreshCw, AlertCircle, Users, Search, ChevronUp, ChevronDown, ChevronsUpDown, Info, FileSpreadsheet,
+  LayoutGrid, Home, Car,
 } from 'lucide-react';
 import type { InsideSales306090Data, InsideSales306090Row, CicloStatus, CicloPerformance } from '@/lib/inside-sales-306090';
+import type { Segmento } from '@/lib/inside-sales';
 import { Select } from '@/components/ui/Select';
+import { SegmentTabs } from '@/components/ui/SegmentTabs';
+import { FilterPopover } from '@/components/ui/FilterPopover';
 
-type SortCol = 'nome' | 'diasRestantesCiclo' | 'pvTotal90Dias' | 'valorTotal90Dias' | 'metaGeralFinanceiroPercentual' | 'roiPeriodo';
+const SEGMENTO_TABS = [
+  { value: 'todos' as const, label: 'Geral', icon: LayoutGrid },
+  { value: 'imoveis' as const, label: 'Imóveis', icon: Home },
+  { value: 'veiculos' as const, label: 'Veículos', icon: Car },
+];
+
+type SortCol =
+  | 'nome' | 'squad' | 'supervisor' | 'cicloAtual' | 'diasRestantesCiclo' | 'dataAdmissao' | 'validacaoRh45'
+  | 'ciclo1Vendas' | 'ciclo2Vendas' | 'ciclo3Vendas'
+  | 'pvTotal90Dias' | 'metaGeralPvPercentual' | 'valorTotal90Dias' | 'metaGeralFinanceiroPercentual'
+  | 'mediaPvPeriodo' | 'mediaValorPeriodo' | 'roiPeriodo';
 type SortDir = 'asc' | 'desc';
 type CicloFiltro = 'todos' | CicloStatus;
+type Aba = 'todos' | Segmento;
 
 function fmtData(s: string | null): string {
   if (!s) return '—';
@@ -61,12 +76,12 @@ function CicloCell({ ciclo }: { ciclo: CicloPerformance }) {
 }
 
 const DESCRICOES: Record<string, string> = {
-  nome: 'Colaborador na Convenia, filtrado por gestor = Jackson Savi Alberti, cargo contendo "Vendedor" e departamento Imóveis. Abaixo do nome, o cargo exato da Convenia.',
+  nome: 'Colaborador na Convenia, filtrado por gestor = Jackson Savi Alberti, cargo contendo "Vendedor" e departamento Imóveis ou Veículos. Abaixo do nome, o cargo exato da Convenia.',
   squad: 'Squad atual do vendedor no admin (crm_salesperson_allocation + crm_squad), vinculado a partir da Convenia por CPF ou nome.',
   supervisor: 'Supervisor/treinador atual do vendedor no admin (tb_vendedor_grupo, perfil=4).',
   ciclo: 'Ciclo de validação comercial: 30 dias corridos por ciclo a partir da data de admissão. "Validado" = passou dos 90 dias.',
   diasRestantesCiclo: 'Dias restantes até o fim do ciclo atual. Zero quando já validado.',
-  validacaoRh: 'Datas de fim do período de experiência (Convenia). Ficam vazias quando a Convenia não tem mais o período de experiência armazenado (comum para admissões antigas).',
+  validacaoRh: 'Datas de fim do período de experiência (Convenia): 30 dias e depois +60 dias (90 no total). Ficam vazias quando a Convenia não tem mais o período de experiência armazenado (comum para admissões antigas).',
   ciclo1: 'Vendas e valor faturado (tb_financeiro_contrato, não cancelado, cliente não congelado) entre o dia 1 e o dia 30 da admissão. Meta: 10 vendas / R$ 3.000.',
   ciclo2: 'Mesmo cálculo do ciclo 1, entre o dia 31 e o dia 60. Meta: 15 vendas / R$ 4.500.',
   ciclo3: 'Mesmo cálculo do ciclo 1, entre o dia 61 e o dia 90. Meta: 20 vendas / R$ 6.000.',
@@ -158,7 +173,7 @@ function KpiCard({ label, value, tone }: { label: string; value: number; tone?: 
 function exportarExcel(linhas: InsideSales306090Row[]) {
   const header = [
     'Nome', 'Cargo', 'Squad', 'Supervisor', 'Admissão', 'Ciclo Atual', 'Dias Restantes Ciclo',
-    'Validação RH 45', 'Dias Faltantes 45', 'Validação RH 90', 'Dias Faltantes 90',
+    'Validação RH 30', 'Dias Faltantes 30', 'Validação RH 90', 'Dias Faltantes 90',
     'Ciclo 1 - Vendas', 'Ciclo 1 - Meta %', 'Ciclo 1 - Financeiro',
     'Ciclo 2 - Vendas', 'Ciclo 2 - Meta %', 'Ciclo 2 - Financeiro',
     'Ciclo 3 - Vendas', 'Ciclo 3 - Meta %', 'Ciclo 3 - Financeiro',
@@ -181,6 +196,7 @@ function exportarExcel(linhas: InsideSales306090Row[]) {
 }
 
 export default function InsideSales306090Page() {
+  const [aba, setAba] = useState<Aba>('todos');
   const [dados, setDados] = useState<InsideSales306090Data | null>(null);
   const [loading, setLoading] = useState(true);
   const [reloading, setReloading] = useState(false);
@@ -216,9 +232,31 @@ export default function InsideSales306090Page() {
     else { setSortCol(col); setSortDir(col === 'nome' ? 'asc' : 'desc'); }
   }
 
-  const linhasFiltradas = useMemo(() => {
+  const linhasPorSegmento = useMemo(() => {
     if (!dados) return [];
-    let lista = dados.linhas;
+    return aba === 'todos' ? dados.linhas : dados.linhas.filter((l) => l.segmento === aba);
+  }, [dados, aba]);
+
+  const stats = useMemo(() => ({
+    total: linhasPorSegmento.length,
+    ciclo1: linhasPorSegmento.filter((l) => l.cicloAtual === 'ciclo1').length,
+    ciclo2: linhasPorSegmento.filter((l) => l.cicloAtual === 'ciclo2').length,
+    ciclo3: linhasPorSegmento.filter((l) => l.cicloAtual === 'ciclo3').length,
+    validado: linhasPorSegmento.filter((l) => l.cicloAtual === 'validado').length,
+  }), [linhasPorSegmento]);
+
+  const squadsDisponiveis = useMemo(() => {
+    const nomes = new Set(linhasPorSegmento.map((l) => l.squad).filter((s): s is string => Boolean(s)));
+    return [...nomes].sort((a, b) => a.localeCompare(b));
+  }, [linhasPorSegmento]);
+
+  const supervisoresDisponiveis = useMemo(() => {
+    const nomes = new Set(linhasPorSegmento.map((l) => l.supervisor).filter((s): s is string => Boolean(s)));
+    return [...nomes].sort((a, b) => a.localeCompare(b));
+  }, [linhasPorSegmento]);
+
+  const linhasFiltradas = useMemo(() => {
+    let lista = linhasPorSegmento;
     if (squadFiltro !== 'todos') lista = lista.filter((l) => l.squad === squadFiltro);
     if (supervisorFiltro !== 'todos') lista = lista.filter((l) => l.supervisor === supervisorFiltro);
     if (cicloFiltro !== 'todos') lista = lista.filter((l) => l.cicloAtual === cicloFiltro);
@@ -232,14 +270,25 @@ export default function InsideSales306090Page() {
     return [...lista].sort((a, b) => {
       let v = 0;
       if (sortCol === 'nome') v = a.nome.localeCompare(b.nome);
+      else if (sortCol === 'squad') v = (a.squad ?? '').localeCompare(b.squad ?? '');
+      else if (sortCol === 'supervisor') v = (a.supervisor ?? '').localeCompare(b.supervisor ?? '');
+      else if (sortCol === 'cicloAtual') v = a.cicloAtual.localeCompare(b.cicloAtual);
       else if (sortCol === 'diasRestantesCiclo') v = a.diasRestantesCiclo - b.diasRestantesCiclo;
+      else if (sortCol === 'dataAdmissao') v = a.dataAdmissao.localeCompare(b.dataAdmissao);
+      else if (sortCol === 'validacaoRh45') v = (a.validacaoRh45 ?? '').localeCompare(b.validacaoRh45 ?? '');
+      else if (sortCol === 'ciclo1Vendas') v = a.ciclo1.vendas - b.ciclo1.vendas;
+      else if (sortCol === 'ciclo2Vendas') v = a.ciclo2.vendas - b.ciclo2.vendas;
+      else if (sortCol === 'ciclo3Vendas') v = a.ciclo3.vendas - b.ciclo3.vendas;
       else if (sortCol === 'pvTotal90Dias') v = a.pvTotal90Dias - b.pvTotal90Dias;
+      else if (sortCol === 'metaGeralPvPercentual') v = a.metaGeralPvPercentual - b.metaGeralPvPercentual;
       else if (sortCol === 'valorTotal90Dias') v = a.valorTotal90Dias - b.valorTotal90Dias;
       else if (sortCol === 'metaGeralFinanceiroPercentual') v = a.metaGeralFinanceiroPercentual - b.metaGeralFinanceiroPercentual;
+      else if (sortCol === 'mediaPvPeriodo') v = a.mediaPvPeriodo - b.mediaPvPeriodo;
+      else if (sortCol === 'mediaValorPeriodo') v = a.mediaValorPeriodo - b.mediaValorPeriodo;
       else v = a.roiPeriodo - b.roiPeriodo;
       return sortDir === 'asc' ? v : -v;
     });
-  }, [dados, squadFiltro, supervisorFiltro, cicloFiltro, busca, sortCol, sortDir]);
+  }, [linhasPorSegmento, squadFiltro, supervisorFiltro, cicloFiltro, busca, sortCol, sortDir]);
 
   const updatedAt = dados?.generatedAt
     ? new Date(dados.generatedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
@@ -283,6 +332,44 @@ export default function InsideSales306090Page() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <SegmentTabs
+            value={aba}
+            onChange={(v) => { setAba(v); setSquadFiltro('todos'); setSupervisorFiltro('todos'); }}
+            options={SEGMENTO_TABS}
+          />
+          <FilterPopover
+            activeCount={
+              (squadFiltro !== 'todos' ? 1 : 0) +
+              (supervisorFiltro !== 'todos' ? 1 : 0) +
+              (cicloFiltro !== 'todos' ? 1 : 0)
+            }
+            onClear={() => { setSquadFiltro('todos'); setSupervisorFiltro('todos'); setCicloFiltro('todos'); }}
+          >
+            <Select
+              value={squadFiltro}
+              onChange={setSquadFiltro}
+              className="w-full"
+              options={[{ value: 'todos', label: 'Todos os squads' }, ...squadsDisponiveis.map((s) => ({ value: s, label: s }))]}
+            />
+            <Select
+              value={supervisorFiltro}
+              onChange={setSupervisorFiltro}
+              className="w-full"
+              options={[{ value: 'todos', label: 'Todos os supervisores' }, ...supervisoresDisponiveis.map((s) => ({ value: s, label: s }))]}
+            />
+            <Select
+              value={cicloFiltro}
+              onChange={(v) => setCicloFiltro(v as CicloFiltro)}
+              className="w-full"
+              options={[
+                { value: 'todos', label: 'Todos os ciclos' },
+                { value: 'ciclo1', label: '1º Ciclo' },
+                { value: 'ciclo2', label: '2º Ciclo' },
+                { value: 'ciclo3', label: '3º Ciclo' },
+                { value: 'validado', label: 'Validado' },
+              ]}
+            />
+          </FilterPopover>
           <button onClick={() => exportarExcel(linhasFiltradas)}
             className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
             <FileSpreadsheet size={14} /> Exportar Excel
@@ -296,11 +383,11 @@ export default function InsideSales306090Page() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <KpiCard label="Total" value={dados.stats.total} />
-        <KpiCard label="1º Ciclo" value={dados.stats.ciclo1} tone="warning" />
-        <KpiCard label="2º Ciclo" value={dados.stats.ciclo2} tone="warning" />
-        <KpiCard label="3º Ciclo" value={dados.stats.ciclo3} tone="warning" />
-        <KpiCard label="Validados" value={dados.stats.validado} tone="success" />
+        <KpiCard label="Total" value={stats.total} />
+        <KpiCard label="1º Ciclo" value={stats.ciclo1} tone="warning" />
+        <KpiCard label="2º Ciclo" value={stats.ciclo2} tone="warning" />
+        <KpiCard label="3º Ciclo" value={stats.ciclo3} tone="warning" />
+        <KpiCard label="Validados" value={stats.validado} tone="success" />
       </div>
 
       {/* Tabela */}
@@ -309,30 +396,6 @@ export default function InsideSales306090Page() {
           <h2 className="text-sm font-semibold flex items-center gap-2 mr-auto">
             <Users size={15} className="text-primary" /> Inside Sales em validação
           </h2>
-          <Select
-            value={squadFiltro}
-            onChange={setSquadFiltro}
-            className="min-w-[170px]"
-            options={[{ value: 'todos', label: 'Todos os squads' }, ...dados.squads.map((s) => ({ value: s, label: s }))]}
-          />
-          <Select
-            value={supervisorFiltro}
-            onChange={setSupervisorFiltro}
-            className="min-w-[200px]"
-            options={[{ value: 'todos', label: 'Todos os supervisores' }, ...dados.supervisores.map((s) => ({ value: s, label: s }))]}
-          />
-          <Select
-            value={cicloFiltro}
-            onChange={(v) => setCicloFiltro(v as CicloFiltro)}
-            className="min-w-[160px]"
-            options={[
-              { value: 'todos', label: 'Todos os ciclos' },
-              { value: 'ciclo1', label: '1º Ciclo' },
-              { value: 'ciclo2', label: '2º Ciclo' },
-              { value: 'ciclo3', label: '3º Ciclo' },
-              { value: 'validado', label: 'Validado' },
-            ]}
-          />
           <div className="relative flex-1 min-w-[220px] max-w-xs">
             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
@@ -353,21 +416,21 @@ export default function InsideSales306090Page() {
               <thead>
                 <tr className="text-left text-[11px] text-muted-foreground uppercase tracking-wider border-b border-border">
                   <SortTh col="nome" current={sortCol} dir={sortDir} onSort={toggleSort} className="sticky left-0 z-20 bg-card px-5 w-[220px] min-w-[220px]"><HeaderLabel label="IS" info={DESCRICOES.nome} /></SortTh>
-                  <th className="sticky left-[220px] z-20 bg-card px-4 py-3 font-semibold w-[170px] min-w-[170px]"><HeaderLabel label="Squad" info={DESCRICOES.squad} /></th>
-                  <th className="px-4 py-3 font-semibold w-[150px] min-w-[150px]"><HeaderLabel label="Supervisor" info={DESCRICOES.supervisor} /></th>
-                  <th className="px-4 py-3 font-semibold text-center"><HeaderLabel label="Ciclo" info={DESCRICOES.ciclo} /></th>
+                  <SortTh col="squad" current={sortCol} dir={sortDir} onSort={toggleSort} className="sticky left-[220px] z-20 bg-card px-4 w-[170px] min-w-[170px]"><HeaderLabel label="Squad" info={DESCRICOES.squad} /></SortTh>
+                  <SortTh col="supervisor" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 w-[150px] min-w-[150px]"><HeaderLabel label="Supervisor" info={DESCRICOES.supervisor} /></SortTh>
+                  <SortTh col="cicloAtual" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-center"><HeaderLabel label="Ciclo" info={DESCRICOES.ciclo} /></SortTh>
                   <SortTh col="diasRestantesCiclo" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right"><HeaderLabel label="Dias restantes" info={DESCRICOES.diasRestantesCiclo} /></SortTh>
-                  <th className="px-4 py-3 font-semibold text-right">Admissão</th>
-                  <th className="px-4 py-3 font-semibold text-right"><HeaderLabel label="Validação RH 45/90" info={DESCRICOES.validacaoRh} /></th>
-                  <th className="px-4 py-3 font-semibold text-right"><HeaderLabel label="1ª Volta" info={DESCRICOES.ciclo1} /></th>
-                  <th className="px-4 py-3 font-semibold text-right"><HeaderLabel label="2ª Volta" info={DESCRICOES.ciclo2} /></th>
-                  <th className="px-4 py-3 font-semibold text-right"><HeaderLabel label="3ª Volta" info={DESCRICOES.ciclo3} /></th>
+                  <SortTh col="dataAdmissao" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right">Admissão</SortTh>
+                  <SortTh col="validacaoRh45" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right"><HeaderLabel label="Validação RH 30/90" info={DESCRICOES.validacaoRh} /></SortTh>
+                  <SortTh col="ciclo1Vendas" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right"><HeaderLabel label="1ª Volta" info={DESCRICOES.ciclo1} /></SortTh>
+                  <SortTh col="ciclo2Vendas" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right"><HeaderLabel label="2ª Volta" info={DESCRICOES.ciclo2} /></SortTh>
+                  <SortTh col="ciclo3Vendas" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right"><HeaderLabel label="3ª Volta" info={DESCRICOES.ciclo3} /></SortTh>
                   <SortTh col="pvTotal90Dias" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right"><HeaderLabel label="PV 90 dias" info={DESCRICOES.pvTotal90Dias} /></SortTh>
-                  <th className="px-4 py-3 font-semibold text-right"><HeaderLabel label="% Meta PV" info={DESCRICOES.metaGeralPvPercentual} /></th>
+                  <SortTh col="metaGeralPvPercentual" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right"><HeaderLabel label="% Meta PV" info={DESCRICOES.metaGeralPvPercentual} /></SortTh>
                   <SortTh col="valorTotal90Dias" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right"><HeaderLabel label="Valor 90 dias" info={DESCRICOES.valorTotal90Dias} /></SortTh>
                   <SortTh col="metaGeralFinanceiroPercentual" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right"><HeaderLabel label="% Meta financeira" info={DESCRICOES.metaGeralFinanceiroPercentual} /></SortTh>
-                  <th className="px-4 py-3 font-semibold text-right"><HeaderLabel label="Média PV/mês" info={DESCRICOES.mediaPvPeriodo} /></th>
-                  <th className="px-4 py-3 font-semibold text-right"><HeaderLabel label="Média Valor/mês" info={DESCRICOES.mediaValorPeriodo} /></th>
+                  <SortTh col="mediaPvPeriodo" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right"><HeaderLabel label="Média PV/mês" info={DESCRICOES.mediaPvPeriodo} /></SortTh>
+                  <SortTh col="mediaValorPeriodo" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-4 text-right"><HeaderLabel label="Média Valor/mês" info={DESCRICOES.mediaValorPeriodo} /></SortTh>
                   <SortTh col="roiPeriodo" current={sortCol} dir={sortDir} onSort={toggleSort} className="px-5 text-right"><HeaderLabel label="ROI" info={DESCRICOES.roiPeriodo} /></SortTh>
                 </tr>
               </thead>
