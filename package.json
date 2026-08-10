@@ -14,6 +14,7 @@
     "migrate:quadro-comercial": "node scripts/migrate-quadro-comercial.mjs",
     "migrate:auth": "node scripts/migrate-auth.mjs",
     "migrate:folha-pagamento": "node scripts/migrate-folha-pagamento.mjs",
+    "migrate:fila-leads": "node scripts/migrate-fila-leads.mjs",
     "seed:admin": "node scripts/seed-admin.mjs"
   },
   "dependencies": {

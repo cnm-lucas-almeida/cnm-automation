@@ -25,7 +25,6 @@ export const menus: NavGroup[] = [
       { label: "DRE", href: "/financeiro/dre" },
       { label: "Projeção", href: "/financeiro/projecao" },
       { label: "Quadro Comercial", href: "/financeiro/quadro-comercial" },
-      { label: "Comissões", href: "/comissoes" },
     ],
   },
   {
@@ -35,10 +34,23 @@ export const menus: NavGroup[] = [
     ],
   },
   {
+    label: "Comercial",
+    items: [
+      { label: "Vendas", href: "/vendas" },
+      { label: "Comissões", href: "/comissoes" },
+      { label: "Painel mensal", href: "/inside-sales" },
+      { label: "IS 30/60/90", href: "/inside-sales-306090" },
+      { label: "Vendas Dia a Dia", href: "/vendas-dia-a-dia" },
+      { label: "Base de Fila de Leads", href: "/fila-leads" },
+      { label: "Estoque Semanal", href: "/estoque-semanal" },
+      { label: "Ranking Semanal", href: "/ranking-semanal" },
+      { label: "Painel de Metas", href: "/metas-comercial" },
+    ],
+  },
+  {
     label: "Relatórios",
     items: [
       { label: "GLPI", href: "/glpi" },
-      { label: "Vendas", href: "/vendas" },
       { label: "Abandono de Carrinho", href: "/carrinho" },
       { label: "Assinaturas PF", href: "/assinaturas" },
       { label: "Congelamentos", href: "/congelamentos" },
@@ -46,9 +58,6 @@ export const menus: NavGroup[] = [
       { label: "Movimentações de Aditivo", href: "/aditivos" },
       { label: "Verificação NFS-e", href: "/nfse" },
       { label: "Inadimplência", href: "/inadimplencia" },
-      { label: "Painel mensal", href: "/inside-sales" },
-      { label: "IS 30/60/90", href: "/inside-sales-306090" },
-      { label: "Vendas Dia a Dia", href: "/vendas-dia-a-dia" },
     ],
   },
   {
@@ -64,6 +73,8 @@ export const menus: NavGroup[] = [
         label: "Comercial",
         items: [
           { label: "Metas", href: "/configuracoes/comercial/metas" },
+          { label: "Metas Macro", href: "/configuracoes/comercial/metas-macro" },
+          { label: "Cidades Foco", href: "/configuracoes/cidades-foco" },
         ],
       },
       { label: "Automações", href: "/configuracoes/automacoes" },

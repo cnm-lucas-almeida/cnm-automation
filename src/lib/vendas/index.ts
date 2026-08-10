@@ -30,6 +30,8 @@ export type VendaContrato = {
   squadNome: string | null;
   treinadorNome: string | null;
   pago: boolean | null;
+  /** Vencimento da 1ª parcela não bonificada — usado por outras libs (ex.: estoque-semanal) pra calcular "não paga" (parcela vencida sem pagamento), não usado no cálculo de status/paga desta lib. */
+  dataVencimentoPrimeiraParcela: string | null;
   status: StatusVenda;
   paga: boolean;
 };
@@ -125,7 +127,8 @@ const QUERY = `
     v.nome AS vendedor_nome,
     squad.name AS squad_nome,
     v2.nome AS treinador_nome,
-    fm.pago
+    fm.pago,
+    fm.data_vencimento
   FROM tb_cliente cl
   INNER JOIN tb_financeiro_contrato fc ON fc.id_cliente = cl.id
   INNER JOIN tb_vendedor v ON v.id = fc.id_vendedor
@@ -347,6 +350,7 @@ export async function getVendasData(
         squadNome: r.squad_nome,
         treinadorNome: r.treinador_nome,
         pago,
+        dataVencimentoPrimeiraParcela: r.data_vencimento,
         status,
         paga,
       };

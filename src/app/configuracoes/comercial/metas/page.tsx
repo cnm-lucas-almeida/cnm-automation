@@ -23,6 +23,17 @@ function fmtNum(v: number): string {
   return v.toLocaleString('pt-BR');
 }
 
+function mesAtual(): string {
+  const hoje = new Date();
+  return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function fmtMes(mesReferencia: string): string {
+  const [ano, mes] = mesReferencia.slice(0, 7).split('-');
+  const nomes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+  return `${nomes[Number(mes) - 1]}/${ano}`;
+}
+
 function SegmentoBadge({ segmento }: { segmento: Segmento }) {
   if (segmento === 'imoveis') {
     return <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-primary/10 text-primary">Imóveis</span>;
@@ -41,8 +52,10 @@ function MetaModal({
 }) {
   const isEdit = meta !== null;
   const [squadId, setSquadId] = useState<string>('');
+  const [mesReferencia, setMesReferencia] = useState<string>(meta ? meta.mesReferencia.slice(0, 7) : mesAtual());
   const [metaEstoqueDia, setMetaEstoqueDia] = useState<string>(meta ? String(meta.metaEstoqueDia) : '');
   const [metaFinanceiraDia, setMetaFinanceiraDia] = useState<string>(meta ? String(meta.metaFinanceiraDia) : '');
+  const [metaPvDia, setMetaPvDia] = useState<string>(meta ? String(meta.metaPvDia) : '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,6 +72,7 @@ function MetaModal({
         await axios.put(`/api/config/metas/${meta!.id}`, {
           metaEstoqueDia: Number(metaEstoqueDia) || 0,
           metaFinanceiraDia: Number(metaFinanceiraDia) || 0,
+          metaPvDia: Number(metaPvDia) || 0,
         });
       } else {
         const squad = squads.find((s) => String(s.id) === squadId);
@@ -71,8 +85,10 @@ function MetaModal({
           squadId: squad.id,
           squadNome: squad.nome,
           segmento: squad.segmento,
+          mesReferencia: `${mesReferencia}-01`,
           metaEstoqueDia: Number(metaEstoqueDia) || 0,
           metaFinanceiraDia: Number(metaFinanceiraDia) || 0,
+          metaPvDia: Number(metaPvDia) || 0,
         });
       }
       onSaved();
@@ -113,6 +129,19 @@ function MetaModal({
             )}
           </div>
           <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Mês de referência</label>
+            {isEdit ? (
+              <p className="mt-1 text-sm font-medium">{fmtMes(meta!.mesReferencia)}</p>
+            ) : (
+              <input
+                type="month"
+                value={mesReferencia}
+                onChange={(e) => setMesReferencia(e.target.value)}
+                className="w-full mt-1 px-3 py-2 text-sm border border-border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            )}
+          </div>
+          <div>
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Meta estoque / dia</label>
             <input
               type="number"
@@ -128,6 +157,15 @@ function MetaModal({
               step="0.01"
               value={metaFinanceiraDia}
               onChange={(e) => setMetaFinanceiraDia(e.target.value)}
+              className="w-full mt-1 px-3 py-2 text-sm border border-border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Meta PV / dia</label>
+            <input
+              type="number"
+              value={metaPvDia}
+              onChange={(e) => setMetaPvDia(e.target.value)}
               className="w-full mt-1 px-3 py-2 text-sm border border-border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
@@ -192,6 +230,7 @@ export default function MetasPage() {
   const [reloading, setReloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [aba, setAba] = useState<Aba>('todos');
+  const [mes, setMes] = useState<string>(mesAtual());
   const [modalAberto, setModalAberto] = useState<'novo' | 'editar' | null>(null);
   const [metaEditando, setMetaEditando] = useState<MetaSquad | null>(null);
   const [metaExcluir, setMetaExcluir] = useState<MetaSquad | null>(null);
@@ -200,7 +239,7 @@ export default function MetasPage() {
     setError(null);
     try {
       const [metasRes, squadsRes] = await Promise.all([
-        axios.get('/api/config/metas'),
+        axios.get('/api/config/metas', { params: { mes } }),
         axios.get('/api/config/metas/squads'),
       ]);
       setMetas(metasRes.data);
@@ -211,7 +250,7 @@ export default function MetasPage() {
       setLoading(false);
       setReloading(false);
     }
-  }, []);
+  }, [mes]);
 
   useEffect(() => { carregar(); }, [carregar]);
 
@@ -260,6 +299,12 @@ export default function MetasPage() {
           <p className="text-sm text-muted-foreground mt-0.5">Configurações · Comercial · Metas</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="month"
+            value={mes}
+            onChange={(e) => { setReloading(true); setMes(e.target.value); }}
+            className="px-3 py-2 text-sm border border-border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-ring"
+          />
           <SegmentTabs value={aba} onChange={setAba} options={SEGMENTO_TABS} />
           <button onClick={() => { setReloading(true); carregar(); }}
             className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
@@ -289,11 +334,13 @@ export default function MetasPage() {
               <thead>
                 <tr className="text-left text-[11px] text-muted-foreground uppercase tracking-wider border-b border-border">
                   <th className="px-5 py-3 font-semibold">Squad</th>
+                  <th className="px-4 py-3 font-semibold">Mês</th>
                   <th className="px-4 py-3 font-semibold text-right">Meta estoque dia</th>
                   <th className="px-4 py-3 font-semibold text-right">Meta estoque mês</th>
                   <th className="px-4 py-3 font-semibold text-right">Meta financeira dia</th>
-                  <th className="px-4 py-3 font-semibold text-right">Meta financeira semana</th>
                   <th className="px-4 py-3 font-semibold text-right">Meta financeira mês</th>
+                  <th className="px-4 py-3 font-semibold text-right">Meta PV dia</th>
+                  <th className="px-4 py-3 font-semibold text-right">Meta PV mês</th>
                   <th className="px-5 py-3 font-semibold text-right">Ações</th>
                 </tr>
               </thead>
@@ -304,11 +351,13 @@ export default function MetasPage() {
                       <div className="font-medium">{m.squadNome}</div>
                       <div className="mt-0.5"><SegmentoBadge segmento={m.segmento} /></div>
                     </td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">{fmtMes(m.mesReferencia)}</td>
                     <td className="px-4 py-3 text-right tabular-nums font-semibold text-xs">{fmtNum(m.metaEstoqueDia)}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-xs text-muted-foreground">{fmtNum(m.metaEstoqueMes)}</td>
                     <td className="px-4 py-3 text-right tabular-nums font-semibold text-xs">{fmtMoeda(m.metaFinanceiraDia)}</td>
-                    <td className="px-4 py-3 text-right tabular-nums text-xs text-muted-foreground">{fmtMoeda(m.metaFinanceiraSemana)}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-xs text-muted-foreground">{fmtMoeda(m.metaFinanceiraMes)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums font-semibold text-xs">{fmtNum(m.metaPvDia)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-xs text-muted-foreground">{fmtNum(m.metaPvMes)}</td>
                     <td className="px-5 py-3">
                       <div className="flex items-center justify-end gap-1">
                         <button

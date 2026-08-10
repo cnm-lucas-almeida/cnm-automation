@@ -1,7 +1,7 @@
 import { getDbConnection } from '@/lib/db';
 import { listarColaboradores } from '@/lib/convenia';
 import { getVendasData } from '@/lib/vendas';
-import { listarMetas } from '@/lib/metas';
+import { listarMetas, mesReferenciaDe } from '@/lib/metas';
 
 const CACHE_TTL = 15 * 60 * 1000;
 export const GESTOR_NOME = 'Jackson Savi Alberti';
@@ -61,7 +61,7 @@ export function segmentoFromDepartamento(departamento: string | null): Segmento 
   return null;
 }
 
-function calcularCiclo(experiencePeriod: { firstEnd: string | null; secondEnd: string | null } | null, hoje: Date): Ciclo {
+export function calcularCiclo(experiencePeriod: { firstEnd: string | null; secondEnd: string | null } | null, hoje: Date): Ciclo {
   if (!experiencePeriod?.firstEnd || !experiencePeriod?.secondEnd) return 'V';
   const primeiroFim = new Date(experiencePeriod.firstEnd);
   const segundoFim = new Date(experiencePeriod.secondEnd);
@@ -70,7 +70,7 @@ function calcularCiclo(experiencePeriod: { firstEnd: string | null; secondEnd: s
   return 'V';
 }
 
-function diasUteisNoMes(dataInicialIso: string): number {
+export function diasUteisNoMes(dataInicialIso: string): number {
   const [ano, mes] = dataInicialIso.split('-').map(Number);
   const ultimoDia = new Date(ano, mes, 0).getDate();
   let count = 0;
@@ -82,7 +82,7 @@ function diasUteisNoMes(dataInicialIso: string): number {
 }
 
 /** Dias úteis (seg-sex) já decorridos dentro do período selecionado, inclusive nas duas pontas. */
-function diasUteisNoPeriodo(dataInicialIso: string, dataFinalIso: string): number {
+export function diasUteisNoPeriodo(dataInicialIso: string, dataFinalIso: string): number {
   const inicio = new Date(`${dataInicialIso}T00:00:00`);
   const fim = new Date(`${dataFinalIso}T00:00:00`);
   let count = 0;
@@ -213,7 +213,7 @@ async function buscarBases(dataInicial: string, dataFinal: string): Promise<Map<
  * Espelha o campo "QTDE ANUN" da tela relatorio_vendas_vendedor do admin: soma, por vendedor,
  * a capacidade de anúncios (qtd_imoveis/qtd_veiculos) do plano ativo do cliente em cada contrato do período.
  */
-async function buscarEstoqueTotal(dataInicial: string, dataFinal: string): Promise<Map<number, number>> {
+export async function buscarEstoqueTotal(dataInicial: string, dataFinal: string): Promise<Map<number, number>> {
   const connection = await getDbConnection();
   try {
     const [rows] = await connection.query(
@@ -280,7 +280,7 @@ export async function getInsideSalesData(
     buscarDadosAdmin(insideSales.map((c) => ({ cpf: c.cpf, nome: c.nome }))),
     buscarBases(dataInicial, dataFinal),
     getVendasData(dataInicial, dataFinal),
-    listarMetas(),
+    listarMetas(mesReferenciaDe(dataInicial)),
     buscarEstoqueTotal(dataInicial, dataFinal),
   ]);
 

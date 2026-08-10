@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS cidade_foco (
+  id SERIAL PRIMARY KEY,
+  id_cidade INTEGER NOT NULL UNIQUE,
+  nome_cidade VARCHAR(255) NOT NULL,
+  sigla_uf VARCHAR(2) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

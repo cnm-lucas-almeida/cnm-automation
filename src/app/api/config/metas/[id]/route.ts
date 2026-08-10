@@ -10,11 +10,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const body = await request.json();
-    const { metaEstoqueDia, metaFinanceiraDia } = body;
+    const { metaEstoqueDia, metaFinanceiraDia, metaPvDia } = body;
 
     const data = await atualizarMeta(metaId, {
       metaEstoqueDia: Number(metaEstoqueDia) || 0,
       metaFinanceiraDia: Number(metaFinanceiraDia) || 0,
+      metaPvDia: Number(metaPvDia) || 0,
     });
 
     if (!data) {
