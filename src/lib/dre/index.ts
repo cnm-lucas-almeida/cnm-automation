@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { getMetasPool } from '@/lib/db-metas';
+import { parseBalancetePdf } from './balancete-pdf';
 
 // Padrão esperado do arquivo importado: export de balancete com "Saldo atual" acumulado desde
 // o início do ano fiscal (YTD), chaveado pelo código hierárquico da Classificação (ex.:
@@ -37,7 +38,14 @@ function toNumber(v: unknown): number {
   return Number.isNaN(n) ? 0 : n;
 }
 
-export function parseBalanceteFile(buffer: Buffer): LinhaBalancete[] {
+export async function parseBalanceteFile(buffer: Buffer, nomeArquivo: string): Promise<LinhaBalancete[]> {
+  if (/\.pdf$/i.test(nomeArquivo)) {
+    return parseBalancetePdf(buffer);
+  }
+  return parseBalanceteXlsx(buffer);
+}
+
+function parseBalanceteXlsx(buffer: Buffer): LinhaBalancete[] {
   const workbook = XLSX.read(buffer, { type: 'buffer' });
   const sheetName = workbook.SheetNames[0];
   const sheet = workbook.Sheets[sheetName];

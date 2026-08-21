@@ -108,8 +108,8 @@ function UploadModal({ onClose, onImportado }: { onClose: () => void; onImportad
         </div>
 
         <p className="text-sm text-muted-foreground">
-          Envie o export do balancete (xlsx) com as colunas Conta, Classificação, Tipo, Nome da conta
-          contábil, Saldo anterior, Débito, Crédito e Saldo atual.
+          Envie o export do balancete (xlsx ou pdf) com as colunas Conta, Classificação, Tipo, Nome
+          da conta contábil, Saldo anterior, Débito, Crédito e Saldo atual.
         </p>
 
         <div className="space-y-1">
@@ -126,7 +126,7 @@ function UploadModal({ onClose, onImportado }: { onClose: () => void; onImportad
           <label className="text-xs font-medium text-muted-foreground">Arquivo</label>
           <input
             type="file"
-            accept=".xlsx,.xls,.csv"
+            accept=".xlsx,.xls,.csv,.pdf"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             className="w-full text-sm"
           />

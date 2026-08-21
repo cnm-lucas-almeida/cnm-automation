@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const linhas = parseBalanceteFile(buffer);
+    const linhas = await parseBalanceteFile(buffer, file.name);
     const total = await importarBalancete(competencia, linhas);
 
     return NextResponse.json({ success: true, linhasImportadas: total });
