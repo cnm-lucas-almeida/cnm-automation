@@ -1,4 +1,4 @@
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { pdfjsLib } from '@/lib/pdf/pdfjs-server';
 import { getMetasPool } from '@/lib/db-metas';
 import type { UnimedEvento } from './types';
 

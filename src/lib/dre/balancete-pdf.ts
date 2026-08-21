@@ -1,4 +1,4 @@
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { pdfjsLib } from '@/lib/pdf/pdfjs-server';
 import type { LinhaBalancete } from './index';
 
 // O export do balancete em PDF (relatório "SCI Ambiente Contábil") usa a mesma tabela do export
