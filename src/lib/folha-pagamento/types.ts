@@ -10,10 +10,9 @@ export interface FolhaColaborador {
   cargo: string | null;
   dpto: string | null;
 
-  salarioBase: number; // Convenia, sem dissídio
-  dissidioPercentual: number; // acumulado (5%/ano ÷ 12 × meses desde a admissão)
+  salarioBase: number; // Convenia — já inclui o reajuste da convenção (consolidado pelo RH em 2026-08)
   overridePercentual: number; // extra de tabela de exceção (liderança), 0 se não houver
-  salarioAtualizado: number; // salarioBase × (1 + dissidioPercentual + overridePercentual)
+  salarioAtualizado: number; // salarioBase × (1 + overridePercentual)
 
   comissao: number;
   dsrComissao: number;

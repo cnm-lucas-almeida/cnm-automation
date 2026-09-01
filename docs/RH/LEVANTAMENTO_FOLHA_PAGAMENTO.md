@@ -69,7 +69,14 @@ Reverse-engineering feito em cima de 1.337 fórmulas Excel *vivas* na planilha r
 | Desc. Horas Falta | `Salário/Hora × Hora Convertida (negativa)` |
 | DSR (falta) | `Salário atual ÷ 25 × nº de DSRs perdidos` — **regra de perda**: falta injustificada de um dia inteiro da semana = perde 1 DSR; **valor de cada DSR = valor de um dia de trabalho** (equivalente a `Salário/Hora × 8h`) |
 
-## 3. Dissídio antecipado
+## 3. Dissídio antecipado — DESATIVADO em 01/09/2026
+
+> **Estado atual:** o mecanismo descrito nesta seção **não é mais aplicado**. O RH consolidou o reajuste da convenção direto no Convenia, então o salário que a API devolve já é o valor pago. A automação passou a usar o salário do Convenia como está (`src/lib/folha-pagamento/salario.ts`); a coluna "Dissídio" saiu da tela e do export.
+>
+> **Como foi conferido** (amostra de 20 colaboradores contra `Folha Junho Atualizada - Dissídio.xlsx`): em 16 o salário do Convenia hoje é exatamente `base × 1,05` (dissídio cheio, inclusive para quem tinha 0 meses de casa em junho) e em 4 é o "Salário atual" de junho. Em nenhum caso é a base sem reajuste — ou seja, aplicar o cálculo por cima estava inflando a folha em até 5%, e o erro se propagava para valor hora, HE +75%, DSR e desconto de faltas.
+>
+> O texto abaixo fica como registro histórico de como o mecanismo funcionava, caso a empresa volte a antecipar reajuste fora do Convenia.
+
 
 A empresa antecipa o reajuste da convenção coletiva antes de ela sair oficialmente — por isso o salário pago é maior do que o registrado no Convenia.
 
@@ -98,7 +105,7 @@ Mecanismo encontrado na planilha real:
 | 3 | CPF | Convenia `documents.cpf` (lista) | ✅ pronto |
 | 4 | Cargo | Convenia `job.name` | ✅ pronto |
 | 5 | Dpto | Convenia `department.name` | ✅ pronto |
-| 6 | Salário atualizado | Convenia (base) + dissídio (admissão) + tabela de exceção liderança | ✅ pronto |
+| 6 | Salário atualizado | Convenia (já com o reajuste consolidado) + tabela de exceção liderança | ✅ pronto |
 | 7 | Comissão | MySQL direto — query de vendas elegíveis + faixas | ✅ pronto |
 | 8 | DSR Comissão | `Comissão ÷ 25 × 5` (proporcional) | ✅ pronto |
 | 9 | Sal + Comissão | `#6 + #7` | ✅ pronto |
@@ -131,7 +138,7 @@ Mecanismo encontrado na planilha real:
 5. Representante Comercial fecha por semana (dom–sáb), não por mês — semanas que cruzam virada de mês precisam de rateio.
 6. Rescisão no meio do mês muda a regra de cálculo (inclui pendências que normalmente não comissionariam).
 7. Convenia: nenhum endpoint único traz as 6 colunas cadastrais — CPF só na lista, salário só no detalhe (1 + N chamadas).
-8. Convenia traz só o salário-base, sem o dissídio antecipado — aplicar o mecanismo da seção 3 por cima.
+8. ~~Convenia traz só o salário-base, sem o dissídio antecipado~~ — **não vale mais desde 01/09/2026**: o RH consolidou o reajuste no próprio Convenia. O salário do Convenia já é o valor pago; nada de dissídio por cima (ver seção 3).
 9. 7 colaboradores de liderança/tech têm reajuste fora do mecanismo padrão (tabela de exceção separada).
 10. Unimed: colunas numéricas coladas sem separador no texto puro do PDF — extrair por coordenada (x/y), não por texto linear.
 11. Unimed: blocos de família quebram entre páginas do PDF — concatenar todas as páginas antes de segmentar.

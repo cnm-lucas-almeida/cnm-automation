@@ -61,7 +61,8 @@ export async function removerOverride(id: number): Promise<void> {
 }
 
 // Percentual de override vigente pra aquele CPF na competência (mes/ano) —
-// tabela de exceção separada do mecanismo automático de dissídio (dissidio.ts).
+// tabela de exceção de reajuste de liderança (mérito/mercado), aplicada sobre o
+// salário do Convenia — ver salario.ts.
 export async function buscarOverridePercentual(cpf: string, ano: number, mes: number): Promise<number> {
   const pool = getMetasPool();
   const referencia = `${ano}-${String(mes).padStart(2, '0')}-01`;

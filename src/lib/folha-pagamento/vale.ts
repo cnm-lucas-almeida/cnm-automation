@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { getMetasPool } from '@/lib/db-metas';
 import { normalizarNome } from './unimed';
+import { corrigirRangeDaAba } from './xlsx-range';
 
 // Planilha de acompanhamento da empresa (upload mensal, nome do arquivo muda
 // todo mês — ex.: "09 CNM SETEMBRO 2026.xlsx"). 3 abas, identificadas pelo
@@ -97,7 +98,7 @@ export function parseValeXlsx(buffer: Buffer, competencia: string): ValeRegistro
   const registros: ValeRegistro[] = [];
 
   for (const nomeAba of workbook.SheetNames) {
-    const linhas: Record<string, unknown>[] = XLSX.utils.sheet_to_json(workbook.Sheets[nomeAba], { defval: '' });
+    const linhas: Record<string, unknown>[] = XLSX.utils.sheet_to_json(corrigirRangeDaAba(workbook.Sheets[nomeAba]), { defval: '' });
     if (linhas.length === 0) continue;
 
     const colunas = Object.keys(linhas[0]).map(normalizarChaveColuna);

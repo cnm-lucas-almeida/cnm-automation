@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { formatCurrencyBRL, formatNumberBR } from '@/lib/format';
 import { PercentInput } from '@/components/ui/PercentInput';
-import type { FolhaColaborador, OverrideSalario, FolhaPagamentoResultado, ProgressoFechamento } from '@/lib/folha-pagamento';
+import type { FolhaColaborador, OverrideSalario, FolhaPagamentoResultado, ProgressoFechamento, DescontosImportados } from '@/lib/folha-pagamento';
 
 const MESES = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -189,7 +189,7 @@ function EditableHorasCell({
 function exportarExcel(dados: FolhaPagamentoResultado) {
   const header = [
     'Admissão', 'Nome', 'CPF', 'Cargo', 'Dpto',
-    'Salário Base', 'Dissídio %', '% Adicional', 'Salário Atualizado',
+    'Salário Base', '% Adicional', 'Salário Atualizado',
     'Comissão', 'DSR Comissão', 'Sal+Comissão',
     'Horas +', 'Horas -', 'Saldo Horas', 'Valor Hora', 'Hora Extra', 'HE +75%', 'DSR HE',
     'Salário/H', 'Desc. Falta', 'Falta (qtd)', 'DSR',
@@ -204,7 +204,6 @@ function exportarExcel(dados: FolhaPagamentoResultado) {
     c.cargo ?? '',
     c.dpto ?? '',
     c.salarioBase,
-    c.dissidioPercentual * 100,
     c.overridePercentual * 100,
     c.salarioAtualizado,
     c.comissao,
@@ -327,6 +326,28 @@ export default function FolhaPagamentoPage() {
     }
   }, [ano, mes]);
 
+  // Depois de um import, só as colunas vindas do banco mudam — salário
+  // (Convenia), horas (Secullum) e comissão continuam valendo. Recarregar o
+  // fechamento inteiro aqui custava ~5 min, quase tudo esperando o rate limit
+  // do Convenia pra rebuscar salário que não mudou.
+  const atualizarDescontos = useCallback(async () => {
+    const { data } = await axios.get<{ descontos: DescontosImportados[] }>(
+      '/api/folha-pagamento/descontos',
+      { params: { ano, mes } }
+    );
+    const porCpf = new Map(data.descontos.map((d) => [d.cpf, d]));
+    setDados((atual) => {
+      if (!atual) return atual;
+      return {
+        ...atual,
+        colaboradores: atual.colaboradores.map((c) => {
+          const d = porCpf.get(c.cpf);
+          return d ? { ...c, ...d } : c;
+        }),
+      };
+    });
+  }, [ano, mes]);
+
   const carregarConfig = useCallback(async () => {
     const { data } = await axios.get('/api/folha-pagamento/overrides');
     setOverrides(data.overrides);
@@ -345,7 +366,9 @@ export default function FolhaPagamentoPage() {
       formData.append('file', file);
       if (tipo === 'odonto' || tipo === 'vale') formData.append('competencia', `${ano}-${String(mes).padStart(2, '0')}`);
       await axios.post(`/api/folha-pagamento/upload/${tipo}`, formData);
-      await carregar();
+      // Só atualiza se já houver folha na tela; sem cálculo prévio não há o
+      // que mesclar (o dado já está salvo no banco de qualquer forma).
+      if (dados) await atualizarDescontos();
     } catch (e: any) {
       setErro(e?.response?.data?.error ?? e.message);
     } finally {
@@ -556,7 +579,7 @@ export default function FolhaPagamentoPage() {
                   <th className="sticky z-10 bg-muted" style={stickyColStyle(STICKY_NOME_LEFT, STICKY_NOME_W)}>Nome</th>
                   <th>CPF</th>
                   <th>Cargo</th><th className="border-r border-border">Dpto</th>
-                  <th className="text-right">Salário Base</th><th className="text-right">Dissídio</th><th className="text-right">% Adicional</th><th className="text-right border-r border-border">Salário Atual.</th>
+                  <th className="text-right">Salário Base</th><th className="text-right">% Adicional</th><th className="text-right border-r border-border">Salário Atual.</th>
                   <th className="text-right">Comissão</th><th className="text-right">DSR Comis.</th><th className="text-right border-r border-border">Sal+Comis.</th>
                   <th className="text-right">Horas +</th><th className="text-right">Horas −</th><th className="text-right">Saldo Horas</th>
                   <th className="text-right">Valor Hora</th><th className="text-right">Hora Extra</th>
@@ -599,7 +622,6 @@ export default function FolhaPagamentoPage() {
                     <td className="max-w-[160px] truncate">{c.cargo}</td>
                     <td className="border-r border-border">{c.dpto}</td>
                     <td className="text-right tabular-nums">{formatCurrencyBRL(c.salarioBase)}</td>
-                    <td className="text-right tabular-nums">{formatNumberBR(c.dissidioPercentual * 100, { maximumFractionDigits: 2 })}%</td>
                     <td className="text-right tabular-nums">{c.overridePercentual > 0 ? `${formatNumberBR(c.overridePercentual * 100, { maximumFractionDigits: 2 })}%` : '—'}</td>
                     <td className="text-right tabular-nums font-medium border-r border-border">{formatCurrencyBRL(c.salarioAtualizado)}</td>
                     <td className={`text-right tabular-nums ${corAcrescimo(c.comissao)}`}>{formatCurrencyBRL(c.comissao)}</td>
@@ -730,7 +752,7 @@ function OverridesModal({
           </button>
         </div>
         <p className="text-xs text-muted-foreground">
-          Percentual extra somado ao dissídio automático (ex.: +40% de mercado). Não usar pra dissídio comum — isso já é calculado sozinho pela data de admissão.
+          Percentual extra aplicado sobre o salário do Convenia (ex.: +40% de mercado). O reajuste da convenção já vem consolidado no Convenia — não lançar aqui.
         </p>
         <div className="space-y-1">
           {overrides.map((o) => (

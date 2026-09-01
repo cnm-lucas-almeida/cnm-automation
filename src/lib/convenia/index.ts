@@ -1,7 +1,12 @@
 const CONVENIA_URL = 'https://public-api.convenia.com.br/api/v3';
 const CONVENIA_TOKEN = process.env.CONVENIA_TOKEN!;
 
-const CACHE_TTL = 5 * 60 * 1000;
+// 1h: o fechamento de folha é um fluxo longo (calcular → conferir → importar
+// → recalcular) e salário não muda no meio dele. Com 5 min o cache vencia
+// entre uma etapa e outra e a tela repetia as ~156 buscas (1,5s cada por
+// causa do rate limit) sem necessidade. O botão "Calcular folha" com
+// forceRefresh continua ignorando o cache quando o RH quiser dado fresco.
+const CACHE_TTL = 60 * 60 * 1000;
 const PAGE_SIZE = 100;
 
 export interface ExperiencePeriod {

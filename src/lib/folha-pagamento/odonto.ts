@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { getMetasPool } from '@/lib/db-metas';
+import { corrigirRangeDaAba } from './xlsx-range';
 import type { OdontoCertificado } from './types';
 
 // Planilha Bradesco Odonto: uma linha por vínculo (titular ou dependente),
@@ -25,7 +26,7 @@ export function parseOdontoXlsx(
   valorUnitario = VALOR_UNITARIO_DEPENDENTE_PADRAO
 ): OdontoCertificado[] {
   const workbook = XLSX.read(buffer, { type: 'buffer' });
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const sheet = corrigirRangeDaAba(workbook.Sheets[workbook.SheetNames[0]]);
   const linhas: LinhaOdontoRaw[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
 
   const porCertificado = new Map<string, { titular: LinhaOdontoRaw | null; dependentes: number }>();

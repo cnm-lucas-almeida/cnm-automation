@@ -1,5 +1,5 @@
 import { listarColaboradoresComSalario, listarColaboradores, buscarSalario } from '@/lib/convenia';
-import { calcularSalarioAtualizado } from './dissidio';
+import { calcularSalarioAtualizado } from './salario';
 import { buscarComissoesDoMes } from './comissao';
 import { calcularHorasMes } from './horas';
 import { calcularDiasMes, calcularDiasPeriodo, type DiasMes } from './calendario';
@@ -57,6 +57,66 @@ export function obterProgressoCalculo(): ProgressoCalculo {
   return { ...progressoCalculo };
 }
 
+// Regra de resolução das colunas que vêm de import (Postgres), isolada aqui
+// porque é usada em dois lugares: no fechamento completo (montarLinha) e no
+// refresh rápido depois de um upload (getDescontosImportados). Se as duas
+// divergirem, a tela passa a mostrar um valor depois do import e outro depois
+// do recálculo — por isso a regra mora num lugar só.
+const centavos = (n: number) => Math.round(n * 100) / 100;
+
+function resolverImportados(
+  nome: string,
+  cpf: string,
+  unimedMap: Map<string, number>,
+  odontoMap: Map<string, number>,
+  consignadoMap: Map<string, number>,
+  manual: { valeAlimentacao: number | null; valeTransporte: number | null } | undefined,
+  valeMap: Awaited<ReturnType<typeof buscarValeDoMes>>
+) {
+  // VA/VT vêm da planilha de acompanhamento da empresa (cruzada por nome, sem
+  // CPF disponível ali); edição manual continua valendo como correção pontual
+  // por cima. Unimed também cruza por nome; Odonto e Consignado, por CPF.
+  const vale = valeMap.get(normalizarNome(nome));
+  return {
+    descontoUnimed: centavos(unimedMap.get(normalizarNome(nome)) ?? 0),
+    descontoOdonto: centavos(odontoMap.get(cpf) ?? 0),
+    consignado: centavos(consignadoMap.get(cpf) ?? 0),
+    valeAlimentacao: manual?.valeAlimentacao ?? (vale ? vale.va : null),
+    valeTransporte: manual?.valeTransporte ?? (vale ? vale.vt : null),
+  };
+}
+
+// Só as colunas que vêm de import, sem tocar no Convenia (salário), no
+// Secullum (horas) nem na comissão. Serve o refresh depois de um upload: o
+// fechamento inteiro leva ~5 min só por causa das ~156 buscas de salário no
+// Convenia, e nenhum dos 4 imports depende disso.
+export interface DescontosImportados {
+  cpf: string;
+  descontoUnimed: number;
+  descontoOdonto: number;
+  consignado: number;
+  valeAlimentacao: number | null;
+  valeTransporte: number | null;
+}
+
+export async function getDescontosImportados(ano: number, mes: number): Promise<DescontosImportados[]> {
+  const [colaboradores, unimedMap, odontoMap, consignadoMap, manuaisMap, valeMap] = await Promise.all([
+    listarColaboradores(), // lista simples: 2 requisições paginadas, sem o detalhe de salário
+    buscarUnimedDoMes(ano, mes),
+    buscarOdontoDoMes(ano, mes),
+    buscarConsignadoDoMes(ano, mes),
+    buscarCamposManuaisDoMes(ano, mes),
+    buscarValeDoMes(ano, mes),
+  ]);
+
+  return colaboradores
+    .filter((c): c is typeof c & { cpf: string } => !!c.cpf)
+    .map((c) => ({
+      cpf: c.cpf,
+      ...resolverImportados(c.nome, c.cpf, unimedMap, odontoMap, consignadoMap, manuaisMap.get(c.cpf), valeMap),
+    }));
+}
+
 export async function getFolhaPagamento(ano: number, mes: number, forceRefreshConvenia = false): Promise<FolhaPagamentoResultado> {
   progressoCalculo = { total: 0, atual: 0 };
 
@@ -103,7 +163,6 @@ export async function getFolhaPagamento(ano: number, mes: number, forceRefreshCo
         cargo: c.cargo,
         dpto: c.departamento,
         salarioBase: c.salario,
-        dissidioPercentual: 0,
         overridePercentual: 0,
         salarioAtualizado: c.salario,
         comissao: 0,
@@ -157,13 +216,7 @@ async function montarLinha(
 ): Promise<FolhaColaborador> {
   const cpf = c.cpf!;
   const overridePercentual = overridePercentualVigente(overrides, cpf, ano, mes);
-  const { salarioBase, dissidioPercentual, salarioAtualizado } = calcularSalarioAtualizado(
-    c.salario,
-    c.dataAdmissao,
-    ano,
-    mes,
-    overridePercentual
-  );
+  const { salarioBase, salarioAtualizado } = calcularSalarioAtualizado(c.salario, overridePercentual);
 
   const horas = await calcularHorasMes(cpf, ano, mes, diasExcecao, c.dataAdmissao);
   const manual = manuaisMap.get(cpf);
@@ -193,16 +246,8 @@ async function montarLinha(
   const faltaQtd = manual?.faltaQtdOverride ?? horas.faltaQtd;
   const dsrValor = dias.diasUteis > 0 ? faltaQtd * (salarioAtualizado / dias.diasUteis) : 0;
 
-  const descontoUnimed = unimedMap.get(normalizarNome(c.nome)) ?? 0;
-  const descontoOdonto = odontoMap.get(cpf) ?? 0;
-  const consignado = consignadoMap.get(cpf) ?? 0;
-
-  // VA/VT vêm da planilha de acompanhamento da empresa (cruzada por nome, sem
-  // CPF disponível ali); edição manual continua valendo como correção pontual
-  // por cima, igual já fazíamos quando não tínhamos fonte nenhuma.
-  const vale = valeMap.get(normalizarNome(c.nome));
-  const valeAlimentacao = manual?.valeAlimentacao ?? (vale ? vale.va : null);
-  const valeTransporte = manual?.valeTransporte ?? (vale ? vale.vt : null);
+  const { descontoUnimed, descontoOdonto, consignado, valeAlimentacao, valeTransporte } =
+    resolverImportados(c.nome, cpf, unimedMap, odontoMap, consignadoMap, manual, valeMap);
 
   return {
     cpf,
@@ -212,7 +257,6 @@ async function montarLinha(
     dpto: c.departamento,
 
     salarioBase,
-    dissidioPercentual,
     overridePercentual,
     salarioAtualizado: Math.round(salarioAtualizado * 100) / 100,
 
@@ -235,9 +279,9 @@ async function montarLinha(
     dsrPerdidosQtd: faltaQtd,
     dsrValor: Math.round(dsrValor * 100) / 100,
 
-    descontoUnimed: Math.round(descontoUnimed * 100) / 100,
-    descontoOdonto: Math.round(descontoOdonto * 100) / 100,
-    consignado: Math.round(consignado * 100) / 100,
+    descontoUnimed,
+    descontoOdonto,
+    consignado,
 
     observacoes: manual?.observacoes ?? null,
     sitepd: manual?.sitepd ?? null,
