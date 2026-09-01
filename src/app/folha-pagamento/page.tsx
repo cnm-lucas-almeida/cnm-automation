@@ -15,9 +15,19 @@ const MESES = [
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
 ];
 
-function KpiCard({ title, icon: Icon, value, sub }: { title: string; icon: any; value: string; sub?: string }) {
+function KpiCard({
+  title, icon: Icon, value, sub, onClick, ativo,
+}: {
+  title: string; icon: any; value: string; sub?: string; onClick?: () => void; ativo?: boolean;
+}) {
+  const Tag = onClick ? 'button' : 'div';
   return (
-    <div className="rounded-lg border border-border p-5">
+    <Tag
+      onClick={onClick}
+      className={`rounded-lg border p-5 text-left w-full ${
+        onClick ? 'cursor-pointer hover:border-foreground/30 transition-colors' : ''
+      } ${ativo ? 'border-warning bg-warning-bg/30' : 'border-border'}`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-semibold text-muted-foreground uppercase tracking-wider text-[11px]">{title}</p>
@@ -26,8 +36,24 @@ function KpiCard({ title, icon: Icon, value, sub }: { title: string; icon: any; 
         </div>
         <Icon size={20} className="opacity-60 flex-shrink-0 mt-1 text-muted-foreground" />
       </div>
-    </div>
+    </Tag>
   );
+}
+
+// Motivos pelos quais uma linha precisa de conferência manual. Antes isso
+// estava espalhado: a contagem do KPI somava as 3 condições, mas o tooltip da
+// linha só explicava 2 delas — quem não foi encontrado no Secullum (o caso
+// mais comum) ganhava o triângulo de alerta sem explicação nenhuma.
+function motivosPendencia(c: FolhaColaborador): string[] {
+  const motivos: string[] = [];
+  if (c.erro) motivos.push(c.erro);
+  if (!c.secullumEncontrado) {
+    motivos.push('Sem registro no Secullum — horas extras, faltas e DSR ficaram zerados. Conferir o ponto.');
+  }
+  if (c.comissaoMatchPorNome) {
+    motivos.push('Comissão cruzada por nome, não por CPF — o cadastro do vendedor está sem documento (tb_vendedor.documento vazio). Risco de homônimo.');
+  }
+  return motivos;
 }
 
 function BarraProgresso({ label, atual, total }: { label: string; atual: number; total: number }) {
@@ -272,6 +298,7 @@ export default function FolhaPagamentoPage() {
   const [salvandoFalta, setSalvandoFalta] = useState<string | null>(null);
   const [progresso, setProgresso] = useState<ProgressoFechamento | null>(null);
   const [linhaSelecionada, setLinhaSelecionada] = useState<string | null>(null);
+  const [apenasPendencias, setApenasPendencias] = useState(false);
 
   // Barra de scroll horizontal grudada no rodapé da tela — a tabela tem
   // centenas de linhas, então o scrollbar nativo (no fim do container) fica
@@ -460,7 +487,11 @@ export default function FolhaPagamentoPage() {
     0
   );
   const totalFolha = colaboradores.reduce((s, c) => s + c.salMaisComissao, 0);
-  const pendencias = colaboradores.filter((c) => !c.secullumEncontrado || c.erro || c.comissaoMatchPorNome).length;
+  const listaPendencias = colaboradores.filter((c) => motivosPendencia(c).length > 0);
+  const pendencias = listaPendencias.length;
+  // Totais seguem somando a folha inteira — o filtro é só de visualização,
+  // senão o KPI "Total da folha" mudaria ao filtrar e induziria a erro.
+  const colaboradoresVisiveis = apenasPendencias ? listaPendencias : colaboradores;
 
   return (
     <div className="p-6 max-w-[2400px] mx-auto space-y-6">
@@ -553,9 +584,52 @@ export default function FolhaPagamentoPage() {
               title="Pendências"
               icon={AlertTriangle}
               value={String(pendencias)}
-              sub={dados?.colaboradoresSemCpf ? `+ ${dados.colaboradoresSemCpf} sem CPF no Convenia` : 'colaboradores a conferir manualmente'}
+              sub={
+                pendencias === 0
+                  ? 'nada a conferir'
+                  : apenasPendencias
+                    ? 'clique para ver todos de novo'
+                    : 'clique para ver só estes'
+              }
+              ativo={apenasPendencias}
+              onClick={pendencias > 0 ? () => setApenasPendencias((v) => !v) : undefined}
             />
           </div>
+
+          {apenasPendencias && (
+            <div className="rounded-lg border border-warning bg-warning-bg/20 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium flex items-center gap-2">
+                  <AlertTriangle size={15} className="text-warning" />
+                  {pendencias} {pendencias === 1 ? 'colaborador precisa' : 'colaboradores precisam'} de conferência manual
+                </p>
+                <button
+                  onClick={() => setApenasPendencias(false)}
+                  className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+                >
+                  Mostrar todos
+                </button>
+              </div>
+              <ul className="space-y-2">
+                {listaPendencias.map((c) => (
+                  <li key={c.cpf} className="text-xs">
+                    <span className="font-medium">{c.nome}</span>
+                    <ul className="mt-0.5 ml-3 space-y-0.5 text-muted-foreground">
+                      {motivosPendencia(c).map((m, i) => (
+                        <li key={i}>— {m}</li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+              {dados.colaboradoresSemCpf > 0 && (
+                <p className="text-xs text-muted-foreground border-t border-warning/30 pt-2">
+                  Além destes, {dados.colaboradoresSemCpf} colaborador(es) ativo(s) no Convenia estão <strong>sem CPF cadastrado</strong> e ficaram
+                  fora da folha — sem CPF não dá pra cruzar Secullum, comissão, Odonto nem Consignado.
+                </p>
+              )}
+            </div>
+          )}
 
           <div
             className="rounded-lg border border-border overflow-x-auto"
@@ -592,8 +666,9 @@ export default function FolhaPagamentoPage() {
                 </tr>
               </thead>
               <tbody>
-                {colaboradores.map((c) => {
-                  const destaque = !c.secullumEncontrado || c.erro || c.comissaoMatchPorNome;
+                {colaboradoresVisiveis.map((c) => {
+                  const motivos = motivosPendencia(c);
+                  const destaque = motivos.length > 0;
                   const selecionada = linhaSelecionada === c.cpf;
                   // Seleção (clique na linha) tem prioridade visual sobre o
                   // destaque de pendência — o usuário ainda vê o ícone de
@@ -613,7 +688,7 @@ export default function FolhaPagamentoPage() {
                     <td
                       className={`sticky z-10 ${bgSticky} font-medium truncate`}
                       style={stickyColStyle(STICKY_NOME_LEFT, STICKY_NOME_W)}
-                      title={c.erro ?? (c.comissaoMatchPorNome ? 'Comissão cruzada por nome — CPF ausente no cadastro do vendedor (tb_vendedor.documento vazio). Conferir manualmente.' : undefined)}
+                      title={motivos.length > 0 ? motivos.join('\n\n') : undefined}
                     >
                       {c.nome}
                       {destaque && <AlertTriangle size={11} className="inline ml-1 text-warning" />}
