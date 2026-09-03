@@ -51,6 +51,11 @@ function overridePercentualVigente(overrides: OverrideSalario[], cpf: string, an
     .reduce((soma, o) => soma + o.percentual, 0);
 }
 
+// Fallback para cadastro sem `work_period` no Convenia (4 pessoas em
+// 01/09/2026, todas com cargo de CLT integral). A linha vira pendência a
+// conferir em vez de assumir em silêncio — ver `jornadaAusente`.
+const JORNADA_MENSAL_PADRAO = 200;
+
 let progressoCalculo: ProgressoCalculo = { total: 0, atual: 0 };
 
 export function obterProgressoCalculo(): ProgressoCalculo {
@@ -134,7 +139,19 @@ export async function getFolhaPagamento(ano: number, mes: number, forceRefreshCo
   // "Em férias" continua na folha (salário normal, só não bate ponto) — só
   // status de desligamento/afastamento de fato (Demitido, Aviso Prévio etc.)
   // fica de fora.
-  const ativos = colaboradoresConvenia.filter((c) => c.status === 'Ativo' || c.status === 'Em férias');
+  //
+  // O recorte por data de admissão existe porque a lista do Convenia é uma
+  // foto do PRESENTE: sem ele, quem foi admitido depois do mês fechado entra
+  // na folha desse mês. Caso real (01/09/2026, fechando agosto): 16 pessoas
+  // admitidas em 01/09 estavam dentro do cálculo, inflando a folha em
+  // R$ 35.066,80. Pedido do RH: incluir quem foi admitido até o último dia
+  // da competência.
+  const ultimoDiaCompetencia = `${ano}-${String(mes).padStart(2, '0')}-${String(ultimoDiaDoMes(ano, mes)).padStart(2, '0')}`;
+  const ativos = colaboradoresConvenia.filter(
+    (c) =>
+      (c.status === 'Ativo' || c.status === 'Em férias') &&
+      (!c.dataAdmissao || c.dataAdmissao <= ultimoDiaCompetencia)
+  );
   const paraComissao = ativos
     .filter((c): c is typeof c & { cpf: string } => !!c.cpf)
     .map((c) => ({ cpf: c.cpf, nome: c.nome }));
@@ -165,6 +182,8 @@ export async function getFolhaPagamento(ano: number, mes: number, forceRefreshCo
         salarioBase: c.salario,
         overridePercentual: 0,
         salarioAtualizado: c.salario,
+        jornadaMensal: c.jornadaMensal ?? JORNADA_MENSAL_PADRAO,
+        jornadaAusente: c.jornadaMensal == null,
         comissao: 0,
         dsrComissao: 0,
         salMaisComissao: c.salario,
@@ -174,6 +193,8 @@ export async function getFolhaPagamento(ano: number, mes: number, forceRefreshCo
         heMais75: 0,
         dsrHoraExtra: 0,
         horasNegativas: 0,
+        saldoHoras: 0,
+        valorSaldo: 0,
         salarioPorHora: 0,
         descHorasFalta: 0,
         faltaQtd: 0,
@@ -232,14 +253,35 @@ async function montarLinha(
 
   const dias = diasReferencia(ano, mes, diasMes, c.dataAdmissao);
 
+  // Divisor da hora = jornada mensal contratada, não 200 fixo. Medido em
+  // 01/09/2026: 124 pessoas em 200h, 7 aprendizes em 86h, 3 estagiários em
+  // 80h e 2 em 100h. Com 200 chumbado, a hora de um aprendiz saía 2,3x
+  // subavaliada — errando hora extra e desconto de falta. "Estagiário" tem
+  // duas jornadas diferentes, então não dá pra deduzir por cargo: é o campo
+  // do cadastro, pessoa a pessoa.
+  const jornadaAusente = c.jornadaMensal == null;
+  const jornadaMensal = c.jornadaMensal ?? JORNADA_MENSAL_PADRAO;
+
   const salMaisComissao = salarioAtualizado + comissao;
-  const valorHora = salMaisComissao / 200;
+  const valorHora = salMaisComissao / jornadaMensal;
   const horaExtra = horasPositivas * valorHora;
   const heMais75 = horaExtra * 1.75;
   const dsrHoraExtra = dias.diasUteis > 0 ? (heMais75 / dias.diasUteis) * dias.diasDescanso : 0;
   const dsrComissao = dias.diasUteis > 0 ? (comissao / dias.diasUteis) * dias.diasDescanso : 0;
 
-  const salarioPorHora = salarioAtualizado / 200;
+  const salarioPorHora = salarioAtualizado / jornadaMensal;
+
+  // Saldo do mês e quanto ele vale em dinheiro. É coluna de EXIBIÇÃO, pedida
+  // pelo RH pra enxergar o líquido de uma vez — não entra em nenhum outro
+  // cálculo da folha: hora extra, desconto de horas, DSR e falta continuam
+  // saindo das colunas separadas, exatamente como antes.
+  //
+  // Positivo usa valorHora (que inclui comissão) com o adicional de 75%, igual
+  // à hora extra; negativo usa salarioPorHora (sem comissão, sem adicional),
+  // igual ao desconto por hora falta. Conferido contra caso real: Alana
+  // Grazielle, +1,02h e −0,95h → saldo 0,07h → 0,07 × 14,56 × 1,75 = R$ 1,78.
+  const saldoHoras = horasPositivas - horasNegativas;
+  const valorSaldo = saldoHoras >= 0 ? saldoHoras * valorHora * 1.75 : saldoHoras * salarioPorHora;
   const descHorasFalta = horasNegativas * salarioPorHora;
   // RH pode corrigir o nº de faltas detectado no Secullum (ex.: falta
   // justificada depois do fechamento) — o valor manual, quando existe, prevalece.
@@ -264,6 +306,9 @@ async function montarLinha(
     dsrComissao: Math.round(dsrComissao * 100) / 100,
     salMaisComissao: Math.round(salMaisComissao * 100) / 100,
 
+    jornadaMensal,
+    jornadaAusente,
+
     horasPositivas,
     valorHora: Math.round(valorHora * 100) / 100,
     horaExtra: Math.round(horaExtra * 100) / 100,
@@ -271,6 +316,8 @@ async function montarLinha(
     dsrHoraExtra: Math.round(dsrHoraExtra * 100) / 100,
 
     horasNegativas,
+    saldoHoras: Math.round(saldoHoras * 100) / 100,
+    valorSaldo: Math.round(valorSaldo * 100) / 100,
     salarioPorHora: Math.round(salarioPorHora * 100) / 100,
     descHorasFalta: Math.round(descHorasFalta * 100) / 100,
 
@@ -304,7 +351,7 @@ export async function getFolhaColaborador(cpf: string, ano: number, mes: number)
   const colaborador = colaboradores.find((c) => c.cpf === cpf.replace(/\D/g, ''));
   if (!colaborador) return null;
 
-  const [salario, diasExcecao, overrides, unimedMap, odontoMap, consignadoMap, manuaisMap, valeMap, comissoes] = await Promise.all([
+  const [detalhe, diasExcecao, overrides, unimedMap, odontoMap, consignadoMap, manuaisMap, valeMap, comissoes] = await Promise.all([
     buscarSalario(colaborador.id),
     buscarDiasExcecaoDoMes(ano, mes),
     listarOverrides(),
@@ -318,7 +365,7 @@ export async function getFolhaColaborador(cpf: string, ano: number, mes: number)
 
   const diasMes = calcularDiasMes(ano, mes);
   return montarLinha(
-    { ...colaborador, salario },
+    { ...colaborador, salario: detalhe.salario, jornadaMensal: detalhe.jornadaMensal },
     ano,
     mes,
     diasExcecao,

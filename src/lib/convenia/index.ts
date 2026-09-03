@@ -29,7 +29,7 @@ export interface Colaborador {
 }
 
 let cache: { data: Colaborador[]; ts: number } | null = null;
-const salarioCache = new Map<string, { salario: number; ts: number }>();
+const salarioCache = new Map<string, { salario: number; jornadaMensal: number | null; ts: number }>();
 
 // Busca de salário é 1 chamada por colaborador (rate limit não permite lote)
 // e é o gargalo real do fechamento — expõe o andamento pra tela mostrar uma
@@ -134,19 +134,40 @@ export async function listarColaboradores(forceRefresh = false): Promise<Colabor
   return colaboradores;
 }
 
+// "200:00" -> 200. A jornada mensal contratada vem só no detalhe, no formato
+// HH:MM string. Devolve null quando o cadastro não tem o campo preenchido —
+// quem consome decide o fallback, em vez de a gente inventar 200 aqui e o
+// dado faltando virar invisível.
+function parseJornadaMensal(valor: unknown): number | null {
+  if (typeof valor !== 'string') return null;
+  const m = valor.match(/^(\d+):(\d{2})$/);
+  if (!m) return null;
+  const horas = parseInt(m[1], 10) + parseInt(m[2], 10) / 60;
+  return horas > 0 ? horas : null;
+}
+
+export interface DetalheSalario {
+  salario: number;
+  jornadaMensal: number | null; // horas/mês contratadas (200 CLT, 86 aprendiz, 80/100 estágio)
+}
+
 // A lista (/employees) não traz salário — só o detalhe (/employees/{id}) traz,
 // e o detalhe por sua vez não repete o CPF. É preciso combinar as duas chamadas.
-export async function buscarSalario(id: string, forceRefresh = false): Promise<number> {
+// O mesmo detalhe carrega a jornada, então ela sai de graça aqui: esse endpoint
+// é o gargalo do fechamento (1 chamada por pessoa, throttle de 1,5s) e não
+// vale uma segunda passada só pra ler outro campo.
+export async function buscarSalario(id: string, forceRefresh = false): Promise<DetalheSalario> {
   const now = Date.now();
   const cached = salarioCache.get(id);
   if (!forceRefresh && cached && now - cached.ts < CACHE_TTL) {
-    return cached.salario;
+    return { salario: cached.salario, jornadaMensal: cached.jornadaMensal };
   }
 
   const res = await conveniaFetch(`/employees/${id}`);
   const salario = parseFloat(res.data?.salary ?? '0') || 0;
-  salarioCache.set(id, { salario, ts: now });
-  return salario;
+  const jornadaMensal = parseJornadaMensal(res.data?.work_period?.journey?.monthly_hours);
+  salarioCache.set(id, { salario, jornadaMensal, ts: now });
+  return { salario, jornadaMensal };
 }
 
 async function mapComConcorrencia<T, R>(items: T[], limite: number, fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -166,6 +187,7 @@ async function mapComConcorrencia<T, R>(items: T[], limite: number, fn: (item: T
 
 export interface ColaboradorComSalario extends Colaborador {
   salario: number;
+  jornadaMensal: number | null;
 }
 
 export async function listarColaboradoresComSalario(forceRefresh = false): Promise<ColaboradorComSalario[]> {
@@ -173,9 +195,9 @@ export async function listarColaboradoresComSalario(forceRefresh = false): Promi
   progressoSalario = { total: colaboradores.length, atual: 0 };
 
   const resultado = await mapComConcorrencia(colaboradores, 1, async (c) => {
-    const salario = await buscarSalario(c.id, forceRefresh);
+    const { salario, jornadaMensal } = await buscarSalario(c.id, forceRefresh);
     progressoSalario = { ...progressoSalario, atual: progressoSalario.atual + 1 };
-    return { ...c, salario };
+    return { ...c, salario, jornadaMensal };
   });
 
   return resultado;

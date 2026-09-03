@@ -50,6 +50,9 @@ function motivosPendencia(c: FolhaColaborador): string[] {
   if (!c.secullumEncontrado) {
     motivos.push('Sem registro no Secullum — horas extras, faltas e DSR ficaram zerados. Conferir o ponto.');
   }
+  if (c.jornadaAusente) {
+    motivos.push('Sem jornada cadastrada no Convenia (work_period) — o valor da hora foi calculado por 200h/mês. Se a pessoa for meio-período, hora extra e desconto de falta estão errados.');
+  }
   if (c.comissaoMatchPorNome) {
     motivos.push('Comissão cruzada por nome, não por CPF — o cadastro do vendedor está sem documento (tb_vendedor.documento vazio). Risco de homônimo.');
   }
@@ -217,10 +220,10 @@ function exportarExcel(dados: FolhaPagamentoResultado) {
     'Admissão', 'Nome', 'CPF', 'Cargo', 'Dpto',
     'Salário Base', '% Adicional', 'Salário Atualizado',
     'Comissão', 'DSR Comissão', 'Sal+Comissão',
-    'Horas +', 'Horas -', 'Saldo Horas', 'Valor Hora', 'Hora Extra', 'HE +75%', 'DSR HE',
+    'Horas +', 'Horas -', 'Saldo Horas', 'Valor Saldo', 'Valor Hora', 'Hora Extra', 'HE +75%', 'DSR HE',
     'Salário/H', 'Desc. Falta', 'Falta (qtd)', 'DSR',
     'Consignado', 'SITEPD',
-    'Unimed', 'Odonto', 'VA', 'VT',
+    'Unimed', 'Odonto', 'VT', 'VA',
     'Observações',
   ];
   const linhas = dados.colaboradores.map((c) => [
@@ -237,7 +240,8 @@ function exportarExcel(dados: FolhaPagamentoResultado) {
     c.salMaisComissao,
     decimalParaHHMM(c.horasPositivas),
     decimalParaHHMM(c.horasNegativas),
-    decimalParaHHMM(c.horasPositivas - c.horasNegativas),
+    decimalParaHHMM(c.saldoHoras),
+    c.valorSaldo,
     c.valorHora,
     c.horaExtra,
     c.heMais75,
@@ -250,8 +254,8 @@ function exportarExcel(dados: FolhaPagamentoResultado) {
     c.sitepd ?? '',
     c.descontoUnimed,
     c.descontoOdonto,
-    c.valeAlimentacao ?? '',
     c.valeTransporte ?? '',
+    c.valeAlimentacao ?? '',
     c.observacoes ?? '',
   ]);
 
@@ -641,9 +645,9 @@ export default function FolhaPagamentoPage() {
                 <tr className="border-b border-border bg-muted [&>th]:px-2 [&>th]:py-1 [&>th]:text-center [&>th]:font-semibold [&>th]:text-[10px] [&>th]:uppercase [&>th]:tracking-wider [&>th]:text-muted-foreground/70 [&>th]:whitespace-nowrap">
                   <th className="sticky z-10 bg-muted text-left!" style={stickyColStyle(0, STICKY_TOTAL_W)} colSpan={3}>Dados Gerais</th>
                   <th className="border-r border-border" colSpan={2}>&nbsp;</th>
-                  <th className="border-r border-border" colSpan={4}>Salário</th>
+                  <th className="border-r border-border" colSpan={3}>Salário</th>
                   <th className="border-r border-border" colSpan={3}>Comissão</th>
-                  <th className="border-r border-border" colSpan={11}>Horas</th>
+                  <th className="border-r border-border" colSpan={12}>Horas</th>
                   <th className="border-r border-border" colSpan={2}>Descontos</th>
                   <th className="border-r border-border" colSpan={4}>Benefícios</th>
                   <th colSpan={1}>Observações</th>
@@ -655,13 +659,13 @@ export default function FolhaPagamentoPage() {
                   <th>Cargo</th><th className="border-r border-border">Dpto</th>
                   <th className="text-right">Salário Base</th><th className="text-right">% Adicional</th><th className="text-right border-r border-border">Salário Atual.</th>
                   <th className="text-right">Comissão</th><th className="text-right">DSR Comis.</th><th className="text-right border-r border-border">Sal+Comis.</th>
-                  <th className="text-right">Horas +</th><th className="text-right">Horas −</th><th className="text-right">Saldo Horas</th>
+                  <th className="text-right">Horas +</th><th className="text-right">Horas −</th><th className="text-right">Saldo Horas</th><th className="text-right">Valor Saldo</th>
                   <th className="text-right">Valor Hora</th><th className="text-right">Hora Extra</th>
                   <th className="text-right">HE +75%</th><th className="text-right">DSR HE</th>
                   <th className="text-right">Salário/H</th><th className="text-right">Desc. Falta</th>
                   <th className="text-right">Falta</th><th className="text-right border-r border-border">DSR</th>
                   <th className="text-right">Consignado</th><th className="border-r border-border">SITEPD</th>
-                  <th className="text-right">Unimed</th><th className="text-right">Odonto</th><th className="text-right">VA</th><th className="text-right border-r border-border">VT</th>
+                  <th className="text-right">Unimed</th><th className="text-right">Odonto</th><th className="text-right">VT</th><th className="text-right border-r border-border">VA</th>
                   <th>Observações</th>
                 </tr>
               </thead>
@@ -728,8 +732,18 @@ export default function FolhaPagamentoPage() {
                         {salvandoHoras && editandoHoras?.cpf === c.cpf && <Loader2 size={10} className="animate-spin flex-shrink-0" />}
                       </div>
                     </td>
-                    <td className={`text-right tabular-nums ${corSaldo(c.horasPositivas - c.horasNegativas)}`}>
-                      {decimalParaHHMM(c.horasPositivas - c.horasNegativas)}
+                    <td className={`text-right tabular-nums ${corSaldo(c.saldoHoras)}`}>
+                      {decimalParaHHMM(c.saldoHoras)}
+                    </td>
+                    <td
+                      className={`text-right tabular-nums font-medium ${corSaldo(c.valorSaldo)}`}
+                      title={
+                        c.saldoHoras >= 0
+                          ? `${decimalParaHHMM(c.saldoHoras)} × ${formatCurrencyBRL(c.valorHora)} × 1,75`
+                          : `${decimalParaHHMM(c.saldoHoras)} × ${formatCurrencyBRL(c.salarioPorHora)} (sem adicional)`
+                      }
+                    >
+                      {formatCurrencyBRL(c.valorSaldo)}
                     </td>
                     <td className="text-right tabular-nums">{formatCurrencyBRL(c.valorHora)}</td>
                     <td className={`text-right tabular-nums ${corAcrescimo(c.horaExtra)}`}>{formatCurrencyBRL(c.horaExtra)}</td>
@@ -751,10 +765,10 @@ export default function FolhaPagamentoPage() {
                     <td className={`text-right tabular-nums ${corDesconto(c.descontoUnimed)}`}>{formatCurrencyBRL(c.descontoUnimed)}</td>
                     <td className={`text-right tabular-nums ${corDesconto(c.descontoOdonto)}`}>{formatCurrencyBRL(c.descontoOdonto)}</td>
                     <td className="min-w-[80px] text-right">
-                      <EditableCell value={c.valeAlimentacao} numeric onSave={(v) => salvarManual(c.cpf, 'valeAlimentacao', v)} />
+                      <EditableCell value={c.valeTransporte} numeric onSave={(v) => salvarManual(c.cpf, 'valeTransporte', v)} />
                     </td>
                     <td className="min-w-[80px] text-right border-r border-border">
-                      <EditableCell value={c.valeTransporte} numeric onSave={(v) => salvarManual(c.cpf, 'valeTransporte', v)} />
+                      <EditableCell value={c.valeAlimentacao} numeric onSave={(v) => salvarManual(c.cpf, 'valeAlimentacao', v)} />
                     </td>
                     <td className="min-w-[140px]">
                       <EditableCell value={c.observacoes} onSave={(v) => salvarManual(c.cpf, 'observacoes', v)} />

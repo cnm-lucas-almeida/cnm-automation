@@ -18,13 +18,18 @@ export interface FolhaColaborador {
   dsrComissao: number;
   salMaisComissao: number;
 
+  jornadaMensal: number; // horas/mês contratadas no Convenia — é o divisor de valorHora e salarioPorHora
+  jornadaAusente: boolean; // cadastro sem work_period no Convenia: caiu no fallback de 200h, conferir
+
   horasPositivas: number; // decimal, horas
   valorHora: number;
   horaExtra: number;
   heMais75: number;
   dsrHoraExtra: number;
 
-  horasNegativas: number; // decimal, horas (atraso/saída antecipada — não inclui falta integral)
+  horasNegativas: number;
+  saldoHoras: number; // horasPositivas − horasNegativas
+  valorSaldo: number; // só exibição: saldo ≥ 0 → saldo × valorHora × 1,75; saldo < 0 → saldo × salarioPorHora // decimal, horas (atraso/saída antecipada — não inclui falta integral)
   salarioPorHora: number; // sem comissão
   descHorasFalta: number;
 
