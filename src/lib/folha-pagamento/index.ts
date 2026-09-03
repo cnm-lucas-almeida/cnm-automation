@@ -266,15 +266,9 @@ async function montarLinha(
   const valorHora = salMaisComissao / jornadaMensal;
   const horaExtra = horasPositivas * valorHora;
   const heMais75 = horaExtra * 1.75;
-  const dsrHoraExtra = dias.diasUteis > 0 ? (heMais75 / dias.diasUteis) * dias.diasDescanso : 0;
-  const dsrComissao = dias.diasUteis > 0 ? (comissao / dias.diasUteis) * dias.diasDescanso : 0;
-
   const salarioPorHora = salarioAtualizado / jornadaMensal;
 
-  // Saldo do mês e quanto ele vale em dinheiro. É coluna de EXIBIÇÃO, pedida
-  // pelo RH pra enxergar o líquido de uma vez — não entra em nenhum outro
-  // cálculo da folha: hora extra, desconto de horas, DSR e falta continuam
-  // saindo das colunas separadas, exatamente como antes.
+  // Saldo do mês e quanto ele vale em dinheiro.
   //
   // Positivo usa valorHora (que inclui comissão) com o adicional de 75%, igual
   // à hora extra; negativo usa salarioPorHora (sem comissão, sem adicional),
@@ -282,6 +276,24 @@ async function montarLinha(
   // Grazielle, +1,02h e −0,95h → saldo 0,07h → 0,07 × 14,56 × 1,75 = R$ 1,78.
   const saldoHoras = horasPositivas - horasNegativas;
   const valorSaldo = saldoHoras >= 0 ? saldoHoras * valorHora * 1.75 : saldoHoras * salarioPorHora;
+
+  // DSR da hora extra sai do valor do SALDO, não da hora extra bruta — decisão
+  // do RH em 01/09/2026 ("muda só o DSR, o resto deixa como está"), a partir do
+  // caso Jackson de Bonfim: 8,37h positivas e 1,60h negativas, saldo 6,77h;
+  // eles esperavam R$ 175,17 ÷ 26 × 5 = R$ 33,69, e a tela mostrava R$ 41,65
+  // (que é R$ 216,56 ÷ 26 × 5, sobre as 8,37h brutas).
+  //
+  // Fica registrado que isto é INTERNAMENTE INCONSISTENTE e foi apontado antes
+  // de implementar: a hora extra continua sendo paga sobre as horas positivas
+  // brutas, mas o DSR dela passa a sair do líquido. O RH reafirmou o pedido.
+  //
+  // Saldo negativo não gera DSR negativo — sem hora extra líquida não há
+  // repouso a remunerar, então o piso é zero (o desconto do saldo negativo já
+  // acontece via descHorasFalta, que não mudou).
+  const baseDsrHoraExtra = Math.max(0, valorSaldo);
+  const dsrHoraExtra = dias.diasUteis > 0 ? (baseDsrHoraExtra / dias.diasUteis) * dias.diasDescanso : 0;
+  const dsrComissao = dias.diasUteis > 0 ? (comissao / dias.diasUteis) * dias.diasDescanso : 0;
+
   const descHorasFalta = horasNegativas * salarioPorHora;
   // RH pode corrigir o nº de faltas detectado no Secullum (ex.: falta
   // justificada depois do fechamento) — o valor manual, quando existe, prevalece.
