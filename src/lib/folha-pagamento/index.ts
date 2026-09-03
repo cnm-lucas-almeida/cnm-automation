@@ -56,6 +56,10 @@ function overridePercentualVigente(overrides: OverrideSalario[], cpf: string, an
 // conferir em vez de assumir em silêncio — ver `jornadaAusente`.
 const JORNADA_MENSAL_PADRAO = 200;
 
+// Divisor do salário-dia. Constante por definição legal/convenção — não é o
+// número de dias do mês nem os dias úteis.
+const DIAS_SALARIO_MES = 30;
+
 let progressoCalculo: ProgressoCalculo = { total: 0, atual: 0 };
 
 export function obterProgressoCalculo(): ProgressoCalculo {
@@ -298,7 +302,17 @@ async function montarLinha(
   // RH pode corrigir o nº de faltas detectado no Secullum (ex.: falta
   // justificada depois do fechamento) — o valor manual, quando existe, prevalece.
   const faltaQtd = manual?.faltaQtdOverride ?? horas.faltaQtd;
-  const dsrValor = dias.diasUteis > 0 ? faltaQtd * (salarioAtualizado / dias.diasUteis) : 0;
+  // DSR perdido por falta: o valor de cada DSR é o salário-dia, e o divisor é
+  // SEMPRE 30 — independente de o mês ter 28, 30 ou 31 dias. Definido pelo RH
+  // em 03/09/2026 a partir do caso Andréia Cristina (1 falta, salário
+  // R$ 2.195,32): 2.195,32 ÷ 30 = R$ 73,18, e não ÷ 26 = R$ 84,44.
+  //
+  // O ÷ diasUteis que existia aqui não vinha da planilha: as colunas FALTA e
+  // DSR de `Folha Junho Atualizada - Dissídio.xlsx` são TEXTO digitado à mão
+  // ("1 (dia 05)", "1 + 1 (mês 05)") — nunca houve fórmula calculando esse
+  // valor lá. Era inferência da engenharia reversa. Já o DSR da hora extra tem
+  // fórmula viva (`=R3/25*5`) e por isso continua com dias úteis × descanso.
+  const dsrValor = faltaQtd * (salarioAtualizado / DIAS_SALARIO_MES);
 
   const { descontoUnimed, descontoOdonto, consignado, valeAlimentacao, valeTransporte } =
     resolverImportados(c.nome, cpf, unimedMap, odontoMap, consignadoMap, manual, valeMap);
