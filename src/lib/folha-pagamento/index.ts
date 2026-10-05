@@ -4,6 +4,7 @@ import { buscarComissoesDoMes } from './comissao';
 import { calcularHorasMes } from './horas';
 import { calcularDiasMes, calcularDiasPeriodo, type DiasMes } from './calendario';
 import { listarOverrides, buscarDiasExcecaoDoMes } from './overrides';
+import { buscarFeriadosDoMes } from './feriados';
 import { buscarUnimedDoMes, normalizarNome } from './unimed';
 import { buscarOdontoDoMes } from './odonto';
 import { buscarConsignadoDoMes } from './consignado';
@@ -36,12 +37,12 @@ function ultimoDiaDoMes(ano: number, mes: number): number {
 // 15/06/2026): planilha usa ÷14×2 pro período 15→30/06, e
 // calcularDiasPeriodo(2026,6,15,30) devolve exatamente diasUteis=14,
 // diasDescanso=2. Admissão em mês anterior usa o mês cheio normalmente.
-function diasReferencia(ano: number, mes: number, diasMesCompleto: DiasMes, dataAdmissao: string | null): DiasMes {
+function diasReferencia(ano: number, mes: number, diasMesCompleto: DiasMes, dataAdmissao: string | null, feriadosExtras: Set<string>): DiasMes {
   if (!dataAdmissao) return diasMesCompleto;
   const admissao = new Date(dataAdmissao);
   const dentroDoMes = admissao.getUTCFullYear() === ano && admissao.getUTCMonth() + 1 === mes;
   if (!dentroDoMes) return diasMesCompleto;
-  return calcularDiasPeriodo(ano, mes, admissao.getUTCDate(), ultimoDiaDoMes(ano, mes));
+  return calcularDiasPeriodo(ano, mes, admissao.getUTCDate(), ultimoDiaDoMes(ano, mes), feriadosExtras);
 }
 
 function overridePercentualVigente(overrides: OverrideSalario[], cpf: string, ano: number, mes: number): number {
@@ -129,7 +130,7 @@ export async function getDescontosImportados(ano: number, mes: number): Promise<
 export async function getFolhaPagamento(ano: number, mes: number, forceRefreshConvenia = false): Promise<FolhaPagamentoResultado> {
   progressoCalculo = { total: 0, atual: 0 };
 
-  const [colaboradoresConvenia, diasExcecao, overrides, unimedMap, odontoMap, consignadoMap, manuaisMap, valeMap] = await Promise.all([
+  const [colaboradoresConvenia, diasExcecao, overrides, unimedMap, odontoMap, consignadoMap, manuaisMap, valeMap, feriadosExtras] = await Promise.all([
     listarColaboradoresComSalario(forceRefreshConvenia),
     buscarDiasExcecaoDoMes(ano, mes),
     listarOverrides(),
@@ -138,6 +139,7 @@ export async function getFolhaPagamento(ano: number, mes: number, forceRefreshCo
     buscarConsignadoDoMes(ano, mes),
     buscarCamposManuaisDoMes(ano, mes),
     buscarValeDoMes(ano, mes),
+    buscarFeriadosDoMes(ano, mes),
   ]);
 
   // "Em férias" continua na folha (salário normal, só não bate ponto) — só
@@ -160,7 +162,7 @@ export async function getFolhaPagamento(ano: number, mes: number, forceRefreshCo
     .filter((c): c is typeof c & { cpf: string } => !!c.cpf)
     .map((c) => ({ cpf: c.cpf, nome: c.nome }));
   const comissoes = await buscarComissoesDoMes(paraComissao, ano, mes);
-  const diasMes = calcularDiasMes(ano, mes);
+  const diasMes = calcularDiasMes(ano, mes, feriadosExtras);
 
   const colaboradoresSemCpf = ativos.filter((c) => !c.cpf).length;
 
@@ -169,7 +171,7 @@ export async function getFolhaPagamento(ano: number, mes: number, forceRefreshCo
     if (!c.cpf) return null;
 
     try {
-      const linha = await montarLinha(c, ano, mes, diasExcecao, overrides, comissoes, unimedMap, odontoMap, consignadoMap, manuaisMap, valeMap, diasMes);
+      const linha = await montarLinha(c, ano, mes, diasExcecao, overrides, comissoes, unimedMap, odontoMap, consignadoMap, manuaisMap, valeMap, diasMes, feriadosExtras);
       progressoCalculo = { ...progressoCalculo, atual: progressoCalculo.atual + 1 };
       return linha;
     } catch (err: any) {
@@ -222,7 +224,7 @@ export async function getFolhaPagamento(ano: number, mes: number, forceRefreshCo
 
   const colaboradores = linhas.filter((l): l is FolhaColaborador => l !== null).sort((a, b) => a.nome.localeCompare(b.nome));
 
-  return { ano, mes, colaboradores, colaboradoresSemCpf };
+  return { ano, mes, colaboradores, colaboradoresSemCpf, dias: diasMes };
 }
 
 async function montarLinha(
@@ -237,7 +239,8 @@ async function montarLinha(
   consignadoMap: Map<string, number>,
   manuaisMap: Map<string, Awaited<ReturnType<typeof buscarCamposManuaisDoMes>> extends Map<string, infer V> ? V : never>,
   valeMap: Awaited<ReturnType<typeof buscarValeDoMes>>,
-  diasMes: ReturnType<typeof calcularDiasMes>
+  diasMes: ReturnType<typeof calcularDiasMes>,
+  feriadosExtras: Set<string>
 ): Promise<FolhaColaborador> {
   const cpf = c.cpf!;
   const overridePercentual = overridePercentualVigente(overrides, cpf, ano, mes);
@@ -255,7 +258,7 @@ async function montarLinha(
   };
   const comissao = comissaoResultado.comissao;
 
-  const dias = diasReferencia(ano, mes, diasMes, c.dataAdmissao);
+  const dias = diasReferencia(ano, mes, diasMes, c.dataAdmissao, feriadosExtras);
 
   // Divisor da hora = jornada mensal contratada, não 200 fixo. Medido em
   // 01/09/2026: 124 pessoas em 200h, 7 aprendizes em 86h, 3 estagiários em
@@ -377,7 +380,7 @@ export async function getFolhaColaborador(cpf: string, ano: number, mes: number)
   const colaborador = colaboradores.find((c) => c.cpf === cpf.replace(/\D/g, ''));
   if (!colaborador) return null;
 
-  const [detalhe, diasExcecao, overrides, unimedMap, odontoMap, consignadoMap, manuaisMap, valeMap, comissoes] = await Promise.all([
+  const [detalhe, diasExcecao, overrides, unimedMap, odontoMap, consignadoMap, manuaisMap, valeMap, comissoes, feriadosExtras] = await Promise.all([
     buscarSalario(colaborador.id),
     buscarDiasExcecaoDoMes(ano, mes),
     listarOverrides(),
@@ -387,9 +390,10 @@ export async function getFolhaColaborador(cpf: string, ano: number, mes: number)
     buscarCamposManuaisDoMes(ano, mes),
     buscarValeDoMes(ano, mes),
     buscarComissoesDoMes([{ cpf: colaborador.cpf!, nome: colaborador.nome }], ano, mes),
+    buscarFeriadosDoMes(ano, mes),
   ]);
 
-  const diasMes = calcularDiasMes(ano, mes);
+  const diasMes = calcularDiasMes(ano, mes, feriadosExtras);
   return montarLinha(
     { ...colaborador, salario: detalhe.salario, jornadaMensal: detalhe.jornadaMensal },
     ano,
@@ -402,6 +406,7 @@ export async function getFolhaColaborador(cpf: string, ano: number, mes: number)
     consignadoMap,
     manuaisMap,
     valeMap,
-    diasMes
+    diasMes,
+    feriadosExtras
   );
 }

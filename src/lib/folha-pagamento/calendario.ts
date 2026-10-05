@@ -60,37 +60,41 @@ export interface DiasMes {
   totalDias: number;
   diasUteis: number;
   diasDescanso: number; // domingos + feriados que não caem num domingo
+  feriados: string[]; // ISO dates dos feriados (nacionais + cadastrados) dentro do período, inclusive os que caem num domingo
 }
 
-export function calcularDiasMes(ano: number, mes: number): DiasMes {
+// `feriadosExtras` = feriados cadastrados pelo RH na tabela
+// folha_pagamento_feriado (municipais, pontes), além dos nacionais fixos acima.
+// Caso real (setembro/2026): sem o 08/09 (feriado municipal de Curitiba) o
+// sistema fechava ÷25×5 e o RH esperava ÷24×6.
+export function calcularDiasMes(ano: number, mes: number, feriadosExtras: Set<string> = new Set()): DiasMes {
   const totalDias = new Date(Date.UTC(ano, mes, 0)).getUTCDate();
-  const feriados = feriadosNacionais(ano);
-
-  let diasDescanso = 0;
-  for (let dia = 1; dia <= totalDias; dia++) {
-    const data = new Date(Date.UTC(ano, mes - 1, dia));
-    const domingo = data.getUTCDay() === 0;
-    const feriado = feriados.has(chaveISO(data));
-    if (domingo || feriado) diasDescanso++;
-  }
-
-  return { totalDias, diasUteis: totalDias - diasDescanso, diasDescanso };
+  return calcularDiasPeriodo(ano, mes, 1, totalDias, feriadosExtras);
 }
 
 // Proporcional para admissão/desligamento no meio do mês — conta só os dias do
 // período efetivamente trabalhado dentro do mês (validado contra a planilha:
 // colaboradores admitidos no meio do mês usam divisores como ÷14×2, ÷6 etc.).
-export function calcularDiasPeriodo(ano: number, mes: number, diaInicio: number, diaFim: number): DiasMes {
-  const feriados = feriadosNacionais(ano);
+export function calcularDiasPeriodo(
+  ano: number,
+  mes: number,
+  diaInicio: number,
+  diaFim: number,
+  feriadosExtras: Set<string> = new Set()
+): DiasMes {
+  const nacionais = feriadosNacionais(ano);
   let diasDescanso = 0;
+  const feriados: string[] = [];
   const totalDias = diaFim - diaInicio + 1;
 
   for (let dia = diaInicio; dia <= diaFim; dia++) {
     const data = new Date(Date.UTC(ano, mes - 1, dia));
+    const iso = chaveISO(data);
     const domingo = data.getUTCDay() === 0;
-    const feriado = feriados.has(chaveISO(data));
+    const feriado = nacionais.has(iso) || feriadosExtras.has(iso);
+    if (feriado) feriados.push(iso);
     if (domingo || feriado) diasDescanso++;
   }
 
-  return { totalDias, diasUteis: totalDias - diasDescanso, diasDescanso };
+  return { totalDias, diasUteis: totalDias - diasDescanso, diasDescanso, feriados };
 }

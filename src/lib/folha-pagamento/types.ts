@@ -71,6 +71,14 @@ export interface DiaExcecao {
   motivo: string;
 }
 
+// Feriado cadastrado pelo RH além dos nacionais (municipal, ponte). Conta como
+// dia de descanso no DSR — ver calendario.ts.
+export interface Feriado {
+  id: number;
+  data: string; // ISO date
+  descricao: string;
+}
+
 export interface UnimedEvento {
   competencia: string; // "YYYY-MM"
   nomeBeneficiario: string;
@@ -99,6 +107,9 @@ export interface FolhaPagamentoResultado {
   mes: number;
   colaboradores: FolhaColaborador[];
   colaboradoresSemCpf: number; // não dá pra cruzar Secullum/comissão/Odonto/Consignado sem CPF
+  // Divisor e multiplicador do DSR do mês cheio (÷ diasUteis × diasDescanso),
+  // já com os feriados cadastrados — mostrado na tela pra conferência do RH.
+  dias: { totalDias: number; diasUteis: number; diasDescanso: number; feriados: string[] };
 }
 
 // Segunda fase do fechamento (Secullum + fórmulas por colaborador) — bem mais

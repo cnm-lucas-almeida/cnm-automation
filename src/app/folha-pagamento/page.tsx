@@ -4,11 +4,11 @@ import { useState, useEffect, useCallback, useRef, type UIEvent, type RefObject 
 import axios from 'axios';
 import * as XLSX from 'xlsx';
 import {
-  Loader2, AlertTriangle, Wallet, TrendingUp, MinusCircle, Upload, Plus, X, Users, Pencil, Calculator, FileSpreadsheet,
+  Loader2, AlertTriangle, Wallet, TrendingUp, MinusCircle, Upload, Plus, X, Users, Pencil, Calculator, FileSpreadsheet, CalendarDays,
 } from 'lucide-react';
 import { formatCurrencyBRL, formatNumberBR } from '@/lib/format';
 import { PercentInput } from '@/components/ui/PercentInput';
-import type { FolhaColaborador, OverrideSalario, FolhaPagamentoResultado, ProgressoFechamento, DescontosImportados } from '@/lib/folha-pagamento';
+import type { FolhaColaborador, OverrideSalario, Feriado, FolhaPagamentoResultado, ProgressoFechamento, DescontosImportados } from '@/lib/folha-pagamento';
 
 const MESES = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -297,6 +297,7 @@ export default function FolhaPagamentoPage() {
   const [uploading, setUploading] = useState<string | null>(null);
   const [mostrarConfig, setMostrarConfig] = useState(false);
   const [overrides, setOverrides] = useState<OverrideSalario[]>([]);
+  const [feriados, setFeriados] = useState<Feriado[]>([]);
   const [editandoHoras, setEditandoHoras] = useState<{ cpf: string; campo: 'horasPositivas' | 'horasNegativas' } | null>(null);
   const [salvandoHoras, setSalvandoHoras] = useState(false);
   const [salvandoFalta, setSalvandoFalta] = useState<string | null>(null);
@@ -380,9 +381,13 @@ export default function FolhaPagamentoPage() {
   }, [ano, mes]);
 
   const carregarConfig = useCallback(async () => {
-    const { data } = await axios.get('/api/folha-pagamento/overrides');
-    setOverrides(data.overrides);
-  }, []);
+    const [{ data: ov }, { data: fer }] = await Promise.all([
+      axios.get('/api/folha-pagamento/overrides'),
+      axios.get<{ feriados: Feriado[] }>('/api/folha-pagamento/feriados', { params: { ano } }),
+    ]);
+    setOverrides(ov.overrides);
+    setFeriados(fer.feriados);
+  }, [ano]);
 
   // Sem carregamento automático ao entrar na tela — o fechamento é pesado
   // (rate limit do Convenia, minutos de espera), então só roda quando o
@@ -546,6 +551,8 @@ export default function FolhaPagamentoPage() {
       {mostrarConfig && (
         <OverridesModal
           overrides={overrides}
+          feriados={feriados}
+          ano={ano}
           colaboradores={colaboradores}
           onChange={carregarConfig}
           onClose={() => setMostrarConfig(false)}
@@ -582,7 +589,12 @@ export default function FolhaPagamentoPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <KpiCard title="Total da folha" icon={Wallet} value={formatCurrencyBRL(totalFolha)} sub={`${colaboradores.length} colaboradores ativos`} />
-            <KpiCard title="Total comissões" icon={TrendingUp} value={formatCurrencyBRL(totalComissao)} />
+            <KpiCard
+              title="Total comissões"
+              icon={TrendingUp}
+              value={formatCurrencyBRL(totalComissao)}
+              sub={dados.dias ? `DSR do mês: ÷ ${dados.dias.diasUteis} úteis × ${dados.dias.diasDescanso} de descanso` : undefined}
+            />
             <KpiCard title="Total descontos" icon={MinusCircle} value={formatCurrencyBRL(totalDescontos)} sub="Unimed + Odonto + Consignado + faltas" />
             <KpiCard
               title="Pendências"
@@ -803,10 +815,31 @@ export default function FolhaPagamentoPage() {
   );
 }
 
+function formatDataBR(iso: string): string {
+  const [a, m, d] = iso.split('-');
+  return `${d}/${m}/${a}`;
+}
+
 function OverridesModal({
-  overrides, colaboradores, onChange, onClose,
-}: { overrides: OverrideSalario[]; colaboradores: FolhaColaborador[]; onChange: () => void; onClose: () => void }) {
+  overrides, feriados, ano, colaboradores, onChange, onClose,
+}: {
+  overrides: OverrideSalario[]; feriados: Feriado[]; ano: number; colaboradores: FolhaColaborador[]; onChange: () => void; onClose: () => void;
+}) {
   const [novoOverride, setNovoOverride] = useState({ cpf: '', nome: '', percentual: 0, motivo: '', vigenciaInicio: '' });
+  const [novoFeriado, setNovoFeriado] = useState({ data: '', descricao: '' });
+  const [salvandoFeriado, setSalvandoFeriado] = useState(false);
+
+  async function adicionarFeriado() {
+    if (!novoFeriado.data || !novoFeriado.descricao.trim()) return;
+    setSalvandoFeriado(true);
+    try {
+      await axios.post('/api/folha-pagamento/feriados', novoFeriado);
+      setNovoFeriado({ data: '', descricao: '' });
+      onChange();
+    } finally {
+      setSalvandoFeriado(false);
+    }
+  }
 
   function onCpfChange(cpfDigitado: string) {
     const cpfNormalizado = cpfDigitado.replace(/\D/g, '');
@@ -874,6 +907,57 @@ function OverridesModal({
         <button onClick={adicionarOverride} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-border hover:bg-muted/60">
           <Plus size={13} /> Adicionar override
         </button>
+
+        <div className="border-t border-border pt-4 space-y-3">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <CalendarDays size={18} className="text-primary" /> Feriados além dos nacionais — {ano}
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            Feriado municipal (ex.: 08/09 em Curitiba) ou ponte oficial. Entra como dia de descanso no DSR de comissão e de hora extra:
+            o cálculo divide pelos dias úteis do mês (dias menos domingos e feriados) e multiplica pelos domingos e feriados.
+            Os feriados nacionais já estão no sistema. Cadastrar ano a ano. Não altera a contagem de faltas do ponto.
+          </p>
+          <div className="space-y-1">
+            {feriados.map((f) => (
+              <div key={f.id} className="flex items-center justify-between gap-2 text-xs px-2 py-1.5 rounded border border-border">
+                <span className="truncate tabular-nums">{formatDataBR(f.data)} · {f.descricao}</span>
+                <button
+                  title="Remover feriado"
+                  onClick={async () => { await axios.delete('/api/folha-pagamento/feriados', { params: { id: f.id } }); onChange(); }}
+                >
+                  <X size={13} className="text-muted-foreground hover:text-destructive" />
+                </button>
+              </div>
+            ))}
+            {feriados.length === 0 && (
+              <p className="text-xs text-muted-foreground">Nenhum feriado cadastrado para {ano} além dos nacionais.</p>
+            )}
+          </div>
+          <div className="grid grid-cols-[auto_1fr] gap-2">
+            <input
+              type="date"
+              value={novoFeriado.data}
+              onChange={(e) => setNovoFeriado({ ...novoFeriado, data: e.target.value })}
+              className="px-2 py-1.5 rounded border border-border bg-background text-xs"
+            />
+            <input
+              placeholder="Descrição (ex.: Padroeira de Curitiba)"
+              value={novoFeriado.descricao}
+              onChange={(e) => setNovoFeriado({ ...novoFeriado, descricao: e.target.value })}
+              className="px-2 py-1.5 rounded border border-border bg-background text-xs"
+            />
+          </div>
+          <button
+            onClick={adicionarFeriado}
+            disabled={salvandoFeriado || !novoFeriado.data || !novoFeriado.descricao.trim()}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-border hover:bg-muted/60 disabled:opacity-50"
+          >
+            {salvandoFeriado ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />} Adicionar feriado
+          </button>
+          <p className="text-[11px] text-muted-foreground">
+            Depois de incluir ou remover um feriado, clique em &quot;Calcular folha&quot; de novo para o DSR refletir a mudança.
+          </p>
+        </div>
       </div>
     </div>
   );
