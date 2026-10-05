@@ -9,6 +9,7 @@ const CAMPOS_EDITAVEIS = [
   'horasPositivasOverride',
   'horasNegativasOverride',
   'faltaQtdOverride',
+  'comissaoOverride',
 ] as const satisfies readonly (keyof CamposManuais)[];
 
 export async function POST(request: NextRequest) {

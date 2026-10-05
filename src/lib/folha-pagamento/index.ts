@@ -191,6 +191,7 @@ export async function getFolhaPagamento(ano: number, mes: number, forceRefreshCo
         jornadaMensal: c.jornadaMensal ?? JORNADA_MENSAL_PADRAO,
         jornadaAusente: c.jornadaMensal == null,
         comissao: 0,
+        comissaoCalculada: 0,
         dsrComissao: 0,
         salMaisComissao: c.salario,
         horasPositivas: 0,
@@ -217,6 +218,7 @@ export async function getFolhaPagamento(ano: number, mes: number, forceRefreshCo
         secullumEncontrado: false,
         comissaoMatchPorNome: false,
         horasEditadasManualmente: false,
+        comissaoEditadaManualmente: false,
         erro: err?.message ?? 'Erro desconhecido ao calcular esta linha.',
       };
     }
@@ -256,7 +258,11 @@ async function montarLinha(
   const comissaoResultado = comissoes.get(cpf) ?? {
     comissao: 0, fechado: false, perfil: null, vendedorEncontrado: false, matchPorNome: false,
   };
-  const comissao = comissaoResultado.comissao;
+  // RH pode sobrescrever a comissão do mês (ex.: ajuste acordado fora do
+  // comissionamento). O valor editado entra em tudo que deriva da comissão:
+  // DSR de comissão, Sal+Comissão e valor da hora (logo, hora extra também).
+  const comissaoCalculada = comissaoResultado.comissao;
+  const comissao = manual?.comissaoOverride ?? comissaoCalculada;
 
   const dias = diasReferencia(ano, mes, diasMes, c.dataAdmissao, feriadosExtras);
 
@@ -271,37 +277,46 @@ async function montarLinha(
 
   const salMaisComissao = salarioAtualizado + comissao;
   const valorHora = salMaisComissao / jornadaMensal;
-  const horaExtra = horasPositivas * valorHora;
-  const heMais75 = horaExtra * 1.75;
   const salarioPorHora = salarioAtualizado / jornadaMensal;
 
-  // Saldo do mês e quanto ele vale em dinheiro.
+  // Horas: TUDO sai do SALDO do mês (positivas − negativas), nunca das horas
+  // brutas. Regra única definida pelo RH em 05/10/2026 (caso Alana, setembro:
+  // +00:25, −01:25, saldo −01:00; a Lari esperava desconto de 1h × 2.137 ÷ 200
+  // = R$ 10,68 e nenhuma hora extra; o sistema cobrava a 1h25 inteira,
+  // R$ 15,17, e ainda pagava os 25 min como HE +75%, R$ 11,27).
   //
-  // Positivo usa valorHora (que inclui comissão) com o adicional de 75%, igual
-  // à hora extra; negativo usa salarioPorHora (sem comissão, sem adicional),
-  // igual ao desconto por hora falta. Conferido contra caso real: Alana
-  // Grazielle, +1,02h e −0,95h → saldo 0,07h → 0,07 × 14,56 × 1,75 = R$ 1,78.
+  // - Saldo positivo: é hora extra. horaExtra = saldo × valorHora (com
+  //   comissão), heMais75 = horaExtra × 1,75, DSR de HE sobre o heMais75.
+  //   Desconto de hora zero.
+  // - Saldo negativo: é desconto. descHorasFalta = |saldo| × salarioPorHora
+  //   (sem comissão, sem adicional). Hora extra e DSR de HE zero.
+  //
+  // Antes (01/09 a 05/10) só o DSR de HE usava o saldo — decisão do RH no caso
+  // Jackson ("muda só o DSR, o resto deixa como está"), que ficou registrada
+  // aqui como inconsistente. Agora o resto acompanhou. As colunas Horas +,
+  // Horas − e Saldo continuam mostrando o bruto do ponto, para conferência.
   const saldoHoras = horasPositivas - horasNegativas;
-  const valorSaldo = saldoHoras >= 0 ? saldoHoras * valorHora * 1.75 : saldoHoras * salarioPorHora;
+  const saldoPositivo = Math.max(0, saldoHoras);
+  const saldoNegativo = Math.max(0, -saldoHoras);
 
-  // DSR da hora extra sai do valor do SALDO, não da hora extra bruta — decisão
-  // do RH em 01/09/2026 ("muda só o DSR, o resto deixa como está"), a partir do
-  // caso Jackson de Bonfim: 8,37h positivas e 1,60h negativas, saldo 6,77h;
-  // eles esperavam R$ 175,17 ÷ 26 × 5 = R$ 33,69, e a tela mostrava R$ 41,65
-  // (que é R$ 216,56 ÷ 26 × 5, sobre as 8,37h brutas).
-  //
-  // Fica registrado que isto é INTERNAMENTE INCONSISTENTE e foi apontado antes
-  // de implementar: a hora extra continua sendo paga sobre as horas positivas
-  // brutas, mas o DSR dela passa a sair do líquido. O RH reafirmou o pedido.
-  //
+  const horaExtra = saldoPositivo * valorHora;
+  const heMais75 = horaExtra * 1.75;
+  const descHorasFalta = saldoNegativo * salarioPorHora;
+
+  // Quanto o saldo vale em dinheiro, com sinal: o que entra (HE +75%) ou o que
+  // sai (desconto). Conferido contra caso real: Alana, +1,02h e −0,95h → saldo
+  // 0,07h → 0,07 × 14,56 × 1,75 = R$ 1,78.
+  // Arredonda antes de trocar o sinal: Math.round(−1068,5) dá −1068 e
+  // Math.round(1068,5) dá 1069, então sem isso a Alana aparecia com Valor
+  // Saldo −10,68 e Desc. Falta 10,69 para a mesma 1 hora.
+  const valorSaldo = saldoHoras >= 0 ? centavos(heMais75) : -centavos(descHorasFalta);
+
   // Saldo negativo não gera DSR negativo — sem hora extra líquida não há
-  // repouso a remunerar, então o piso é zero (o desconto do saldo negativo já
-  // acontece via descHorasFalta, que não mudou).
-  const baseDsrHoraExtra = Math.max(0, valorSaldo);
-  const dsrHoraExtra = dias.diasUteis > 0 ? (baseDsrHoraExtra / dias.diasUteis) * dias.diasDescanso : 0;
+  // repouso a remunerar. Caso Jackson (01/09): 8,37h − 1,60h = 6,77h →
+  // R$ 175,17 ÷ 26 × 5 = R$ 33,69.
+  const dsrHoraExtra = dias.diasUteis > 0 ? (heMais75 / dias.diasUteis) * dias.diasDescanso : 0;
   const dsrComissao = dias.diasUteis > 0 ? (comissao / dias.diasUteis) * dias.diasDescanso : 0;
 
-  const descHorasFalta = horasNegativas * salarioPorHora;
   // RH pode corrigir o nº de faltas detectado no Secullum (ex.: falta
   // justificada depois do fechamento) — o valor manual, quando existe, prevalece.
   const faltaQtd = manual?.faltaQtdOverride ?? horas.faltaQtd;
@@ -332,6 +347,7 @@ async function montarLinha(
     salarioAtualizado: Math.round(salarioAtualizado * 100) / 100,
 
     comissao: Math.round(comissao * 100) / 100,
+    comissaoCalculada: Math.round(comissaoCalculada * 100) / 100,
     dsrComissao: Math.round(dsrComissao * 100) / 100,
     salMaisComissao: Math.round(salMaisComissao * 100) / 100,
 
@@ -367,6 +383,7 @@ async function montarLinha(
     secullumEncontrado: horas.encontradoNoSecullum,
     comissaoMatchPorNome: comissaoResultado.matchPorNome,
     horasEditadasManualmente: manual?.horasPositivasOverride != null || manual?.horasNegativasOverride != null,
+    comissaoEditadaManualmente: manual?.comissaoOverride != null,
     erro: null,
   };
 }

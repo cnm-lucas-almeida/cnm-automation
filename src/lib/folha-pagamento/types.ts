@@ -14,24 +14,25 @@ export interface FolhaColaborador {
   overridePercentual: number; // extra de tabela de exceção (liderança), 0 se não houver
   salarioAtualizado: number; // salarioBase × (1 + overridePercentual)
 
-  comissao: number;
+  comissao: number; // valor em vigor: o editado pelo RH, se houver, senão o calculado
+  comissaoCalculada: number; // o que o comissionamento calculou, pra referência quando o RH editou
   dsrComissao: number;
   salMaisComissao: number;
 
   jornadaMensal: number; // horas/mês contratadas no Convenia — é o divisor de valorHora e salarioPorHora
   jornadaAusente: boolean; // cadastro sem work_period no Convenia: caiu no fallback de 200h, conferir
 
-  horasPositivas: number; // decimal, horas
+  horasPositivas: number; // decimal, horas (bruto do ponto, só conferência)
   valorHora: number;
-  horaExtra: number;
-  heMais75: number;
-  dsrHoraExtra: number;
+  horaExtra: number; // saldo positivo × valorHora (zero se o saldo do mês for negativo)
+  heMais75: number; // horaExtra × 1,75 — é o que entra na folha
+  dsrHoraExtra: number; // heMais75 ÷ dias úteis × dias de descanso
 
   horasNegativas: number;
   saldoHoras: number; // horasPositivas − horasNegativas
-  valorSaldo: number; // só exibição: saldo ≥ 0 → saldo × valorHora × 1,75; saldo < 0 → saldo × salarioPorHora // decimal, horas (atraso/saída antecipada — não inclui falta integral)
+  valorSaldo: number; // com sinal: saldo ≥ 0 → heMais75; saldo < 0 → −descHorasFalta
   salarioPorHora: number; // sem comissão
-  descHorasFalta: number;
+  descHorasFalta: number; // |saldo negativo| × salarioPorHora (zero se o saldo do mês for positivo)
 
   faltaQtd: number; // nº de faltas integrais não justificadas no mês
   faltaDatas: string[]; // ISO dates
@@ -52,6 +53,7 @@ export interface FolhaColaborador {
   secullumEncontrado: boolean;
   comissaoMatchPorNome: boolean; // tb_vendedor.documento vazio — cruzado por nome, não por CPF
   horasEditadasManualmente: boolean; // Horas +/- foram sobrescritas pelo RH, não vêm do Secullum
+  comissaoEditadaManualmente: boolean; // Comissão foi sobrescrita pelo RH, não vem do comissionamento
   erro: string | null;
 }
 

@@ -8,6 +8,7 @@ export interface CamposManuais {
   horasPositivasOverride: number | null; // RH controla exceções de hora editando direto, não por dia-exceção automático
   horasNegativasOverride: number | null;
   faltaQtdOverride: number | null; // corrige o nº de faltas detectado no Secullum (recalcula DSR)
+  comissaoOverride: number | null; // sobrescreve a comissão calculada (recalcula DSR de comissão, Sal+Comissão e valor hora)
 }
 
 function normalizarCpf(cpf: string): string {
@@ -18,7 +19,7 @@ export async function buscarCamposManuaisDoMes(ano: number, mes: number): Promis
   const competencia = `${ano}-${String(mes).padStart(2, '0')}`;
   const pool = getMetasPool();
   const { rows } = await pool.query(
-    `SELECT cpf, observacoes, sitepd, vale_alimentacao, vale_transporte, horas_positivas_override, horas_negativas_override, falta_qtd_override
+    `SELECT cpf, observacoes, sitepd, vale_alimentacao, vale_transporte, horas_positivas_override, horas_negativas_override, falta_qtd_override, comissao_override
      FROM folha_pagamento_manual WHERE competencia = $1`,
     [competencia]
   );
@@ -33,6 +34,7 @@ export async function buscarCamposManuaisDoMes(ano: number, mes: number): Promis
         horasPositivasOverride: r.horas_positivas_override !== null ? parseFloat(r.horas_positivas_override) : null,
         horasNegativasOverride: r.horas_negativas_override !== null ? parseFloat(r.horas_negativas_override) : null,
         faltaQtdOverride: r.falta_qtd_override !== null ? parseInt(r.falta_qtd_override, 10) : null,
+        comissaoOverride: r.comissao_override !== null ? parseFloat(r.comissao_override) : null,
       },
     ])
   );
@@ -53,6 +55,7 @@ const COLUNAS: Record<keyof CamposManuais, string> = {
   horasPositivasOverride: 'horas_positivas_override',
   horasNegativasOverride: 'horas_negativas_override',
   faltaQtdOverride: 'falta_qtd_override',
+  comissaoOverride: 'comissao_override',
 };
 
 // Grava só os campos presentes em `campos` — a chave existir (mesmo valendo

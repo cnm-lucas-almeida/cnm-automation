@@ -171,6 +171,62 @@ function stickyColStyle(left: number, width: number) {
   return { left, width, minWidth: width, maxWidth: width };
 }
 
+// Aceita "1.234,56", "1234,56" e "1234.56". Vazio é tratado pelo chamador
+// (limpa a edição e volta ao valor calculado).
+function valorBRParaNumero(valor: string): number | null {
+  const limpo = valor.trim().replace(/^R\$\s*/i, '');
+  if (!limpo) return null;
+  const normalizado = /,\d{1,2}$/.test(limpo)
+    ? limpo.replace(/\./g, '').replace(',', '.')
+    : limpo.replace(/,/g, '');
+  const n = Number(normalizado);
+  return Number.isFinite(n) ? n : null;
+}
+
+// Célula de valor em reais editável — mesma mecânica de EditableHorasCell:
+// mostra formatado, abre input ao clicar, salva no blur/Enter. O lápis fica
+// escuro quando o valor em vigor foi digitado pelo RH, e o tooltip diz
+// quanto o sistema tinha calculado.
+function EditableValorCell({
+  valor, editando, onEditar, onSave, corTexto, editadoManualmente, valorCalculado,
+}: {
+  valor: number; editando: boolean; onEditar: () => void; onSave: (texto: string) => void;
+  corTexto?: string; editadoManualmente?: boolean; valorCalculado?: number;
+}) {
+  const [rascunho, setRascunho] = useState(formatNumberBR(valor, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+
+  if (!editando) {
+    return (
+      <button
+        onClick={() => { setRascunho(formatNumberBR(valor, { minimumFractionDigits: 2, maximumFractionDigits: 2 })); onEditar(); }}
+        className={`w-full flex items-center justify-end gap-1 px-1.5 py-0.5 rounded hover:bg-muted/60 tabular-nums ${corTexto ?? ''}`}
+        title={
+          editadoManualmente
+            ? `Valor editado manualmente. Calculado pelo sistema: ${formatCurrencyBRL(valorCalculado ?? 0)}. Apague o valor para voltar ao calculado.`
+            : 'Clique para editar'
+        }
+      >
+        <span>{formatCurrencyBRL(valor)}</span>
+        <Pencil size={9} className={`flex-shrink-0 ${editadoManualmente ? 'text-foreground' : 'text-muted-foreground/50'}`} />
+      </button>
+    );
+  }
+
+  return (
+    <input
+      autoFocus
+      type="text"
+      inputMode="decimal"
+      placeholder="0,00"
+      value={rascunho}
+      onChange={(e) => setRascunho(e.target.value)}
+      onBlur={() => onSave(rascunho)}
+      onKeyDown={(e) => { if (e.key === 'Enter') onSave(rascunho); }}
+      className="w-full px-1.5 py-0.5 rounded border border-border bg-background text-xs text-right tabular-nums"
+    />
+  );
+}
+
 function hhmmParaDecimal(valor: string): number | null {
   const m = valor.trim().match(/^(-?\d{1,4}):([0-5]\d)$/);
   if (!m) return null;
@@ -301,6 +357,8 @@ export default function FolhaPagamentoPage() {
   const [editandoHoras, setEditandoHoras] = useState<{ cpf: string; campo: 'horasPositivas' | 'horasNegativas' } | null>(null);
   const [salvandoHoras, setSalvandoHoras] = useState(false);
   const [salvandoFalta, setSalvandoFalta] = useState<string | null>(null);
+  const [editandoComissao, setEditandoComissao] = useState<string | null>(null);
+  const [salvandoComissao, setSalvandoComissao] = useState<string | null>(null);
   const [progresso, setProgresso] = useState<ProgressoFechamento | null>(null);
   const [linhaSelecionada, setLinhaSelecionada] = useState<string | null>(null);
   const [apenasPendencias, setApenasPendencias] = useState(false);
@@ -486,6 +544,36 @@ export default function FolhaPagamentoPage() {
       setErro(e?.response?.data?.error ?? e.message);
     } finally {
       setSalvandoFalta(null);
+    }
+  }
+
+  // Comissão vem do comissionamento, mas o RH pode sobrescrever o valor do
+  // mês. Vazio apaga a edição e volta ao calculado. Recarrega só essa linha,
+  // porque DSR de comissão, Sal+Comissão, valor hora e hora extra derivam dela.
+  async function salvarComissao(cpf: string, texto: string) {
+    const comissaoOverride = texto.trim() === '' ? null : valorBRParaNumero(texto);
+    if (texto.trim() !== '' && (comissaoOverride === null || comissaoOverride < 0)) {
+      setErro('Comissão inválida — use um valor em reais maior ou igual a 0 (ex.: 1.250,00)');
+      setEditandoComissao(null);
+      return;
+    }
+    setSalvandoComissao(cpf);
+    setErro(null);
+    try {
+      await axios.post('/api/folha-pagamento/manual', { ano, mes, cpf, comissaoOverride });
+      const { data } = await axios.get('/api/folha-pagamento/colaborador', { params: { cpf, ano, mes } });
+      setDados((atual) => {
+        if (!atual) return atual;
+        return {
+          ...atual,
+          colaboradores: atual.colaboradores.map((c) => (c.cpf === cpf ? data.colaborador : c)),
+        };
+      });
+    } catch (e: any) {
+      setErro(e?.response?.data?.error ?? e.message);
+    } finally {
+      setSalvandoComissao(null);
+      setEditandoComissao(null);
     }
   }
 
@@ -715,7 +803,20 @@ export default function FolhaPagamentoPage() {
                     <td className="text-right tabular-nums">{formatCurrencyBRL(c.salarioBase)}</td>
                     <td className="text-right tabular-nums">{c.overridePercentual > 0 ? `${formatNumberBR(c.overridePercentual * 100, { maximumFractionDigits: 2 })}%` : '—'}</td>
                     <td className="text-right tabular-nums font-medium border-r border-border">{formatCurrencyBRL(c.salarioAtualizado)}</td>
-                    <td className={`text-right tabular-nums ${corAcrescimo(c.comissao)}`}>{formatCurrencyBRL(c.comissao)}</td>
+                    <td className="text-right tabular-nums min-w-[110px]">
+                      <div className="flex items-center justify-end gap-1">
+                        <EditableValorCell
+                          valor={c.comissao}
+                          valorCalculado={c.comissaoCalculada}
+                          editando={editandoComissao === c.cpf}
+                          onEditar={() => setEditandoComissao(c.cpf)}
+                          onSave={(v) => salvarComissao(c.cpf, v)}
+                          corTexto={corAcrescimo(c.comissao)}
+                          editadoManualmente={c.comissaoEditadaManualmente}
+                        />
+                        {salvandoComissao === c.cpf && <Loader2 size={10} className="animate-spin flex-shrink-0" />}
+                      </div>
+                    </td>
                     <td className={`text-right tabular-nums ${corAcrescimo(c.dsrComissao)}`}>{formatCurrencyBRL(c.dsrComissao)}</td>
                     <td className="text-right tabular-nums font-medium border-r border-border">{formatCurrencyBRL(c.salMaisComissao)}</td>
                     <td className="text-right tabular-nums min-w-[70px]">
